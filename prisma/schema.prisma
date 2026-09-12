@@ -1,0 +1,149 @@
+// Prisma schema for Cooachly — a coaching platform with admin, professor, and student roles.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PROFESSOR
+  STUDENT
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  COVERED_BY_SUBSCRIPTION
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String    @unique
+  passwordHash         String
+  role                 Role      @default(STUDENT)
+  timezone             String    @default("UTC")
+  isActive             Boolean   @default(true)
+  stripeCustomerId     String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  professorProfile     ProfessorProfile?
+
+  availabilities       Availability[] @relation("ProfessorAvailability")
+
+  bookingsAsStudent    Booking[] @relation("StudentBookings")
+  bookingsAsProfessor  Booking[] @relation("ProfessorBookings")
+
+  sentMessages         Message[] @relation("SentMessages")
+  receivedMessages     Message[] @relation("ReceivedMessages")
+
+  subscriptionsAsStudent   Subscription[] @relation("StudentSubscriptions")
+  subscriptionsAsProfessor Subscription[] @relation("ProfessorSubscriptions")
+}
+
+model ProfessorProfile {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline             String   @default("")
+  bio                  String   @default("")
+  subject              String   @default("")
+  hourlyRateCents      Int      @default(5000)
+  monthlyPriceCents    Int?
+  currency             String   @default("usd")
+  stripeProductId      String?
+  stripePriceId        String?
+  stripeSubscriptionPriceId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Availability {
+  id           String   @id @default(cuid())
+  professorId  String
+  professor    User     @relation("ProfessorAvailability", fields: [professorId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int      // 0 (Sunday) - 6 (Saturday)
+  startTime    String   // "HH:mm" in the professor's timezone
+  endTime      String   // "HH:mm" in the professor's timezone
+  timezone     String   // IANA timezone name, e.g. "America/New_York"
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([professorId])
+}
+
+model Booking {
+  id                     String        @id @default(cuid())
+  studentId              String
+  student                User          @relation("StudentBookings", fields: [studentId], references: [id], onDelete: Cascade)
+  professorId            String
+  professor              User          @relation("ProfessorBookings", fields: [professorId], references: [id], onDelete: Cascade)
+  startAt                DateTime      // UTC
+  endAt                  DateTime      // UTC
+  status                 BookingStatus @default(PENDING)
+  paymentStatus          PaymentStatus @default(UNPAID)
+  priceCents             Int
+  currency               String        @default("usd")
+  meetingLink            String?
+  notes                  String?
+  stripeCheckoutSessionId String?
+  stripePaymentIntentId  String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  messages               Message[]
+
+  @@index([professorId, startAt])
+  @@index([studentId, startAt])
+}
+
+model Message {
+  id           String   @id @default(cuid())
+  senderId     String
+  sender       User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId   String
+  receiver     User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  bookingId    String?
+  booking      Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  body         String
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, senderId])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  studentId            String
+  student              User               @relation("StudentSubscriptions", fields: [studentId], references: [id], onDelete: Cascade)
+  professorId          String
+  professor            User               @relation("ProfessorSubscriptions", fields: [professorId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String             @unique
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd     DateTime
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([studentId, professorId])
+}
