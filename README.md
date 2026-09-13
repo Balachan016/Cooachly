@@ -141,6 +141,11 @@ Create a database and copy its connection string — you'll use it as `DATABASE_
      connected).
 4. Deploy. Vercel will run `npm run build`, which runs `prisma generate` automatically
    (see the `postinstall`/`build` scripts in `package.json`).
+
+   > **No deployment showing up?** Vercel only builds on *new* pushes made after the Git
+   > connection is created — it won't retroactively build a commit that already existed on
+   > `main` before you connected the repo. If Deployments is empty, push any new commit to
+   > `main` (or reconnect the repo under Project Settings → Git) to trigger the first build.
 5. After the first deploy, run the database migration against your production database once
    (from your machine, with `DATABASE_URL` set to the production connection string):
 
