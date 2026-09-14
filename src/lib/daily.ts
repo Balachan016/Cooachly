@@ -5,12 +5,19 @@ const DAILY_API_BASE = "https://api.daily.co/v1";
 
 export const isDailyConfigured = Boolean(apiKey);
 
+// Cloud recording is billed per recorded minute on top of Daily's free video
+// minutes, so it's opt-in — set DAILY_ENABLE_RECORDING="true" to turn on
+// recording + the transcript/AI-summary pipeline (see /api/daily/webhook).
+// Video calls work either way; without recording, sessions just aren't
+// recorded or summarized afterwards.
+export const isRecordingEnabled = process.env.DAILY_ENABLE_RECORDING === "true";
+
 /**
- * Creates a Daily.co video room for a booking with cloud recording enabled.
- * The room is only joinable from shortly before the session until a couple
- * hours after (`nbf`/`exp`), and is automatically recorded to the cloud so a
- * transcript + AI summary can be generated afterwards (see the Daily webhook
- * handler at /api/daily/webhook).
+ * Creates a Daily.co video room for a booking. The room is only joinable
+ * from shortly before the session until a couple hours after (`nbf`/`exp`).
+ * If recording is enabled, it's recorded to the cloud so a transcript + AI
+ * summary can be generated afterwards (see the Daily webhook handler at
+ * /api/daily/webhook).
  */
 export async function createDailyRoomForBooking(opts: {
   bookingId: string;
@@ -32,7 +39,7 @@ export async function createDailyRoomForBooking(opts: {
       name: `cooachly-${opts.bookingId}`,
       privacy: "public",
       properties: {
-        enable_recording: "cloud",
+        ...(isRecordingEnabled ? { enable_recording: "cloud" } : {}),
         nbf,
         exp,
       },

@@ -14,12 +14,13 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
   session), or subscribe monthly to a professor for unlimited sessions. If Stripe isn't
   configured, bookings are auto-confirmed so you can develop without a Stripe account.
 - **Messaging** — simple in-app messaging between students and professors.
-- **Video calls with cloud recording** — every confirmed booking gets its own Daily.co video
-  room automatically. If `DAILY_API_KEY` isn't set, professors can paste a manual meeting link
-  (Zoom, Google Meet, etc.) instead.
-- **AI session summaries** — recordings are transcribed (OpenAI `gpt-4o-mini-transcribe`) and
-  summarized (OpenAI GPT) automatically after each session, then emailed to both student and
-  professor.
+- **Video calls** — every confirmed booking gets its own Daily.co video room automatically. If
+  `DAILY_API_KEY` isn't set, professors can paste a manual meeting link (Zoom, Google Meet, etc.)
+  instead.
+- **Optional cloud recording + AI session summaries** — set `DAILY_ENABLE_RECORDING="true"` to
+  record sessions to the cloud (billed per minute by Daily) and get them transcribed (OpenAI
+  `gpt-4o-mini-transcribe`) and summarized (OpenAI GPT) automatically, then emailed to both
+  student and professor. Off by default to keep video calls free.
 - **Reminders** — automatic email (Resend) and WhatsApp (Twilio) reminders 1 day, 1 hour, and
   5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
 - **Admin panel** — manage user roles/access and see all bookings and revenue.
@@ -161,17 +162,21 @@ job frequently is safe. WhatsApp is skipped for anyone without a phone number on
 
 1. Sign up at [daily.co](https://daily.co) and create an API key at
    [dashboard.daily.co/developers](https://dashboard.daily.co/developers). Set `DAILY_API_KEY`.
-   Once set, every confirmed booking automatically gets a recorded video room — no code changes
-   needed. Without it, professors fall back to pasting a manual meeting link.
-2. In the Daily.co dashboard, add a webhook subscribed to the `recording.ready-to-download`
-   event, pointing at `https://your-domain.com/api/daily/webhook`. (Optional: enable webhook
-   signing and set `DAILY_WEBHOOK_SECRET` to verify requests.)
-3. Sign up at [platform.openai.com](https://platform.openai.com), create an API key, and set
-   `OPENAI_API_KEY`. This powers both the Whisper transcription and the GPT-generated summary
-   that gets emailed to both parties after each session.
+   Once set, every confirmed booking automatically gets a video room — no code changes needed.
+   Without it, professors fall back to pasting a manual meeting link.
+2. **Cloud recording + AI summaries are opt-in**, since Daily bills recording per minute on top
+   of its free video minutes. By default (`DAILY_ENABLE_RECORDING` unset or `false`), video calls
+   work but aren't recorded, and no summary is generated. To turn recording + summaries on:
+   - Set `DAILY_ENABLE_RECORDING="true"`.
+   - In the Daily.co dashboard, add a webhook subscribed to the `recording.ready-to-download`
+     event, pointing at `https://your-domain.com/api/daily/webhook`. (Optional: enable webhook
+     signing and set `DAILY_WEBHOOK_SECRET` to verify requests.)
+   - Sign up at [platform.openai.com](https://platform.openai.com), create an API key, and set
+     `OPENAI_API_KEY`. This powers both the transcription and the GPT-generated summary that
+     gets emailed to both parties after each session.
 
-Note: Whisper's API caps uploads at 25MB, which covers roughly an hour of compressed audio —
-fine for a single coaching session, but very long sessions may need to be trimmed.
+Note: the transcription API caps uploads at 25MB, which covers roughly an hour of compressed
+audio — fine for a single coaching session, but very long sessions may need to be trimmed.
 
 ## Deploying — hosting `cooachly.com`
 
