@@ -30,7 +30,7 @@ export function MessageThread({
               <div
                 className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
                   isMe
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-green-700 text-white"
                     : "bg-black/5 text-black dark:bg-white/10 dark:text-white"
                 }`}
               >

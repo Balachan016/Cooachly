@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { signup } from "@/actions/auth";
 import { Button, Card, FormMessage, Input, Label, Select } from "@/components/ui";
+import { Logo } from "@/components/logo";
 import { TIMEZONES } from "@/lib/roles";
 
 export default function RegisterPage() {
@@ -18,7 +19,10 @@ export default function RegisterPage() {
   });
 
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-16">
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
+      <Link href="/" className="mb-8">
+        <Logo withTagline />
+      </Link>
       <Card className="w-full max-w-sm">
         <h1 className="text-xl font-semibold">Create your account</h1>
         <p className="mt-1 text-sm text-black/60 dark:text-white/60">
@@ -36,7 +40,7 @@ export default function RegisterPage() {
                   onClick={() => setRole(r)}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                     role === r
-                      ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                      ? "border-green-700 bg-green-50 text-green-800 dark:bg-green-950 dark:text-lime-500"
                       : "border-black/15 text-black/70 dark:border-white/15 dark:text-white/70"
                   }`}
                 >
@@ -56,6 +60,11 @@ export default function RegisterPage() {
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" placeholder="you@example.com" required />
             <FormMessage>{state?.errors?.email?.[0]}</FormMessage>
+          </div>
+          <div>
+            <Label htmlFor="phone">Phone (optional, for SMS/WhatsApp reminders)</Label>
+            <Input id="phone" name="phone" type="tel" placeholder="+1 555 123 4567" />
+            <FormMessage>{state?.errors?.phone?.[0]}</FormMessage>
           </div>
           <div>
             <Label htmlFor="password">Password</Label>
@@ -86,7 +95,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-black/60 dark:text-white/60">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-indigo-600 hover:underline">
+          <Link href="/login" className="font-medium text-green-700 hover:underline">
             Log in
           </Link>
         </p>

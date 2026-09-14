@@ -33,8 +33,8 @@ export function BookingPicker({ professorId, groups, timezone }: { professorId: 
                   onClick={() => setSelected(t.startAt)}
                   className={`rounded-lg border px-3 py-1.5 text-sm ${
                     selected === t.startAt
-                      ? "border-indigo-600 bg-indigo-600 text-white"
-                      : "border-black/15 hover:border-indigo-400 dark:border-white/15"
+                      ? "border-green-700 bg-green-700 text-white"
+                      : "border-black/15 hover:border-green-400 dark:border-white/15"
                   }`}
                 >
                   {t.label}

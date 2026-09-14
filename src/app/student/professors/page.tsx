@@ -19,7 +19,7 @@ export default async function BrowseProfessorsPage() {
           <Link key={p.id} href={`/student/professors/${p.id}`}>
             <Card className="h-full transition-shadow hover:shadow-md">
               <h2 className="font-semibold">{p.name}</h2>
-              <p className="mt-1 text-sm text-indigo-600 dark:text-indigo-400">{p.professorProfile?.subject || "Coaching"}</p>
+              <p className="mt-1 text-sm text-green-700 dark:text-green-400">{p.professorProfile?.subject || "Coaching"}</p>
               <p className="mt-2 text-sm text-black/60 dark:text-white/60">{p.professorProfile?.headline}</p>
               <p className="mt-3 text-sm font-medium">
                 ${((p.professorProfile?.hourlyRateCents ?? 0) / 100).toFixed(2)} / session

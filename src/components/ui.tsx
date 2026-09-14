@@ -15,7 +15,7 @@ export function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" }) {
   const styles = {
-    primary: "bg-indigo-600 text-white hover:bg-indigo-500 disabled:bg-indigo-300",
+    primary: "bg-green-700 text-white hover:bg-green-600 disabled:bg-lime-500",
     secondary: "bg-transparent border border-black/15 text-black hover:bg-black/5 dark:border-white/20 dark:text-white dark:hover:bg-white/10",
     danger: "bg-red-600 text-white hover:bg-red-500 disabled:bg-red-300",
   }[variant];
@@ -34,7 +34,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-white/15 dark:bg-neutral-800 ${props.className ?? ""}`}
+      className={`w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 dark:border-white/15 dark:bg-neutral-800 ${props.className ?? ""}`}
     />
   );
 }
@@ -43,7 +43,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-white/15 dark:bg-neutral-800 ${props.className ?? ""}`}
+      className={`w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 dark:border-white/15 dark:bg-neutral-800 ${props.className ?? ""}`}
     />
   );
 }
@@ -52,7 +52,7 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   return (
     <textarea
       {...props}
-      className={`w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-white/15 dark:bg-neutral-800 ${props.className ?? ""}`}
+      className={`w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 dark:border-white/15 dark:bg-neutral-800 ${props.className ?? ""}`}
     />
   );
 }

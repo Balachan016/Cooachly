@@ -14,8 +14,15 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
   session), or subscribe monthly to a professor for unlimited sessions. If Stripe isn't
   configured, bookings are auto-confirmed so you can develop without a Stripe account.
 - **Messaging** — simple in-app messaging between students and professors.
-- **Video calls** — professors attach a meeting link (Zoom, Google Meet, etc.) to each booking.
+- **Video calls with cloud recording** — every confirmed booking gets its own Daily.co video
+  room automatically. If `DAILY_API_KEY` isn't set, professors can paste a manual meeting link
+  (Zoom, Google Meet, etc.) instead.
+- **AI session summaries** — recordings are transcribed (OpenAI Whisper) and summarized
+  (OpenAI GPT) automatically after each session, then emailed to both student and professor.
+- **Reminders** — automatic email (Resend), SMS, and WhatsApp (Twilio) reminders 1 day, 1 hour,
+  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
 - **Admin panel** — manage user roles/access and see all bookings and revenue.
+- **About page** at `/about`.
 
 ## Tech stack
 
@@ -24,6 +31,13 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - [Prisma](https://www.prisma.io) + PostgreSQL
 - Auth: custom email/password auth using signed, httpOnly JWT session cookies ([`jose`](https://github.com/panva/jose) + `bcryptjs`) — no third-party auth provider required
 - [Stripe](https://stripe.com) for payments and subscriptions
+- [Daily.co](https://daily.co) for video rooms + cloud recording
+- [OpenAI](https://platform.openai.com) (Whisper + GPT) for transcription and AI summaries
+- [Resend](https://resend.com) for email, [Twilio](https://twilio.com) for SMS/WhatsApp reminders
+
+Every third-party integration above is optional at the code level — if its API key isn't set,
+that feature no-ops (logs to the console) instead of crashing, so you can run and demo the app
+without signing up for anything, then turn integrations on one at a time.
 
 ## Local development
 
@@ -110,6 +124,44 @@ Open [http://localhost:3000](http://localhost:3000).
    `https://your-domain.com/api/stripe/webhook`, subscribed to at least:
    `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
 
+## Setting up reminders (email, SMS, WhatsApp)
+
+1. **Email — Resend**: sign up at [resend.com](https://resend.com), verify a sending domain (or
+   use their `onboarding@resend.dev` test address to start), create an API key at
+   [resend.com/api-keys](https://resend.com/api-keys), and set `RESEND_API_KEY` +
+   `RESEND_FROM_EMAIL`.
+2. **SMS + WhatsApp — Twilio**: sign up at [twilio.com](https://twilio.com), buy a phone number
+   (for SMS) from the console, and set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+   `TWILIO_SMS_FROM`. For WhatsApp, join Twilio's WhatsApp sandbox (or apply for a production
+   WhatsApp sender) and set `TWILIO_WHATSAPP_FROM` to the number Twilio gives you, e.g.
+   `whatsapp:+14155238886`.
+3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then either:
+   - Rely on the `vercel.json` in this repo, which asks Vercel to hit `/api/cron/reminders`
+     every 5 minutes (Vercel automatically sends the right `Authorization` header when
+     `CRON_SECRET` is set as an env var) — check your Vercel plan supports this frequency, or
+   - Use a free external scheduler like [cron-job.org](https://cron-job.org) to call
+     `https://your-domain.com/api/cron/reminders?secret=<CRON_SECRET>` every 5 minutes instead.
+
+Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
+`reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
+job frequently is safe. SMS/WhatsApp are skipped for anyone without a phone number on file.
+
+## Setting up video calls & AI summaries (Daily.co + OpenAI)
+
+1. Sign up at [daily.co](https://daily.co) and create an API key at
+   [dashboard.daily.co/developers](https://dashboard.daily.co/developers). Set `DAILY_API_KEY`.
+   Once set, every confirmed booking automatically gets a recorded video room — no code changes
+   needed. Without it, professors fall back to pasting a manual meeting link.
+2. In the Daily.co dashboard, add a webhook subscribed to the `recording.ready-to-download`
+   event, pointing at `https://your-domain.com/api/daily/webhook`. (Optional: enable webhook
+   signing and set `DAILY_WEBHOOK_SECRET` to verify requests.)
+3. Sign up at [platform.openai.com](https://platform.openai.com), create an API key, and set
+   `OPENAI_API_KEY`. This powers both the Whisper transcription and the GPT-generated summary
+   that gets emailed to both parties after each session.
+
+Note: Whisper's API caps uploads at 25MB, which covers roughly an hour of compressed audio —
+fine for a single coaching session, but very long sessions may need to be trimmed.
+
 ## Deploying — hosting `cooachly.com`
 
 You already own the domain; the pieces you need are (1) somewhere to run the Next.js app, and
@@ -182,11 +234,15 @@ handling payments.
 ## Project structure
 
 ```
-prisma/schema.prisma       Database schema (User, ProfessorProfile, Availability, Booking, Message, Subscription)
-prisma/seed.ts             Seed script for sample admin/professor/student accounts
-src/proxy.ts               Route protection (Next.js 16's replacement for middleware.ts)
-src/lib/                   Session/auth, Prisma client, scheduling, Stripe, DAL helpers
-src/actions/                Server Actions (auth, bookings, availability, messages, billing, admin)
+prisma/schema.prisma        Database schema (User, ProfessorProfile, Availability, Booking, Message, Subscription)
+prisma/seed.ts              Seed script for sample admin/professor/student accounts
+src/proxy.ts                Route protection (Next.js 16's replacement for middleware.ts)
+src/lib/                    Session/auth, Prisma client, scheduling, Stripe, Daily.co, AI summary, DAL helpers
+src/lib/notifications/      Email (Resend) + SMS/WhatsApp (Twilio) senders
+src/actions/                Server Actions (auth, bookings, availability, messages, billing, admin, profile)
 src/app/(admin|professor|student)/   Role-specific dashboards
+src/app/about               Public "About Cooachly" page
 src/app/api/stripe/webhook  Stripe webhook handler
+src/app/api/daily/webhook   Daily.co recording-ready webhook → transcribe + summarize + email
+src/app/api/cron/reminders  Scheduled job: sends 24h/1h/5m reminders for upcoming sessions
 ```

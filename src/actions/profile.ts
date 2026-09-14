@@ -54,18 +54,25 @@ export async function updateProfessorProfile(_state: unknown, formData: FormData
   return { message: "Profile saved." };
 }
 
-const TimezoneSchema = z.object({ timezone: z.string().min(1) });
+const ContactInfoSchema = z.object({
+  timezone: z.string().min(1),
+  phone: z.string().trim().optional(),
+});
 
-export async function updateTimezone(_state: unknown, formData: FormData) {
+export async function updateContactInfo(_state: unknown, formData: FormData) {
   const session = await requireSession();
-  const parsed = TimezoneSchema.safeParse({ timezone: formData.get("timezone") });
-  if (!parsed.success) return { message: "Invalid timezone." };
+  const parsed = ContactInfoSchema.safeParse({
+    timezone: formData.get("timezone"),
+    phone: formData.get("phone"),
+  });
+  if (!parsed.success) return { message: "Please check the form fields." };
 
   await prisma.user.update({
     where: { id: session.userId },
-    data: { timezone: parsed.data.timezone },
+    data: { timezone: parsed.data.timezone, phone: parsed.data.phone || null },
   });
 
-  revalidatePath("/");
-  return { message: "Timezone updated." };
+  revalidatePath("/professor/profile");
+  revalidatePath("/student");
+  return { message: "Contact info updated." };
 }

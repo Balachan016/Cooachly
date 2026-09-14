@@ -10,6 +10,7 @@ import { roleHomePath } from "@/lib/roles";
 const SignupSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters."),
   email: z.string().trim().email("Please enter a valid email."),
+  phone: z.string().trim().optional(),
   password: z.string().min(8, "Password must be at least 8 characters."),
   role: z.enum(["STUDENT", "PROFESSOR"]),
   timezone: z.string().min(1, "Please select your timezone."),
@@ -20,6 +21,7 @@ export type AuthFormState =
       errors?: {
         name?: string[];
         email?: string[];
+        phone?: string[];
         password?: string[];
         role?: string[];
         timezone?: string[];
@@ -32,6 +34,7 @@ export async function signup(_state: AuthFormState, formData: FormData): Promise
   const validated = SignupSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
+    phone: formData.get("phone"),
     password: formData.get("password"),
     role: formData.get("role"),
     timezone: formData.get("timezone"),
@@ -41,7 +44,7 @@ export async function signup(_state: AuthFormState, formData: FormData): Promise
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { name, email, password, role, timezone } = validated.data;
+  const { name, email, phone, password, role, timezone } = validated.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -54,6 +57,7 @@ export async function signup(_state: AuthFormState, formData: FormData): Promise
     data: {
       name,
       email,
+      phone: phone || null,
       passwordHash,
       role,
       timezone,

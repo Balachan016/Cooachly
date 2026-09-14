@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
+import { provisionVideoRoomForBooking } from "@/lib/daily";
 
 const BookSlotSchema = z.object({
   professorId: z.string().min(1),
@@ -59,6 +60,7 @@ export async function bookSlot(_state: unknown, formData: FormData) {
         priceCents,
       },
     });
+    await provisionVideoRoomForBooking(booking);
     revalidatePath("/student/bookings");
     revalidatePath("/professor/bookings");
     redirect(`/student/bookings?booked=${booking.id}`);
@@ -77,6 +79,7 @@ export async function bookSlot(_state: unknown, formData: FormData) {
   });
 
   if (!isStripeConfigured) {
+    await provisionVideoRoomForBooking(booking);
     revalidatePath("/student/bookings");
     revalidatePath("/professor/bookings");
     redirect(`/student/bookings?booked=${booking.id}`);

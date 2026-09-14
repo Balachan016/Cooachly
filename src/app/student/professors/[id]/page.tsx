@@ -35,7 +35,7 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
       <div className="flex flex-col gap-6 lg:flex-row">
         <Card className="flex-1">
           <h1 className="text-2xl font-semibold">{professor.name}</h1>
-          <p className="mt-1 text-indigo-600 dark:text-indigo-400">{professor.professorProfile?.subject || "Coaching"}</p>
+          <p className="mt-1 text-green-700 dark:text-green-400">{professor.professorProfile?.subject || "Coaching"}</p>
           {professor.professorProfile?.headline && (
             <p className="mt-2 font-medium">{professor.professorProfile.headline}</p>
           )}
@@ -52,7 +52,7 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
 
           <Link
             href={`/student/messages/${professor.id}`}
-            className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline dark:text-green-400"
           >
             Message {professor.name.split(" ")[0]} →
           </Link>

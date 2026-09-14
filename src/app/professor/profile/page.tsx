@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/dal";
 import { Card } from "@/components/ui";
+import { ContactInfoForm } from "@/components/contact-info-form";
 import { ProfileForm } from "./profile-form";
 
 export default async function ProfessorProfilePage() {
@@ -15,6 +16,14 @@ export default async function ProfessorProfilePage() {
 
       <Card className="mt-6 max-w-xl">
         <ProfileForm profile={user.professorProfile} />
+      </Card>
+
+      <h2 className="mt-8 text-lg font-semibold">Contact info</h2>
+      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+        Used for scheduling and session reminders.
+      </p>
+      <Card className="mt-4 max-w-xl">
+        <ContactInfoForm timezone={user.timezone} phone={user.phone} />
       </Card>
     </div>
   );

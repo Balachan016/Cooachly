@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
+import { provisionVideoRoomForBooking } from "@/lib/daily";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
       if (type === "booking") {
         const bookingId = checkoutSession.metadata?.bookingId;
         if (bookingId) {
-          await prisma.booking.update({
+          const booking = await prisma.booking.update({
             where: { id: bookingId },
             data: {
               status: "CONFIRMED",
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
                   : checkoutSession.payment_intent?.id,
             },
           });
+          await provisionVideoRoomForBooking(booking);
         }
       }
 

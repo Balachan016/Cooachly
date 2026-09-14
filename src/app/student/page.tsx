@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { Badge, Button, Card } from "@/components/ui";
+import { ContactInfoForm } from "@/components/contact-info-form";
 
 export default async function StudentDashboardPage() {
   const user = await getCurrentUser();
@@ -42,6 +43,14 @@ export default async function StudentDashboardPage() {
           ))}
           {upcoming.length === 0 && <p className="py-3 text-sm text-black/50 dark:text-white/50">No upcoming sessions yet.</p>}
         </div>
+      </Card>
+
+      <h2 className="mt-8 text-lg font-semibold">Contact info</h2>
+      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+        Add your phone number to get session reminders by SMS/WhatsApp in addition to email.
+      </p>
+      <Card className="mt-4 max-w-xl">
+        <ContactInfoForm timezone={user.timezone} phone={user.phone} />
       </Card>
     </div>
   );

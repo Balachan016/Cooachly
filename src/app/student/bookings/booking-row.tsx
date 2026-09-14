@@ -26,7 +26,7 @@ export function StudentBookingRow({ booking, isPast }: { booking: Booking & { pr
             href={booking.meetingLink}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 inline-block text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            className="mt-2 inline-block text-sm font-medium text-green-700 hover:underline dark:text-green-400"
           >
             Join video call →
           </a>

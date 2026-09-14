@@ -4,12 +4,16 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { login } from "@/actions/auth";
 import { Button, Card, FormMessage, Input, Label } from "@/components/ui";
+import { Logo } from "@/components/logo";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState(login, undefined);
 
   return (
-    <div className="flex flex-1 items-center justify-center px-6 py-16">
+    <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
+      <Link href="/" className="mb-8">
+        <Logo withTagline />
+      </Link>
       <Card className="w-full max-w-sm">
         <h1 className="text-xl font-semibold">Welcome back</h1>
         <p className="mt-1 text-sm text-black/60 dark:text-white/60">Log in to your Cooachly account.</p>
@@ -35,7 +39,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-black/60 dark:text-white/60">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-indigo-600 hover:underline">
+          <Link href="/register" className="font-medium text-green-700 hover:underline">
             Sign up
           </Link>
         </p>

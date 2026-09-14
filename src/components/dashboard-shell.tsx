@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { logout } from "@/actions/auth";
 import { Button } from "@/components/ui";
+import { Logo } from "@/components/logo";
 
 export type NavLink = { href: string; label: string };
 
@@ -20,8 +21,8 @@ export function DashboardShell({
       <header className="border-b border-black/10 dark:border-white/10">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-8">
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              Cooachly
+            <Link href="/">
+              <Logo />
             </Link>
             <nav className="hidden gap-1 sm:flex">
               {navLinks.map((link) => (
