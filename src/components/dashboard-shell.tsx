@@ -41,6 +41,11 @@ export function DashboardShell({
               <div className="font-medium">{userName}</div>
               <div className="text-xs text-black/50 dark:text-white/50">{roleLabel}</div>
             </div>
+            <Link href="/settings">
+              <Button variant="secondary" type="button">
+                Settings
+              </Button>
+            </Link>
             <form action={logout}>
               <Button variant="secondary" type="submit">
                 Log out
