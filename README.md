@@ -17,10 +17,11 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Video calls with cloud recording** — every confirmed booking gets its own Daily.co video
   room automatically. If `DAILY_API_KEY` isn't set, professors can paste a manual meeting link
   (Zoom, Google Meet, etc.) instead.
-- **AI session summaries** — recordings are transcribed (OpenAI Whisper) and summarized
-  (OpenAI GPT) automatically after each session, then emailed to both student and professor.
-- **Reminders** — automatic email (Resend), SMS, and WhatsApp (Twilio) reminders 1 day, 1 hour,
-  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
+- **AI session summaries** — recordings are transcribed (OpenAI `gpt-4o-mini-transcribe`) and
+  summarized (OpenAI GPT) automatically after each session, then emailed to both student and
+  professor.
+- **Reminders** — automatic email (Resend) and WhatsApp (Twilio) reminders 1 day, 1 hour, and
+  5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
 - **Admin panel** — manage user roles/access and see all bookings and revenue.
 - **About page** at `/about`.
 
@@ -32,8 +33,8 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - Auth: custom email/password auth using signed, httpOnly JWT session cookies ([`jose`](https://github.com/panva/jose) + `bcryptjs`) — no third-party auth provider required
 - [Stripe](https://stripe.com) for payments and subscriptions
 - [Daily.co](https://daily.co) for video rooms + cloud recording
-- [OpenAI](https://platform.openai.com) (Whisper + GPT) for transcription and AI summaries
-- [Resend](https://resend.com) for email, [Twilio](https://twilio.com) for SMS/WhatsApp reminders
+- [OpenAI](https://platform.openai.com) (`gpt-4o-mini-transcribe` + GPT) for transcription and AI summaries
+- [Resend](https://resend.com) for email, [Twilio](https://twilio.com) for WhatsApp reminders
 
 Every third-party integration above is optional at the code level — if its API key isn't set,
 that feature no-ops (logs to the console) instead of crashing, so you can run and demo the app
@@ -124,17 +125,25 @@ Open [http://localhost:3000](http://localhost:3000).
    `https://your-domain.com/api/stripe/webhook`, subscribed to at least:
    `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
 
-## Setting up reminders (email, SMS, WhatsApp)
+## Setting up reminders (email, WhatsApp)
 
 1. **Email — Resend**: sign up at [resend.com](https://resend.com), verify a sending domain (or
    use their `onboarding@resend.dev` test address to start), create an API key at
    [resend.com/api-keys](https://resend.com/api-keys), and set `RESEND_API_KEY` +
    `RESEND_FROM_EMAIL`.
-2. **SMS + WhatsApp — Twilio**: sign up at [twilio.com](https://twilio.com), buy a phone number
-   (for SMS) from the console, and set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
-   `TWILIO_SMS_FROM`. For WhatsApp, join Twilio's WhatsApp sandbox (or apply for a production
-   WhatsApp sender) and set `TWILIO_WHATSAPP_FROM` to the number Twilio gives you, e.g.
+2. **WhatsApp — Twilio**: sign up at [twilio.com](https://twilio.com), join Twilio's WhatsApp
+   sandbox (or apply for a production WhatsApp sender), and set `TWILIO_ACCOUNT_SID`,
+   `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` to the number Twilio gives you, e.g.
    `whatsapp:+14155238886`.
+
+   Reminders are sent by WhatsApp only, not SMS — WhatsApp already reaches the same phone number
+   at a fraction of the cost, and plain SMS to Indian numbers additionally requires separate DLT
+   template pre-registration with Indian telecom regulators before Twilio will even deliver it.
+
+   **Before going live**, submit your reminder message as a WhatsApp message template for Meta's
+   approval in the Twilio console. Meta requires an approved template for any business-initiated
+   message sent outside a 24-hour customer-service window — which reminders always are — so
+   free-form messages will be rejected in production once you're off the sandbox.
 3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then use a free
    external scheduler like [cron-job.org](https://cron-job.org) to call
    `https://your-domain.com/api/cron/reminders?secret=<CRON_SECRET>` every 5 minutes.
@@ -146,7 +155,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
-job frequently is safe. SMS/WhatsApp are skipped for anyone without a phone number on file.
+job frequently is safe. WhatsApp is skipped for anyone without a phone number on file.
 
 ## Setting up video calls & AI summaries (Daily.co + OpenAI)
 
@@ -240,7 +249,7 @@ prisma/schema.prisma        Database schema (User, ProfessorProfile, Availabilit
 prisma/seed.ts              Seed script for sample admin/professor/student accounts
 src/proxy.ts                Route protection (Next.js 16's replacement for middleware.ts)
 src/lib/                    Session/auth, Prisma client, scheduling, Stripe, Daily.co, AI summary, DAL helpers
-src/lib/notifications/      Email (Resend) + SMS/WhatsApp (Twilio) senders
+src/lib/notifications/      Email (Resend) + WhatsApp (Twilio) senders
 src/actions/                Server Actions (auth, bookings, availability, messages, billing, admin, profile)
 src/app/(admin|professor|student)/   Role-specific dashboards
 src/app/about               Public "About Cooachly" page

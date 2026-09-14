@@ -1,7 +1,7 @@
 import "server-only";
 import type { Booking, User } from "@prisma/client";
 import { sendEmail } from "./email";
-import { sendSms, sendWhatsApp } from "./sms";
+import { sendWhatsApp } from "./sms";
 
 export type ReminderKind = "24h" | "1h" | "5m";
 
@@ -55,7 +55,6 @@ async function notifyPerson(
   ];
 
   if (person.phone) {
-    tasks.push(sendSms({ to: person.phone, body: textBody }));
     tasks.push(sendWhatsApp({ to: person.phone, body: textBody }));
   }
 

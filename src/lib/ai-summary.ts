@@ -5,9 +5,10 @@ const apiKey = process.env.OPENAI_API_KEY;
 export const isAiSummaryConfigured = Boolean(apiKey);
 
 /**
- * Downloads a recording and transcribes it with OpenAI's Whisper model.
- * Whisper's API caps uploads at 25MB, which covers roughly an hour of
- * compressed audio — long enough for a single coaching session.
+ * Downloads a recording and transcribes it with gpt-4o-mini-transcribe
+ * (half the cost of whisper-1 for the same job). The API caps uploads at
+ * 25MB, which covers roughly an hour of compressed audio — long enough
+ * for a single coaching session.
  */
 export async function transcribeRecording(recordingUrl: string): Promise<string | null> {
   if (!apiKey) return null;
@@ -21,7 +22,7 @@ export async function transcribeRecording(recordingUrl: string): Promise<string 
 
   const form = new FormData();
   form.append("file", audioBlob, "session.mp4");
-  form.append("model", "whisper-1");
+  form.append("model", "gpt-4o-mini-transcribe");
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
