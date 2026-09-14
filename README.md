@@ -135,12 +135,14 @@ Open [http://localhost:3000](http://localhost:3000).
    `TWILIO_SMS_FROM`. For WhatsApp, join Twilio's WhatsApp sandbox (or apply for a production
    WhatsApp sender) and set `TWILIO_WHATSAPP_FROM` to the number Twilio gives you, e.g.
    `whatsapp:+14155238886`.
-3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then either:
-   - Rely on the `vercel.json` in this repo, which asks Vercel to hit `/api/cron/reminders`
-     every 5 minutes (Vercel automatically sends the right `Authorization` header when
-     `CRON_SECRET` is set as an env var) — check your Vercel plan supports this frequency, or
-   - Use a free external scheduler like [cron-job.org](https://cron-job.org) to call
-     `https://your-domain.com/api/cron/reminders?secret=<CRON_SECRET>` every 5 minutes instead.
+3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then use a free
+   external scheduler like [cron-job.org](https://cron-job.org) to call
+   `https://your-domain.com/api/cron/reminders?secret=<CRON_SECRET>` every 5 minutes.
+
+   (Vercel's own Cron Jobs feature can also call this endpoint via a `vercel.json` `crons` entry,
+   but Vercel's **Hobby plan only allows once-a-day cron schedules** — a 5-minute schedule is
+   silently rejected and will block every deployment. Stick with an external scheduler like
+   cron-job.org unless you're on a Pro plan or above.)
 
 Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
