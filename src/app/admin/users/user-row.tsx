@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import type { User, Role } from "@prisma/client";
 import { setUserActive, setUserRole } from "@/actions/admin";
@@ -31,13 +32,18 @@ export function UserRow({ user }: { user: User }) {
         {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(user.createdAt)}
       </td>
       <td className="px-4 py-3">
-        <Button
-          variant={user.isActive ? "danger" : "secondary"}
-          disabled={isPending}
-          onClick={() => startTransition(() => setUserActive(user.id, !user.isActive))}
-        >
-          {user.isActive ? "Disable" : "Enable"}
-        </Button>
+        <div className="flex gap-2">
+          <Link href={`/admin/users/${user.id}`}>
+            <Button variant="secondary">Edit</Button>
+          </Link>
+          <Button
+            variant={user.isActive ? "danger" : "secondary"}
+            disabled={isPending}
+            onClick={() => startTransition(() => setUserActive(user.id, !user.isActive))}
+          >
+            {user.isActive ? "Disable" : "Enable"}
+          </Button>
+        </div>
       </td>
     </tr>
   );

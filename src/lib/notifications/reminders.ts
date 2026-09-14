@@ -59,5 +59,10 @@ async function notifyPerson(
     tasks.push(sendWhatsApp({ to: person.phone, body: textBody }));
   }
 
+  // Also notify a parent/guardian's WhatsApp number, if one is on file.
+  if (person.parentPhone) {
+    tasks.push(sendWhatsApp({ to: person.parentPhone, body: textBody }));
+  }
+
   await Promise.all(tasks);
 }
