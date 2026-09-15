@@ -20,6 +20,9 @@ export default function RegisterPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
+      <Link href="/" className="mb-2 text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+        ← Home
+      </Link>
       <Link href="/" className="mb-8">
         <Logo withTagline />
       </Link>
@@ -62,7 +65,7 @@ export default function RegisterPage() {
             <FormMessage>{state?.errors?.email?.[0]}</FormMessage>
           </div>
           <div>
-            <Label htmlFor="phone">Phone (optional, for SMS/WhatsApp reminders)</Label>
+            <Label htmlFor="phone">Phone (optional, for WhatsApp reminders)</Label>
             <Input id="phone" name="phone" type="tel" placeholder="+1 555 123 4567" />
             <FormMessage>{state?.errors?.phone?.[0]}</FormMessage>
           </div>

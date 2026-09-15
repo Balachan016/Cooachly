@@ -11,6 +11,9 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
+      <Link href="/" className="mb-2 text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+        ← Home
+      </Link>
       <Link href="/" className="mb-8">
         <Logo withTagline />
       </Link>

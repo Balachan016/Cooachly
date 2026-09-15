@@ -9,12 +9,17 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-xl px-6 py-10">
-      <Link
-        href={roleHomePath(session.role)}
-        className="text-sm font-medium text-green-700 hover:underline"
-      >
-        ← Back to dashboard
-      </Link>
+      <div className="flex items-center gap-4">
+        <Link
+          href={roleHomePath(session.role)}
+          className="text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+        >
+          ← Back to dashboard
+        </Link>
+        <Link href="/" className="text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+          Home
+        </Link>
+      </div>
 
       <h1 className="mt-4 text-2xl font-semibold">Account settings</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
