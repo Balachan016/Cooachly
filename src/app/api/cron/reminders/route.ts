@@ -3,11 +3,11 @@ import { addHours, addMinutes } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { sendBookingReminder } from "@/lib/notifications/reminders";
 
-// Run this endpoint every 5 minutes via Vercel Cron (see vercel.json) or an
-// external scheduler such as cron-job.org. Each run looks for confirmed
-// bookings starting ~24h, ~1h, or ~5m from now that haven't had that
-// reminder sent yet, and sends it (email always; SMS/WhatsApp if the user
-// has a phone number and Twilio is configured).
+// Run this endpoint every 5 minutes via an external scheduler such as
+// cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
+// or ~5m from now that haven't had that reminder sent yet, and sends it
+// (email always; WhatsApp if the user has a phone number and Twilio is
+// configured).
 
 const WINDOW_MINUTES = 5;
 
