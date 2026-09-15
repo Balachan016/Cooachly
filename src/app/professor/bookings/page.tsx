@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
-import { isPastDate } from "@/lib/time";
+import { isPastDate, isWithinJoinWindow } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { ProfessorBookingRow } from "./booking-row";
 
@@ -24,7 +24,12 @@ export default async function ProfessorBookingsPage() {
       <Card className="mt-6 p-0">
         <div className="divide-y divide-black/5 dark:divide-white/5">
           {bookings.map((b) => (
-            <ProfessorBookingRow key={b.id} booking={b} isPast={isPastDate(b.endAt)} />
+            <ProfessorBookingRow
+              key={b.id}
+              booking={b}
+              isPast={isPastDate(b.endAt)}
+              canJoin={isWithinJoinWindow(b.startAt, b.endAt)}
+            />
           ))}
           {bookings.length === 0 && (
             <p className="p-6 text-sm text-black/50 dark:text-white/50">No bookings yet.</p>

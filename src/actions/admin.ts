@@ -4,6 +4,11 @@ import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
+import { hashPassword } from "@/lib/password";
+import { sendEmail } from "@/lib/notifications/email";
+import { sendWhatsApp } from "@/lib/notifications/sms";
+import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
+import type { SimpleFormState } from "@/actions/auth";
 import type { Role } from "@prisma/client";
 
 export async function setUserRole(userId: string, role: Role) {
@@ -98,4 +103,72 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
   return { message: "Saved.", success: true as const };
+}
+
+const AdminResetPasswordSchema = z.object({
+  newPassword: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+export async function adminResetPassword(
+  userId: string,
+  _state: SimpleFormState,
+  formData: FormData
+): Promise<SimpleFormState> {
+  await requireRole("ADMIN");
+
+  const parsed = AdminResetPasswordSchema.safeParse({ newPassword: formData.get("newPassword") });
+  if (!parsed.success) {
+    return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { message: "User not found." };
+
+  const passwordHash = await hashPassword(parsed.data.newPassword);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+  return { message: "Password reset.", success: true };
+}
+
+export async function sendTestNotification(): Promise<{ message: string }> {
+  const session = await requireRole("ADMIN");
+
+  const admin = await prisma.user.findUnique({ where: { id: session.userId } });
+  if (!admin) return { message: "Admin account not found." };
+
+  let joinLink: string | null = null;
+  if (isDailyConfigured) {
+    const startAt = new Date();
+    const endAt = new Date(Date.now() + 60 * 60 * 1000);
+    const room = await createDailyRoomForBooking({ bookingId: `test-${Date.now()}`, startAt, endAt });
+    joinLink = room?.url ?? null;
+  }
+
+  const linkLine = joinLink ? `\n\nJoin here: ${joinLink}` : "";
+  const textBody = `This is a test notification from Cooachly.${linkLine}`;
+  const emailHtml = `
+    <p>Hi ${admin.name},</p>
+    <p>This is a test notification from Cooachly to confirm your email/WhatsApp/video setup is working.</p>
+    ${joinLink ? `<p><a href="${joinLink}">Click here to join a test video call</a></p>` : "<p>(Daily.co isn't configured yet, so no video link was generated.)</p>"}
+    <p>— Cooachly</p>
+  `;
+
+  const emailResult = await sendEmail({ to: admin.email, subject: "Cooachly test notification", html: emailHtml });
+  const emailStatus = emailResult.skipped ? "not configured" : emailResult.error ? "failed" : "sent";
+
+  let whatsappStatus: string;
+  if (!admin.phone) {
+    whatsappStatus = "skipped — no phone number on your account (add one under Settings)";
+  } else {
+    const waResult = await sendWhatsApp({ to: admin.phone, body: textBody });
+    whatsappStatus = waResult.skipped ? "not configured" : waResult.error ? "failed" : "sent";
+  }
+
+  const videoStatus = isDailyConfigured
+    ? joinLink
+      ? "video link included"
+      : "video room creation failed"
+    : "Daily.co not configured, no link generated";
+
+  return { message: `Email: ${emailStatus}. WhatsApp: ${whatsappStatus}. Video: ${videoStatus}.` };
 }

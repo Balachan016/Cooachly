@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
-import { provisionVideoRoomForBooking } from "@/lib/daily";
+import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 
 const BookSlotSchema = z.object({
   professorId: z.string().min(1),
@@ -154,6 +154,25 @@ export async function setMeetingLink(bookingId: string, meetingLink: string) {
 
   revalidatePath("/professor/bookings");
   revalidatePath("/student/bookings");
+}
+
+export async function extendBooking(bookingId: string, minutes: 15 | 30) {
+  await requireRole("ADMIN");
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.status === "CANCELLED") return;
+
+  const newEndAt = new Date(booking.endAt.getTime() + minutes * 60_000);
+  await prisma.booking.update({ where: { id: bookingId }, data: { endAt: newEndAt } });
+
+  if (booking.dailyRoomName) {
+    const newExp = Math.floor(newEndAt.getTime() / 1000) + 2 * 60 * 60; // same 2h wrap-up buffer as room creation
+    await updateDailyRoomExpiry(booking.dailyRoomName, newExp);
+  }
+
+  revalidatePath("/admin/bookings");
+  revalidatePath("/student/bookings");
+  revalidatePath("/professor/bookings");
 }
 
 export async function markBookingCompleted(bookingId: string) {

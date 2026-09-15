@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { Badge, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
+import { AdminBookingRow } from "./booking-row";
 
 export default async function AdminBookingsPage() {
   const bookings = await prisma.booking.findMany({
@@ -25,30 +26,17 @@ export default async function AdminBookingsPage() {
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3">Price</th>
+              <th className="px-4 py-3">Video</th>
+              <th className="px-4 py-3">Extend</th>
             </tr>
           </thead>
           <tbody>
             {bookings.map((b) => (
-              <tr key={b.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                <td className="px-4 py-3">
-                  {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(b.startAt)}
-                </td>
-                <td className="px-4 py-3">{b.student.name}</td>
-                <td className="px-4 py-3">{b.professor.name}</td>
-                <td className="px-4 py-3">
-                  <Badge tone={b.status === "CANCELLED" ? "danger" : b.status === "COMPLETED" ? "success" : "default"}>
-                    {b.status}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone={b.paymentStatus === "UNPAID" ? "warning" : "success"}>{b.paymentStatus}</Badge>
-                </td>
-                <td className="px-4 py-3">${(b.priceCents / 100).toFixed(2)}</td>
-              </tr>
+              <AdminBookingRow key={b.id} booking={b} />
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+                <td colSpan={8} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
                   No bookings yet.
                 </td>
               </tr>

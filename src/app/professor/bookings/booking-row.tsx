@@ -5,7 +5,15 @@ import type { Booking, User } from "@prisma/client";
 import { cancelBooking, markBookingCompleted, setMeetingLink } from "@/actions/bookings";
 import { Badge, Button, Input } from "@/components/ui";
 
-export function ProfessorBookingRow({ booking, isPast }: { booking: Booking & { student: User }; isPast: boolean }) {
+export function ProfessorBookingRow({
+  booking,
+  isPast,
+  canJoin,
+}: {
+  booking: Booking & { student: User };
+  isPast: boolean;
+  canJoin: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const [link, setLink] = useState(booking.meetingLink ?? "");
 
@@ -22,6 +30,24 @@ export function ProfessorBookingRow({ booking, isPast }: { booking: Booking & { 
           </Badge>
           <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
         </div>
+        {booking.meetingLink && booking.status !== "CANCELLED" && (
+          canJoin ? (
+            <a
+              href={booking.meetingLink}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+            >
+              Join video call →
+            </a>
+          ) : (
+            !isPast && (
+              <p className="mt-2 text-sm text-black/40 dark:text-white/40">
+                Join link opens 5 minutes before the session.
+              </p>
+            )
+          )
+        )}
       </div>
 
       {booking.status !== "CANCELLED" && (

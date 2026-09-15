@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
+import { TestNotificationButton } from "./test-notification-button";
 
 export default async function AdminOverviewPage() {
   const [userCount, professorCount, studentCount, bookingCount, paidBookings] = await Promise.all([
@@ -33,6 +34,17 @@ export default async function AdminOverviewPage() {
         <h2 className="font-semibold">Revenue collected</h2>
         <p className="mt-2 text-3xl font-bold">${(revenueCents / 100).toFixed(2)}</p>
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">From {paidBookings.length} paid bookings</p>
+      </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Test notifications</h2>
+        <p className="mt-1 text-sm text-black/50 dark:text-white/50">
+          Sends a test email and WhatsApp message (with a video call join link) to your own account,
+          so you can confirm Resend, Twilio, and Daily.co are wired up correctly.
+        </p>
+        <div className="mt-4">
+          <TestNotificationButton />
+        </div>
       </Card>
     </div>
   );

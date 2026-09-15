@@ -81,6 +81,29 @@ export async function provisionVideoRoomForBooking(booking: {
   });
 }
 
+/**
+ * Extends how long a Daily room stays open, so an admin-extended booking's
+ * video call doesn't get cut off. `newExp` is a Unix timestamp (seconds).
+ */
+export async function updateDailyRoomExpiry(roomName: string, newExp: number): Promise<boolean> {
+  if (!apiKey) return false;
+
+  const res = await fetch(`${DAILY_API_BASE}/rooms/${roomName}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ properties: { exp: newExp } }),
+  });
+
+  if (!res.ok) {
+    console.error("Failed to update Daily room expiry", await res.text());
+    return false;
+  }
+  return true;
+}
+
 export async function getDailyRecordingDownloadLink(recordingId: string): Promise<string | null> {
   if (!apiKey) return null;
 
