@@ -5,19 +5,23 @@ const DAILY_API_BASE = "https://api.daily.co/v1";
 
 export const isDailyConfigured = Boolean(apiKey);
 
-// Cloud recording is billed per recorded minute on top of Daily's free video
-// minutes, so it's opt-in — set DAILY_ENABLE_RECORDING="true" to turn on
-// recording + the transcript/AI-summary pipeline (see /api/daily/webhook).
-// Video calls work either way; without recording, sessions just aren't
-// recorded or summarized afterwards.
-export const isRecordingEnabled = process.env.DAILY_ENABLE_RECORDING === "true";
+// Live transcription is billed per participant-minute on top of Daily's free
+// video minutes, so it's opt-in — set DAILY_ENABLE_TRANSCRIPTION="true" to
+// turn on transcription + the AI-summary pipeline (see /api/daily/webhook).
+// Video calls work either way; without it, sessions just aren't transcribed
+// or summarized afterwards.
+//
+// Prerequisite: transcription must also be enabled on your Daily domain
+// with a Deepgram API key (Daily's dashboard → Settings) — this is separate
+// from DAILY_API_KEY and is a one-time setup step in Daily's UI.
+export const isTranscriptionEnabled = process.env.DAILY_ENABLE_TRANSCRIPTION === "true";
 
 /**
  * Creates a Daily.co video room for a booking. The room is only joinable
  * from shortly before the session until a couple hours after (`nbf`/`exp`).
- * If recording is enabled, it's recorded to the cloud so a transcript + AI
- * summary can be generated afterwards (see the Daily webhook handler at
- * /api/daily/webhook).
+ * If transcription is enabled, the transcript is persisted to storage so it
+ * can be downloaded and summarized afterwards (see the webhook handler at
+ * /api/daily/webhook, which starts transcription once the call begins).
  */
 export async function createDailyRoomForBooking(opts: {
   bookingId: string;
@@ -39,7 +43,7 @@ export async function createDailyRoomForBooking(opts: {
       name: `cooachly-${opts.bookingId}`,
       privacy: "public",
       properties: {
-        ...(isRecordingEnabled ? { enable_recording: "cloud" } : {}),
+        ...(isTranscriptionEnabled ? { enable_transcription_storage: true } : {}),
         nbf,
         exp,
       },
@@ -104,18 +108,63 @@ export async function updateDailyRoomExpiry(roomName: string, newExp: number): P
   return true;
 }
 
-export async function getDailyRecordingDownloadLink(recordingId: string): Promise<string | null> {
+/**
+ * Starts live transcription for a room. Called from the Daily webhook when
+ * a call begins (`meeting.started`), since transcription can only be
+ * started once a session is active.
+ */
+export async function startTranscription(roomName: string): Promise<boolean> {
+  if (!apiKey) return false;
+
+  const res = await fetch(`${DAILY_API_BASE}/rooms/${roomName}/transcription/start`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ language: "en" }),
+  });
+
+  if (!res.ok) {
+    console.error("Failed to start Daily transcription", await res.text());
+    return false;
+  }
+  return true;
+}
+
+export async function getTranscriptDownloadLink(transcriptId: string): Promise<string | null> {
   if (!apiKey) return null;
 
-  const res = await fetch(`${DAILY_API_BASE}/recordings/${recordingId}/access-link`, {
+  const res = await fetch(`${DAILY_API_BASE}/transcript/${transcriptId}/access-link`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
 
   if (!res.ok) {
-    console.error("Failed to fetch Daily recording access link", await res.text());
+    console.error("Failed to fetch Daily transcript access link", await res.text());
     return null;
   }
 
   const data = (await res.json()) as { download_link: string };
   return data.download_link;
+}
+
+/**
+ * Daily delivers transcripts as WebVTT files. This strips the cue numbers,
+ * timestamps, and speaker markup down to plain readable text for GPT to
+ * summarize and for the admin class-log viewer to display.
+ */
+export function parseVttTranscript(vtt: string): string {
+  return vtt
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (trimmed.startsWith("WEBVTT")) return false;
+      if (/^\d+$/.test(trimmed)) return false;
+      if (trimmed.includes("-->")) return false;
+      return true;
+    })
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

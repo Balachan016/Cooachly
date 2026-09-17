@@ -37,6 +37,7 @@ export default async function AvailabilityPage() {
                 id={a.id}
                 label={`${DAY_NAMES[a.dayOfWeek]} ${a.startTime}–${a.endTime}`}
                 timezone={a.timezone}
+                sessionLengthMinutes={a.sessionLengthMinutes}
               />
             ))}
             {availabilities.length === 0 && (

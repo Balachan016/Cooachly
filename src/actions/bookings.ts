@@ -46,7 +46,10 @@ export async function bookSlot(_state: unknown, formData: FormData) {
     },
   });
 
-  const priceCents = professor.professorProfile.hourlyRateCents;
+  // hourlyRateCents is the professor's price for a SESSION_LENGTH_MINUTES session; prorate for the slot's actual length.
+  const priceCents = Math.round(
+    (professor.professorProfile.hourlyRateCents * match.sessionLengthMinutes) / SESSION_LENGTH_MINUTES
+  );
 
   if (activeSubscription) {
     const booking = await prisma.booking.create({
@@ -106,7 +109,7 @@ export async function bookSlot(_state: unknown, formData: FormData) {
           currency: "usd",
           unit_amount: priceCents,
           product_data: {
-            name: `${SESSION_LENGTH_MINUTES}-minute session with ${professor.name}`,
+            name: `${match.sessionLengthMinutes}-minute session with ${professor.name}`,
           },
         },
         quantity: 1,

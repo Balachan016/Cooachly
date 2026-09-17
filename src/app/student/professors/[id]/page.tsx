@@ -47,7 +47,9 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
             <span className="text-lg font-semibold">
               ${((professor.professorProfile?.hourlyRateCents ?? 0) / 100).toFixed(2)}
             </span>
-            <span className="text-sm text-black/50 dark:text-white/50">/ 60-minute session</span>
+            <span className="text-sm text-black/50 dark:text-white/50">
+              / 60-minute session (final price shown per slot below)
+            </span>
           </div>
 
           <Link

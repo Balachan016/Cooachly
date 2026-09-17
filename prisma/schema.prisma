@@ -64,6 +64,10 @@ model User {
   subscriptionsAsProfessor Subscription[] @relation("ProfessorSubscriptions")
 
   passwordResetTokens  PasswordResetToken[]
+
+  attachmentsUploaded      Attachment[]     @relation("UploadedAttachments")
+  monthlySummariesAsStudent   MonthlySummary[] @relation("StudentMonthlySummaries")
+  monthlySummariesAsProfessor MonthlySummary[] @relation("ProfessorMonthlySummaries")
 }
 
 model PasswordResetToken {
@@ -103,6 +107,7 @@ model Availability {
   startTime    String   // "HH:mm" in the professor's timezone
   endTime      String   // "HH:mm" in the professor's timezone
   timezone     String   // IANA timezone name, e.g. "America/New_York"
+  sessionLengthMinutes Int @default(60) // 45, 60, 75, or 90
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
@@ -141,9 +146,45 @@ model Booking {
   updatedAt              DateTime      @updatedAt
 
   messages               Message[]
+  attachments            Attachment[]
 
   @@index([professorId, startAt])
   @@index([studentId, startAt])
+}
+
+enum AttachmentKind {
+  TEST
+  ANSWER
+}
+
+model Attachment {
+  id           String         @id @default(cuid())
+  bookingId    String
+  booking      Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User           @relation("UploadedAttachments", fields: [uploadedById], references: [id], onDelete: Cascade)
+  kind         AttachmentKind
+  fileName     String
+  fileUrl      String
+  createdAt    DateTime       @default(now())
+
+  @@index([bookingId])
+}
+
+model MonthlySummary {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      User     @relation("StudentMonthlySummaries", fields: [studentId], references: [id], onDelete: Cascade)
+  professorId  String
+  professor    User     @relation("ProfessorMonthlySummaries", fields: [professorId], references: [id], onDelete: Cascade)
+  subject      String
+  periodStart  DateTime
+  periodEnd    DateTime
+  sessionCount Int
+  summary      String
+  createdAt    DateTime @default(now())
+
+  @@unique([studentId, professorId, periodStart])
 }
 
 model Message {

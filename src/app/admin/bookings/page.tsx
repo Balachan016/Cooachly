@@ -6,7 +6,7 @@ export default async function AdminBookingsPage() {
   const bookings = await prisma.booking.findMany({
     orderBy: { startAt: "desc" },
     take: 100,
-    include: { student: true, professor: true },
+    include: { student: true, professor: true, attachments: true },
   });
 
   return (
@@ -28,6 +28,7 @@ export default async function AdminBookingsPage() {
               <th className="px-4 py-3">Price</th>
               <th className="px-4 py-3">Video</th>
               <th className="px-4 py-3">Extend</th>
+              <th className="px-4 py-3">Files</th>
             </tr>
           </thead>
           <tbody>
@@ -36,7 +37,7 @@ export default async function AdminBookingsPage() {
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+                <td colSpan={9} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
                   No bookings yet.
                 </td>
               </tr>

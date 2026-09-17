@@ -9,7 +9,8 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
   protected routes (enforced both in `src/proxy.ts` and in every server component via
   `src/lib/dal.ts`).
 - **Timezone-aware scheduling** — professors set recurring weekly availability once (in their own
-  timezone); students always see open 1-hour slots converted to their own local timezone.
+  timezone, choosing a session length of 45/60/75/90 minutes per window); students always see open
+  slots converted to their own local timezone, priced proportionally to the slot's length.
 - **Booking & payments** — students book sessions and pay via Stripe Checkout (one-off per
   session), or subscribe monthly to a professor for unlimited sessions. If Stripe isn't
   configured, bookings are auto-confirmed so you can develop without a Stripe account.
@@ -17,13 +18,19 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Video calls** — every confirmed booking gets its own Daily.co video room automatically. If
   `DAILY_API_KEY` isn't set, professors can paste a manual meeting link (Zoom, Google Meet, etc.)
   instead.
-- **Optional cloud recording + AI session summaries** — set `DAILY_ENABLE_RECORDING="true"` to
-  record sessions to the cloud (billed per minute by Daily) and get them transcribed (OpenAI
-  `gpt-4o-mini-transcribe`) and summarized (OpenAI GPT) automatically, then emailed to both
-  student and professor. Off by default to keep video calls free.
+- **Optional live transcription + AI session summaries** — set `DAILY_ENABLE_TRANSCRIPTION="true"`
+  to transcribe sessions live (Daily + Deepgram, billed per participant-minute — no audio/video is
+  stored, just text) and get them summarized (OpenAI GPT) automatically after each class, then
+  emailed to both student and professor. Off by default to keep video calls free.
+- **Monthly student summaries** — admins can generate a consolidated monthly progress recap per
+  student/subject from that month's session summaries, from the Class Logs page.
+- **Admin class log** — admins can browse every past session with its transcript and AI summary.
+- **Test files & answers** — professors and admins can share a test file on a booking; students
+  upload their answer back, both stored via Vercel Blob.
 - **Reminders** — automatic email (Resend) and WhatsApp (Twilio) reminders 1 day, 1 hour, and
   5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
-- **Admin panel** — manage user roles/access and see all bookings and revenue.
+- **Admin panel** — manage user roles/access, extend or join any booking's video call, and see all
+  bookings and revenue.
 - **About page** at `/about`.
 
 ## Tech stack
@@ -33,9 +40,10 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - [Prisma](https://www.prisma.io) + PostgreSQL
 - Auth: custom email/password auth using signed, httpOnly JWT session cookies ([`jose`](https://github.com/panva/jose) + `bcryptjs`) — no third-party auth provider required
 - [Stripe](https://stripe.com) for payments and subscriptions
-- [Daily.co](https://daily.co) for video rooms + cloud recording
-- [OpenAI](https://platform.openai.com) (`gpt-4o-mini-transcribe` + GPT) for transcription and AI summaries
+- [Daily.co](https://daily.co) for video rooms + live transcription
+- [OpenAI](https://platform.openai.com) (GPT) for session and monthly AI summaries
 - [Resend](https://resend.com) for email, [Twilio](https://twilio.com) for WhatsApp reminders
+- [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) for test-file and answer uploads
 
 Every third-party integration above is optional at the code level — if its API key isn't set,
 that feature no-ops (logs to the console) instead of crashing, so you can run and demo the app
@@ -164,19 +172,36 @@ job frequently is safe. WhatsApp is skipped for anyone without a phone number on
    [dashboard.daily.co/developers](https://dashboard.daily.co/developers). Set `DAILY_API_KEY`.
    Once set, every confirmed booking automatically gets a video room — no code changes needed.
    Without it, professors fall back to pasting a manual meeting link.
-2. **Cloud recording + AI summaries are opt-in**, since Daily bills recording per minute on top
-   of its free video minutes. By default (`DAILY_ENABLE_RECORDING` unset or `false`), video calls
-   work but aren't recorded, and no summary is generated. To turn recording + summaries on:
-   - Set `DAILY_ENABLE_RECORDING="true"`.
-   - In the Daily.co dashboard, add a webhook subscribed to the `recording.ready-to-download`
-     event, pointing at `https://your-domain.com/api/daily/webhook`. (Optional: enable webhook
-     signing and set `DAILY_WEBHOOK_SECRET` to verify requests.)
+2. **Live transcription + AI summaries are opt-in**, since Daily bills transcription per
+   participant-minute. By default (`DAILY_ENABLE_TRANSCRIPTION` unset or `false`), video calls
+   work but aren't transcribed, and no summary is generated. To turn transcription + summaries on:
+   - In the Daily.co dashboard, go to **Settings → Transcription** and add a Deepgram API key
+     (sign up free at [deepgram.com](https://deepgram.com) — this is a separate prerequisite from
+     `DAILY_API_KEY` and is required before transcription will work at all).
+   - Set `DAILY_ENABLE_TRANSCRIPTION="true"`.
+   - In the Daily.co dashboard, add a webhook pointing at `https://your-domain.com/api/daily/webhook`,
+     subscribed to both the `meeting.started` event (starts transcription when a call begins) and
+     the `transcript.ready-to-download` event (fetches the finished transcript). (Optional: enable
+     webhook signing and set `DAILY_WEBHOOK_SECRET` to verify requests.)
    - Sign up at [platform.openai.com](https://platform.openai.com), create an API key, and set
-     `OPENAI_API_KEY`. This powers both the transcription and the GPT-generated summary that
-     gets emailed to both parties after each session.
+     `OPENAI_API_KEY`. This powers the GPT-generated summary that gets emailed to both parties
+     after each session, and the monthly student recaps admins can generate from Class Logs.
 
-Note: the transcription API caps uploads at 25MB, which covers roughly an hour of compressed
-audio — fine for a single coaching session, but very long sessions may need to be trimmed.
+No audio or video is ever stored with this approach — only the text transcript, which is both
+cheaper and more private than cloud recording.
+
+## Setting up file sharing (Vercel Blob)
+
+Professors/admins can share a test file on a booking, and students can upload their answer back.
+This needs blob storage:
+
+1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available).
+2. Vercel automatically injects `BLOB_READ_WRITE_TOKEN` into your production environment once
+   connected — no manual copying needed there. For local development, copy the token shown in the
+   Blob store's dashboard into your `.env`.
+
+Without this configured, upload attempts show a message asking an admin to set it up, rather than
+failing silently.
 
 ## Deploying — hosting `cooachly.com`
 
@@ -250,15 +275,16 @@ handling payments.
 ## Project structure
 
 ```
-prisma/schema.prisma        Database schema (User, ProfessorProfile, Availability, Booking, Message, Subscription)
+prisma/schema.prisma        Database schema (User, ProfessorProfile, Availability, Booking, Message, Subscription, Attachment, MonthlySummary)
 prisma/seed.ts              Seed script for sample admin/professor/student accounts
 src/proxy.ts                Route protection (Next.js 16's replacement for middleware.ts)
-src/lib/                    Session/auth, Prisma client, scheduling, Stripe, Daily.co, AI summary, DAL helpers
+src/lib/                    Session/auth, Prisma client, scheduling, Stripe, Daily.co, AI summary, blob storage, DAL helpers
 src/lib/notifications/      Email (Resend) + WhatsApp (Twilio) senders
-src/actions/                Server Actions (auth, bookings, availability, messages, billing, admin, profile)
+src/actions/                Server Actions (auth, bookings, availability, messages, billing, admin, profile, attachments, monthly-summary)
 src/app/(admin|professor|student)/   Role-specific dashboards
+src/app/admin/class-logs    Admin view of every past session's transcript/AI summary + monthly recaps
 src/app/about               Public "About Cooachly" page
 src/app/api/stripe/webhook  Stripe webhook handler
-src/app/api/daily/webhook   Daily.co recording-ready webhook → transcribe + summarize + email
+src/app/api/daily/webhook   Daily.co webhook → starts transcription, then summarizes + emails when ready
 src/app/api/cron/reminders  Scheduled job: sends 24h/1h/5m reminders for upcoming sessions
 ```

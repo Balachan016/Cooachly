@@ -9,6 +9,7 @@ export const BOOKING_WINDOW_DAYS = 14;
 export type AvailableSlot = {
   startAt: Date;
   endAt: Date;
+  sessionLengthMinutes: number;
 };
 
 /**
@@ -43,13 +44,14 @@ export async function getAvailableSlots(professorId: string): Promise<AvailableS
       const dateStr = formatDateOnly(cursor);
       const rangeStart = fromZonedTime(`${dateStr}T${availability.startTime}:00`, availability.timezone);
       const rangeEnd = fromZonedTime(`${dateStr}T${availability.endTime}:00`, availability.timezone);
+      const length = availability.sessionLengthMinutes;
 
       for (
         let slotStart = rangeStart;
-        isBefore(addMinutes(slotStart, SESSION_LENGTH_MINUTES), addMinutes(rangeEnd, 1));
-        slotStart = addMinutes(slotStart, SESSION_LENGTH_MINUTES)
+        isBefore(addMinutes(slotStart, length), addMinutes(rangeEnd, 1));
+        slotStart = addMinutes(slotStart, length)
       ) {
-        const slotEnd = addMinutes(slotStart, SESSION_LENGTH_MINUTES);
+        const slotEnd = addMinutes(slotStart, length);
 
         if (isBefore(slotStart, now)) continue;
 
@@ -58,7 +60,7 @@ export async function getAvailableSlots(professorId: string): Promise<AvailableS
         );
         if (overlaps) continue;
 
-        slots.push({ startAt: slotStart, endAt: slotEnd });
+        slots.push({ startAt: slotStart, endAt: slotEnd, sessionLengthMinutes: length });
       }
     }
   }
@@ -80,11 +82,15 @@ export function groupSlotsByLocalDay(slots: AvailableSlot[], timezone: string) {
     minute: "2-digit",
   });
 
-  const groups = new Map<string, { startAt: string; label: string }[]>();
+  const groups = new Map<string, { startAt: string; label: string; sessionLengthMinutes: number }[]>();
   for (const slot of slots) {
     const dayLabel = dayFormatter.format(slot.startAt);
     const list = groups.get(dayLabel) ?? [];
-    list.push({ startAt: slot.startAt.toISOString(), label: timeFormatter.format(slot.startAt) });
+    list.push({
+      startAt: slot.startAt.toISOString(),
+      label: `${timeFormatter.format(slot.startAt)} (${slot.sessionLengthMinutes} min)`,
+      sessionLengthMinutes: slot.sessionLengthMinutes,
+    });
     groups.set(dayLabel, list);
   }
 

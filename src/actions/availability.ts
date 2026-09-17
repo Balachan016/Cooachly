@@ -10,6 +10,9 @@ const AvailabilitySchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   timezone: z.string().min(1),
+  sessionLengthMinutes: z.coerce.number().int().refine((v) => [45, 60, 75, 90].includes(v), {
+    message: "Session length must be 45, 60, 75, or 90 minutes.",
+  }),
 });
 
 export async function addAvailability(formData: FormData) {
@@ -20,14 +23,15 @@ export async function addAvailability(formData: FormData) {
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     timezone: formData.get("timezone"),
+    sessionLengthMinutes: formData.get("sessionLengthMinutes"),
   });
 
   if (!parsed.success) return;
-  const { dayOfWeek, startTime, endTime, timezone } = parsed.data;
+  const { dayOfWeek, startTime, endTime, timezone, sessionLengthMinutes } = parsed.data;
   if (startTime >= endTime) return;
 
   await prisma.availability.create({
-    data: { professorId: session.userId, dayOfWeek, startTime, endTime, timezone },
+    data: { professorId: session.userId, dayOfWeek, startTime, endTime, timezone, sessionLengthMinutes },
   });
 
   revalidatePath("/professor/availability");

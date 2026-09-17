@@ -1,16 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Booking, User } from "@prisma/client";
+import type { Attachment, Booking, User } from "@prisma/client";
 import { cancelBooking, markBookingCompleted, setMeetingLink } from "@/actions/bookings";
 import { Badge, Button, Input } from "@/components/ui";
+import { AttachmentPanel } from "@/components/attachment-panel";
 
 export function ProfessorBookingRow({
   booking,
   isPast,
   canJoin,
 }: {
-  booking: Booking & { student: User };
+  booking: Booking & { student: User; attachments: Attachment[] };
   isPast: boolean;
   canJoin: boolean;
 }) {
@@ -47,6 +48,14 @@ export function ProfessorBookingRow({
               </p>
             )
           )
+        )}
+        {booking.status !== "CANCELLED" && (
+          <AttachmentPanel
+            bookingId={booking.id}
+            attachments={booking.attachments}
+            canUploadTest={true}
+            canUploadAnswer={false}
+          />
         )}
       </div>
 

@@ -1,11 +1,16 @@
 "use client";
 
 import { useTransition } from "react";
-import type { Booking, User } from "@prisma/client";
+import type { Attachment, Booking, User } from "@prisma/client";
 import { extendBooking } from "@/actions/bookings";
 import { Badge, Button } from "@/components/ui";
+import { AttachmentPanel } from "@/components/attachment-panel";
 
-export function AdminBookingRow({ booking }: { booking: Booking & { student: User; professor: User } }) {
+export function AdminBookingRow({
+  booking,
+}: {
+  booking: Booking & { student: User; professor: User; attachments: Attachment[] };
+}) {
   const [isPending, startTransition] = useTransition();
   const canExtend = booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
 
@@ -60,6 +65,14 @@ export function AdminBookingRow({ booking }: { booking: Booking & { student: Use
         ) : (
           <span className="text-black/30 dark:text-white/30">—</span>
         )}
+      </td>
+      <td className="min-w-[220px] px-4 py-3">
+        <AttachmentPanel
+          bookingId={booking.id}
+          attachments={booking.attachments}
+          canUploadTest={booking.status !== "CANCELLED"}
+          canUploadAnswer={false}
+        />
       </td>
     </tr>
   );

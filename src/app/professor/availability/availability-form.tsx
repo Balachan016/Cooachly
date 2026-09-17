@@ -68,6 +68,16 @@ export function AvailabilityForm({ defaultTimezone }: { defaultTimezone: string 
       </div>
 
       <div>
+        <Label htmlFor="sessionLengthMinutes">Session length</Label>
+        <Select id="sessionLengthMinutes" name="sessionLengthMinutes" defaultValue="60" required>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+          <option value="75">75 minutes</option>
+          <option value="90">90 minutes</option>
+        </Select>
+      </div>
+
+      <div>
         <Label htmlFor="timezone">Timezone</Label>
         <Select id="timezone" name="timezone" defaultValue={defaultTimezone} required>
           {!TIMEZONES.includes(defaultTimezone) && <option value={defaultTimezone}>{defaultTimezone}</option>}
