@@ -25,8 +25,16 @@ export async function POST(request: Request) {
   const webhookSecret = process.env.DAILY_WEBHOOK_SECRET;
   if (webhookSecret) {
     const signature = request.headers.get("x-webhook-signature");
-    const expected = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
-    if (signature !== expected) {
+    const timestamp = request.headers.get("x-webhook-timestamp");
+    // Daily's hmac is base64-encoded and must be decoded before use as the
+    // HMAC key; the signed payload is "<timestamp>.<raw body>", and the
+    // result is compared as base64 (not hex).
+    const decodedSecret = Buffer.from(webhookSecret, "base64");
+    const expected = crypto
+      .createHmac("sha256", decodedSecret)
+      .update(`${timestamp}.${body}`)
+      .digest("base64");
+    if (!timestamp || signature !== expected) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
   }
