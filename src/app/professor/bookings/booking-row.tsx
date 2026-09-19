@@ -1,22 +1,28 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Attachment, Booking, StudentProfile, User } from "@prisma/client";
+import type { Attachment, Booking, Review, StudentProfile, User } from "@prisma/client";
 import { cancelBooking, markBookingCompleted, setMeetingLink } from "@/actions/bookings";
 import { Badge, Button, Input } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
+import { ReviewForm } from "@/components/review-form";
 
 export function ProfessorBookingRow({
   booking,
   isPast,
   canJoin,
 }: {
-  booking: Booking & { student: User & { studentProfile: StudentProfile | null }; attachments: Attachment[] };
+  booking: Booking & {
+    student: User & { studentProfile: StudentProfile | null };
+    attachments: Attachment[];
+    reviews: Review[];
+  };
   isPast: boolean;
   canJoin: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [link, setLink] = useState(booking.meetingLink ?? "");
+  const myReview = booking.reviews.find((r) => r.raterId === booking.professorId);
 
   return (
     <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -77,6 +83,14 @@ export function ProfessorBookingRow({
             attachments={booking.attachments}
             canUploadTest={true}
             canUploadAnswer={false}
+          />
+        )}
+        {booking.status === "COMPLETED" && (
+          <ReviewForm
+            bookingId={booking.id}
+            revieweeLabel={booking.student.name}
+            existingRating={myReview?.rating}
+            existingComment={myReview?.comment}
           />
         )}
       </div>

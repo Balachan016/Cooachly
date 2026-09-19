@@ -4,6 +4,7 @@ import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole, requireSession } from "@/lib/dal";
+import { CURRICULUM_OPTIONS } from "@/lib/curricula";
 
 const ProfessorProfileSchema = z.object({
   headline: z.string().trim().max(120).default(""),
@@ -11,6 +12,7 @@ const ProfessorProfileSchema = z.object({
   subject: z.string().trim().max(120).default(""),
   hourlyRateCents: z.coerce.number().int().min(0).max(100000000),
   monthlyPriceCents: z.union([z.coerce.number().int().min(0).max(100000000), z.nan()]).optional(),
+  curricula: z.array(z.enum(CURRICULUM_OPTIONS)).default([]),
 });
 
 export async function updateProfessorProfile(_state: unknown, formData: FormData) {
@@ -23,13 +25,14 @@ export async function updateProfessorProfile(_state: unknown, formData: FormData
     subject: formData.get("subject"),
     hourlyRateCents: formData.get("hourlyRateCents"),
     monthlyPriceCents: rawMonthly ? rawMonthly : NaN,
+    curricula: formData.getAll("curricula"),
   });
 
   if (!parsed.success) {
     return { message: "Please check the form fields and try again." };
   }
 
-  const { headline, bio, subject, hourlyRateCents, monthlyPriceCents } = parsed.data;
+  const { headline, bio, subject, hourlyRateCents, monthlyPriceCents, curricula } = parsed.data;
 
   await prisma.professorProfile.upsert({
     where: { userId: session.userId },
@@ -40,6 +43,7 @@ export async function updateProfessorProfile(_state: unknown, formData: FormData
       subject,
       hourlyRateCents,
       monthlyPriceCents: Number.isNaN(monthlyPriceCents) ? null : monthlyPriceCents,
+      curricula,
     },
     update: {
       headline,
@@ -47,6 +51,7 @@ export async function updateProfessorProfile(_state: unknown, formData: FormData
       subject,
       hourlyRateCents,
       monthlyPriceCents: Number.isNaN(monthlyPriceCents) ? null : monthlyPriceCents,
+      curricula,
     },
   });
 

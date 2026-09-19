@@ -18,6 +18,12 @@ export default function ContactPage() {
           <Link href="/" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             Home
           </Link>
+          <Link href="/pricing" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
+            Pricing
+          </Link>
+          <Link href="/faq" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
+            FAQ
+          </Link>
           <Link href="/login" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             Log in
           </Link>

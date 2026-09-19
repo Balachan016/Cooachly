@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { getAvailableSlots, groupSlotsByLocalDay } from "@/lib/scheduling";
+import { getProfessorRatingSummary } from "@/lib/reviews";
 import { subscribeToProfessor } from "@/actions/billing";
 import { Badge, Button, Card } from "@/components/ui";
 import { BookingPicker } from "./booking-picker";
@@ -20,11 +21,12 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
   });
   if (!professor) notFound();
 
-  const [slots, subscription] = await Promise.all([
+  const [slots, subscription, rating] = await Promise.all([
     getAvailableSlots(professor.id),
     prisma.subscription.findFirst({
       where: { studentId: user.id, professorId: professor.id, status: "ACTIVE", currentPeriodEnd: { gt: new Date() } },
     }),
+    getProfessorRatingSummary(professor.id),
   ]);
 
   const groups = groupSlotsByLocalDay(slots, user.timezone);
@@ -36,8 +38,24 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
         <Card className="flex-1">
           <h1 className="text-2xl font-semibold">{professor.name}</h1>
           <p className="mt-1 text-green-700 dark:text-green-400">{professor.professorProfile?.subject || "Coaching"}</p>
+          {rating.count > 0 && (
+            <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+              {"★".repeat(Math.round(rating.average))}
+              {"☆".repeat(5 - Math.round(rating.average))}{" "}
+              <span className="text-black/40 dark:text-white/40">
+                {rating.average.toFixed(1)} ({rating.count} review{rating.count === 1 ? "" : "s"})
+              </span>
+            </p>
+          )}
           {professor.professorProfile?.headline && (
             <p className="mt-2 font-medium">{professor.professorProfile.headline}</p>
+          )}
+          {!!professor.professorProfile?.curricula.length && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {professor.professorProfile.curricula.map((c) => (
+                <Badge key={c}>{c}</Badge>
+              ))}
+            </div>
           )}
           <p className="mt-3 whitespace-pre-line text-sm text-black/70 dark:text-white/70">
             {professor.professorProfile?.bio}

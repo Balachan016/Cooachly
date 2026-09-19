@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import type { ProfessorProfile } from "@prisma/client";
 import { updateProfessorProfile } from "@/actions/profile";
 import { Button, FormMessage, Input, Label, Textarea } from "@/components/ui";
+import { CURRICULUM_OPTIONS } from "@/lib/curricula";
 
 export function ProfileForm({ profile }: { profile: ProfessorProfile | null }) {
   const [state, action, pending] = useActionState(updateProfessorProfile, undefined);
@@ -21,6 +22,26 @@ export function ProfileForm({ profile }: { profile: ProfessorProfile | null }) {
       <div>
         <Label htmlFor="bio">Bio</Label>
         <Textarea id="bio" name="bio" rows={5} defaultValue={profile?.bio ?? ""} placeholder="Tell students about your background…" />
+      </div>
+      <div>
+        <Label>Curricula you teach</Label>
+        <div className="flex flex-wrap gap-3">
+          {CURRICULUM_OPTIONS.map((option) => (
+            <label key={option} className="flex items-center gap-2 text-sm text-black/70 dark:text-white/70">
+              <input
+                type="checkbox"
+                name="curricula"
+                value={option}
+                defaultChecked={profile?.curricula?.includes(option)}
+                className="h-4 w-4 rounded border-black/20 text-green-700 focus:ring-green-600 dark:border-white/20"
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-black/40 dark:text-white/40">
+          Helps students filter for coaches who teach their curriculum.
+        </p>
       </div>
       <div>
         <Label htmlFor="hourlyRateCents">Price per session (USD)</Label>

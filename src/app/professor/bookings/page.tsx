@@ -11,7 +11,7 @@ export default async function ProfessorBookingsPage() {
   const bookings = await prisma.booking.findMany({
     where: { professorId: user.id },
     orderBy: { startAt: "desc" },
-    include: { student: { include: { studentProfile: true } }, attachments: true },
+    include: { student: { include: { studentProfile: true } }, attachments: true, reviews: true },
   });
 
   return (

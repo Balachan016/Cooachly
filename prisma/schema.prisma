@@ -70,6 +70,9 @@ model User {
   monthlySummariesAsProfessor MonthlySummary[] @relation("ProfessorMonthlySummaries")
 
   studentProfile       StudentProfile?
+
+  reviewsGiven         Review[] @relation("ReviewsGiven")
+  reviewsReceived      Review[] @relation("ReviewsReceived")
 }
 
 model StudentProfile {
@@ -121,6 +124,7 @@ model ProfessorProfile {
   stripeProductId      String?
   stripePriceId        String?
   stripeSubscriptionPriceId String?
+  curricula            String[] @default([]) // e.g. "CBSE", "AP", "Honors", "Accelerated"
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -174,6 +178,7 @@ model Booking {
 
   messages               Message[]
   attachments            Attachment[]
+  reviews                Review[]
 
   @@index([professorId, startAt])
   @@index([studentId, startAt])
@@ -243,4 +248,20 @@ model Subscription {
   updatedAt            DateTime           @updatedAt
 
   @@unique([studentId, professorId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  raterId   String
+  rater     User     @relation("ReviewsGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  rateeId   String
+  ratee     User     @relation("ReviewsReceived", fields: [rateeId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@unique([bookingId, raterId])
+  @@index([rateeId])
 }
