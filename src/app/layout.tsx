@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Poppins } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,14 +12,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Bold, rounded geometric font used for the Cooachly wordmark, matching
-// the original marketing flyer's typography.
-export const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["800", "900"],
-});
-
 export const metadata: Metadata = {
   title: "Cooachly — Coaching, scheduled simply",
   description:
@@ -30,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
