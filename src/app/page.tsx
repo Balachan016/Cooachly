@@ -17,6 +17,9 @@ export default function Home() {
           <Link href="/about" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             About
           </Link>
+          <Link href="/contact" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
+            Contact
+          </Link>
           <Link href="/login" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             Log in
           </Link>
@@ -46,15 +49,18 @@ export default function Home() {
                 that fit your schedule, in your own timezone.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
-                <Link href="/register">
-                  <Button className="px-6 py-3 text-base">Create your account</Button>
+                <Link href="/demo">
+                  <Button className="px-6 py-3 text-base">Book a free 30-min demo</Button>
                 </Link>
-                <Link href="/login">
+                <Link href="/register">
                   <Button variant="secondary" className="px-6 py-3 text-base">
-                    I already have an account
+                    Create your account
                   </Button>
                 </Link>
               </div>
+              <p className="mt-3 text-sm text-black/50 dark:text-white/50">
+                No payment required for your first session.
+              </p>
             </div>
             <HeroIllustration className="w-full max-w-lg justify-self-center" />
           </div>
@@ -163,7 +169,12 @@ export default function Home() {
       <footer className="mx-auto max-w-6xl px-6 py-10 text-sm text-black/40 dark:text-white/40">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} Cooachly</span>
-          <span>For enquiries: +91 80151 51896</span>
+          <div className="flex items-center gap-4">
+            <Link href="/contact" className="hover:text-black dark:hover:text-white">
+              Contact us
+            </Link>
+            <span>For enquiries: +91 80151 51896</span>
+          </div>
         </div>
       </footer>
     </div>

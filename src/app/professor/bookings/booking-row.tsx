@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Attachment, Booking, User } from "@prisma/client";
+import type { Attachment, Booking, StudentProfile, User } from "@prisma/client";
 import { cancelBooking, markBookingCompleted, setMeetingLink } from "@/actions/bookings";
 import { Badge, Button, Input } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
@@ -11,7 +11,7 @@ export function ProfessorBookingRow({
   isPast,
   canJoin,
 }: {
-  booking: Booking & { student: User; attachments: Attachment[] };
+  booking: Booking & { student: User & { studentProfile: StudentProfile | null }; attachments: Attachment[] };
   isPast: boolean;
   canJoin: boolean;
 }) {
@@ -30,7 +30,29 @@ export function ProfessorBookingRow({
             {booking.status}
           </Badge>
           <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
+          {booking.isDemo && <Badge tone="default">Free demo</Badge>}
         </div>
+        {booking.student.studentProfile && (
+          <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+            {booking.student.studentProfile.country}
+            {booking.student.studentProfile.curriculumLevel ? ` · ${booking.student.studentProfile.curriculumLevel}` : ""}
+            {booking.student.studentProfile.curriculum ? ` · ${booking.student.studentProfile.curriculum}` : ""}
+            {booking.student.studentProfile.grade ? ` · Grade ${booking.student.studentProfile.grade}` : ""}
+            {booking.student.studentProfile.syllabusFileUrl && (
+              <>
+                {" · "}
+                <a
+                  href={booking.student.studentProfile.syllabusFileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-green-700 hover:underline dark:text-green-400"
+                >
+                  Syllabus
+                </a>
+              </>
+            )}
+          </p>
+        )}
         {booking.meetingLink && booking.status !== "CANCELLED" && (
           canJoin ? (
             <a

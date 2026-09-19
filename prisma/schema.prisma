@@ -68,6 +68,32 @@ model User {
   attachmentsUploaded      Attachment[]     @relation("UploadedAttachments")
   monthlySummariesAsStudent   MonthlySummary[] @relation("StudentMonthlySummaries")
   monthlySummariesAsProfessor MonthlySummary[] @relation("ProfessorMonthlySummaries")
+
+  studentProfile       StudentProfile?
+}
+
+model StudentProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  country          String?  // "US" | "Middle East" | "Singapore"
+  curriculumLevel  String?  // US only: "Accelerated" | "Honors" | "AP"
+  curriculum       String?  // Middle East / Singapore: "CBSE"
+  grade            String?  // "9" | "10" | "11" | "12"
+  syllabusFileName String?
+  syllabusFileUrl  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Enquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  country   String?
+  message   String
+  createdAt DateTime @default(now())
 }
 
 model PasswordResetToken {
@@ -124,6 +150,7 @@ model Booking {
   endAt                  DateTime      // UTC
   status                 BookingStatus @default(PENDING)
   paymentStatus          PaymentStatus @default(UNPAID)
+  isDemo                 Boolean       @default(false)
   priceCents             Int
   currency               String        @default("usd")
   meetingLink            String?
