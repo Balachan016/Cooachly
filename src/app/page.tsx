@@ -26,6 +26,9 @@ export default function Home() {
           <Link href="/contact" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
             Contact
           </Link>
+          <Link href="/become-a-coach" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
+            Become a coach
+          </Link>
           <Link href="/login" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             Log in
           </Link>
@@ -181,6 +184,9 @@ export default function Home() {
             </Link>
             <Link href="/faq" className="hover:text-black dark:hover:text-white">
               FAQ
+            </Link>
+            <Link href="/become-a-coach" className="hover:text-black dark:hover:text-white">
+              Become a coach
             </Link>
             <Link href="/contact" className="hover:text-black dark:hover:text-white">
               Contact us
