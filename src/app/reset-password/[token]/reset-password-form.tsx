@@ -22,7 +22,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     return (
       <div className="mt-6 space-y-4">
         <p className="text-sm text-black/70 dark:text-white/70">{state.message}</p>
-        <Link href="/login" className="text-sm font-medium text-green-700 hover:underline">
+        <Link href="/login" className="text-sm font-medium text-brand-700 hover:underline">
           Go to login now
         </Link>
       </div>

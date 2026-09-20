@@ -8,6 +8,8 @@ import { getDemoSlotsForSubject, groupDemoSlotsByLocalDay } from "@/lib/scheduli
 import { provisionVideoRoomForBooking } from "@/lib/daily";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
+import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
+import type { Site } from "@prisma/client";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -15,9 +17,9 @@ function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-export async function fetchDemoSlots(subject: string, timezone: string) {
+export async function fetchDemoSlots(subject: string, timezone: string, site: Site) {
   if (!subject) return [];
-  const slots = await getDemoSlotsForSubject(subject);
+  const slots = await getDemoSlotsForSubject(subject, site);
   return groupDemoSlotsByLocalDay(slots, timezone);
 }
 
@@ -49,17 +51,18 @@ export async function submitDemoBooking(_state: DemoBookingState, formData: Form
   }
 
   const { name, email, phone, timezone, subject, startAt, professorId } = parsed.data;
+  const site: Site = formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
   const startDate = new Date(startAt);
   if (Number.isNaN(startDate.getTime())) return { message: "Invalid time selected." };
 
   // Re-check the slot is still free against the live availability, not just what the browser was showing.
-  const freshSlots = await getDemoSlotsForSubject(subject);
+  const freshSlots = await getDemoSlotsForSubject(subject, site);
   const match = freshSlots.find(
     (s) => s.professorId === professorId && s.startAt.getTime() === startDate.getTime()
   );
   if (!match) return { message: "That slot is no longer available. Please pick another." };
 
-  let student = await prisma.user.findUnique({ where: { email } });
+  let student = await prisma.user.findUnique({ where: { site_email: { site, email } } });
   let isNewAccount = false;
 
   if (!student) {
@@ -67,6 +70,7 @@ export async function submitDemoBooking(_state: DemoBookingState, formData: Form
     const randomPassword = crypto.randomBytes(24).toString("hex");
     student = await prisma.user.create({
       data: {
+        site,
         name,
         email,
         phone: phone || null,
@@ -97,6 +101,8 @@ export async function submitDemoBooking(_state: DemoBookingState, formData: Form
     match.startAt
   );
 
+  const brandName = SITE_CONFIG[site].brandName;
+
   let resetLine = "";
   if (isNewAccount) {
     const rawToken = crypto.randomBytes(32).toString("hex");
@@ -108,8 +114,8 @@ export async function submitDemoBooking(_state: DemoBookingState, formData: Form
       },
     });
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const setPasswordUrl = `${appUrl}/reset-password/${rawToken}`;
-    resetLine = `<p>We've created a Cooachly account for you with this email. <a href="${setPasswordUrl}">Set a password</a> to log in and manage your bookings anytime (link expires in 1 hour).</p>`;
+    const setPasswordUrl = `${appUrl}${sitePath(site, `/reset-password/${rawToken}`)}`;
+    resetLine = `<p>We've created a ${brandName} account for you with this email. <a href="${setPasswordUrl}">Set a password</a> to log in and manage your bookings anytime (link expires in 1 hour).</p>`;
   }
 
   const textBody = `Your free demo session with ${booking.professor.name} is confirmed for ${when}.`;
@@ -117,13 +123,13 @@ export async function submitDemoBooking(_state: DemoBookingState, formData: Form
   if (isEmailConfigured) {
     await sendEmail({
       to: email,
-      subject: "Your free Cooachly demo is confirmed",
+      subject: `Your free ${brandName} demo is confirmed`,
       html: `
         <p>Hi ${name},</p>
         <p>Your free 30-minute demo session with <strong>${booking.professor.name}</strong> is confirmed for <strong>${when}</strong>.</p>
         ${booking.meetingLink ? `<p><a href="${booking.meetingLink}">Join your demo session</a></p>` : ""}
         ${resetLine}
-        <p>— Cooachly</p>
+        <p>— ${brandName}</p>
       `,
     });
   }

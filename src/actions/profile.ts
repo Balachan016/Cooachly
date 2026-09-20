@@ -4,7 +4,7 @@ import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole, requireSession } from "@/lib/dal";
-import { CURRICULUM_OPTIONS } from "@/lib/curricula";
+import { sitePath } from "@/lib/site";
 
 const ProfessorProfileSchema = z.object({
   headline: z.string().trim().max(120).default(""),
@@ -12,7 +12,7 @@ const ProfessorProfileSchema = z.object({
   subject: z.string().trim().max(120).default(""),
   hourlyRateCents: z.coerce.number().int().min(0).max(100000000),
   monthlyPriceCents: z.union([z.coerce.number().int().min(0).max(100000000), z.nan()]).optional(),
-  curricula: z.array(z.enum(CURRICULUM_OPTIONS)).default([]),
+  curricula: z.array(z.string().trim().min(1)).default([]),
 });
 
 export async function updateProfessorProfile(_state: unknown, formData: FormData) {
@@ -55,7 +55,7 @@ export async function updateProfessorProfile(_state: unknown, formData: FormData
     },
   });
 
-  revalidatePath("/professor/profile");
+  revalidatePath(sitePath(session.site, "/professor/profile"));
   return { message: "Profile saved." };
 }
 
@@ -77,7 +77,7 @@ export async function updateContactInfo(_state: unknown, formData: FormData) {
     data: { timezone: parsed.data.timezone, phone: parsed.data.phone || null },
   });
 
-  revalidatePath("/professor/profile");
-  revalidatePath("/student");
+  revalidatePath(sitePath(session.site, "/professor/profile"));
+  revalidatePath(sitePath(session.site, "/student"));
   return { message: "Contact info updated." };
 }

@@ -29,6 +29,9 @@ export default function Home() {
           <Link href="/become-a-coach" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
             Become a coach
           </Link>
+          <Link href="/arts" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
+            Arts (Carnatic vocals)
+          </Link>
           <Link href="/login" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             Log in
           </Link>
@@ -43,10 +46,10 @@ export default function Home() {
         <section className="mx-auto max-w-6xl px-6 py-10 sm:py-16">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div>
-              <span className="inline-block rounded-full bg-green-900 px-4 py-1 text-xs font-semibold tracking-wide text-lime-300">
+              <span className="inline-block rounded-full bg-brand-900 px-4 py-1 text-xs font-semibold tracking-wide text-accent-300">
                 GRADES 9 TO 12
               </span>
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-green-900 dark:text-green-300 sm:text-5xl">
+              <h1 className="mt-4 text-4xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-5xl">
                 Expert guidance.
                 <br />
                 Better learning.
@@ -77,9 +80,9 @@ export default function Home() {
 
         {/* Mission banner */}
         <section className="mx-auto max-w-6xl px-6">
-          <div className="rounded-2xl bg-green-900 px-6 py-6 text-white sm:px-10 sm:py-8">
+          <div className="rounded-2xl bg-brand-900 px-6 py-6 text-white sm:px-10 sm:py-8">
             <p className="text-lg font-semibold sm:text-xl">Learn online, excel everywhere.</p>
-            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-lime-300">
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-accent-300">
               <span>Concept Clarity</span>
               <span>Personal Attention</span>
               <span>Better Results</span>
@@ -90,21 +93,21 @@ export default function Home() {
 
         {/* Subjects */}
         <section className="mx-auto max-w-6xl px-6 py-16">
-          <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">
+          <h2 className="text-center text-sm font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">
             Subjects we specialize in
           </h2>
           <div className="mt-8 grid gap-8 sm:grid-cols-3">
             <div className="flex flex-col items-center gap-3 text-center">
               <MathIcon />
-              <span className="font-semibold text-green-900 dark:text-green-300">Mathematics</span>
+              <span className="font-semibold text-brand-900 dark:text-brand-300">Mathematics</span>
             </div>
             <div className="flex flex-col items-center gap-3 text-center">
               <ChemistryIcon />
-              <span className="font-semibold text-green-900 dark:text-green-300">Chemistry</span>
+              <span className="font-semibold text-brand-900 dark:text-brand-300">Chemistry</span>
             </div>
             <div className="flex flex-col items-center gap-3 text-center">
               <PhysicsIcon />
-              <span className="font-semibold text-green-900 dark:text-green-300">Physics</span>
+              <span className="font-semibold text-brand-900 dark:text-brand-300">Physics</span>
             </div>
           </div>
           <p className="mt-6 text-center text-sm text-black/50 dark:text-white/50">
@@ -144,11 +147,11 @@ export default function Home() {
 
         {/* Global reach banner */}
         <section className="mx-auto max-w-6xl px-6 py-10">
-          <div className="overflow-hidden rounded-2xl bg-green-800">
+          <div className="overflow-hidden rounded-2xl bg-brand-800">
             <div className="grid items-center gap-6 p-6 sm:grid-cols-2 sm:p-10">
               <div className="text-white">
                 <h3 className="text-lg font-semibold">Guided by qualified educators</h3>
-                <p className="mt-2 text-sm text-lime-100">
+                <p className="mt-2 text-sm text-accent-100">
                   Expert teaching, wherever you are. Your success is our mission.
                 </p>
               </div>
@@ -160,7 +163,7 @@ export default function Home() {
         {/* CTA */}
         <section className="mx-auto max-w-6xl px-6 py-16 text-center">
           <Card className="mx-auto max-w-2xl py-10">
-            <h2 className="text-2xl font-semibold text-green-900 dark:text-green-300">
+            <h2 className="text-2xl font-semibold text-brand-900 dark:text-brand-300">
               Together, let&apos;s learn and grow.
             </h2>
             <p className="mt-2 text-black/60 dark:text-white/60">
@@ -190,6 +193,9 @@ export default function Home() {
             </Link>
             <Link href="/contact" className="hover:text-black dark:hover:text-white">
               Contact us
+            </Link>
+            <Link href="/arts" className="hover:text-black dark:hover:text-white">
+              Cooachly Arts (Carnatic vocals) →
             </Link>
             <span>For enquiries: +91 80151 51896</span>
           </div>

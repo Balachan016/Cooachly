@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
+import { sitePath } from "@/lib/site";
 
 const BookSlotSchema = z.object({
   professorId: z.string().min(1),
@@ -31,7 +32,9 @@ export async function bookSlot(_state: unknown, formData: FormData) {
     where: { id: professorId, role: "PROFESSOR" },
     include: { professorProfile: true },
   });
-  if (!professor || !professor.professorProfile) return { message: "Professor not found." };
+  if (!professor || !professor.professorProfile || professor.site !== session.site) {
+    return { message: "Professor not found." };
+  }
 
   const slots = await getAvailableSlots(professorId);
   const match = slots.find((s) => s.startAt.getTime() === startDate.getTime());
@@ -64,9 +67,9 @@ export async function bookSlot(_state: unknown, formData: FormData) {
       },
     });
     await provisionVideoRoomForBooking(booking);
-    revalidatePath("/student/bookings");
-    revalidatePath("/professor/bookings");
-    redirect(`/student/bookings?booked=${booking.id}`);
+    revalidatePath(sitePath(session.site, "/student/bookings"));
+    revalidatePath(sitePath(session.site, "/professor/bookings"));
+    redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
   }
 
   const booking = await prisma.booking.create({
@@ -83,9 +86,9 @@ export async function bookSlot(_state: unknown, formData: FormData) {
 
   if (!isStripeConfigured) {
     await provisionVideoRoomForBooking(booking);
-    revalidatePath("/student/bookings");
-    revalidatePath("/professor/bookings");
-    redirect(`/student/bookings?booked=${booking.id}`);
+    revalidatePath(sitePath(session.site, "/student/bookings"));
+    revalidatePath(sitePath(session.site, "/professor/bookings"));
+    redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -115,8 +118,8 @@ export async function bookSlot(_state: unknown, formData: FormData) {
         quantity: 1,
       },
     ],
-    success_url: `${appUrl}/student/bookings?booked=${booking.id}`,
-    cancel_url: `${appUrl}/student/professors/${professorId}?cancelled=1`,
+    success_url: `${appUrl}${sitePath(session.site, `/student/bookings?booked=${booking.id}`)}`,
+    cancel_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?cancelled=1`)}`,
     metadata: { bookingId: booking.id, type: "booking" },
   });
 
@@ -125,7 +128,7 @@ export async function bookSlot(_state: unknown, formData: FormData) {
     data: { stripeCheckoutSessionId: checkoutSession.id },
   });
 
-  redirect(checkoutSession.url ?? `${appUrl}/student/bookings`);
+  redirect(checkoutSession.url ?? `${appUrl}${sitePath(session.site, "/student/bookings")}`);
 }
 
 export async function cancelBooking(bookingId: string) {
@@ -140,8 +143,8 @@ export async function cancelBooking(bookingId: string) {
     data: { status: "CANCELLED" },
   });
 
-  revalidatePath("/student/bookings");
-  revalidatePath("/professor/bookings");
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
 }
 
 export async function setMeetingLink(bookingId: string, meetingLink: string) {
@@ -155,15 +158,15 @@ export async function setMeetingLink(bookingId: string, meetingLink: string) {
     data: { meetingLink: meetingLink.trim() || null },
   });
 
-  revalidatePath("/professor/bookings");
-  revalidatePath("/student/bookings");
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/student/bookings"));
 }
 
 export async function extendBooking(bookingId: string, minutes: 15 | 30) {
-  await requireRole("ADMIN");
+  const session = await requireRole("ADMIN");
 
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking || booking.status === "CANCELLED") return;
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { professor: true } });
+  if (!booking || booking.status === "CANCELLED" || booking.professor.site !== session.site) return;
 
   const newEndAt = new Date(booking.endAt.getTime() + minutes * 60_000);
   await prisma.booking.update({ where: { id: bookingId }, data: { endAt: newEndAt } });
@@ -173,9 +176,9 @@ export async function extendBooking(bookingId: string, minutes: 15 | 30) {
     await updateDailyRoomExpiry(booking.dailyRoomName, newExp);
   }
 
-  revalidatePath("/admin/bookings");
-  revalidatePath("/student/bookings");
-  revalidatePath("/professor/bookings");
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
 }
 
 export async function markBookingCompleted(bookingId: string) {
@@ -189,6 +192,6 @@ export async function markBookingCompleted(bookingId: string) {
     data: { status: "COMPLETED" },
   });
 
-  revalidatePath("/professor/bookings");
-  revalidatePath("/student/bookings");
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/student/bookings"));
 }

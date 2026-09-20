@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function DemoPage() {
   const professorProfiles = await prisma.professorProfile.findMany({
-    where: { subject: { not: "" }, user: { isActive: true } },
+    where: { subject: { not: "" }, user: { isActive: true, site: "COOACHLY" } },
     select: { subject: true },
     distinct: ["subject"],
   });
@@ -42,7 +42,7 @@ export default async function DemoPage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="text-3xl font-bold tracking-tight text-green-900 dark:text-green-300">
+        <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300">
           Book a free 30-minute demo
         </h1>
         <p className="mt-2 text-black/60 dark:text-white/60">
@@ -56,7 +56,7 @@ export default async function DemoPage() {
               No demo slots are available right now — please check back soon.
             </p>
           ) : (
-            <DemoBookingForm subjects={subjects} />
+            <DemoBookingForm subjects={subjects} site="COOACHLY" />
           )}
         </Card>
       </main>

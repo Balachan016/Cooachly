@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { uploadFile, isBlobConfigured } from "@/lib/blob";
+import { sitePath } from "@/lib/site";
 import type { AttachmentKind } from "@prisma/client";
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
@@ -18,8 +19,8 @@ export async function uploadAttachment(
 ): Promise<AttachmentFormState> {
   const session = await requireRole("ADMIN", "PROFESSOR", "STUDENT");
 
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking) return { message: "Booking not found." };
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { professor: true } });
+  if (!booking || booking.professor.site !== session.site) return { message: "Booking not found." };
 
   if (kind === "TEST") {
     const allowed =
@@ -55,9 +56,9 @@ export async function uploadAttachment(
     },
   });
 
-  revalidatePath("/student/bookings");
-  revalidatePath("/professor/bookings");
-  revalidatePath("/admin/bookings");
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
 
   return { message: "Uploaded.", success: true };
 }

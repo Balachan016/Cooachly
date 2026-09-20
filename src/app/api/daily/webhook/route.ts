@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { startTranscription, getTranscriptDownloadLink, parseVttTranscript } from "@/lib/daily";
 import { summarizeTranscript } from "@/lib/ai-summary";
 import { sendEmail } from "@/lib/notifications/email";
+import { SITE_CONFIG } from "@/lib/site";
 
 // Configure this URL as a webhook in your Daily.co dashboard, subscribed to
 // "meeting.started" and "transcript.ready-to-download". When a call begins,
@@ -93,14 +94,15 @@ export async function POST(request: Request) {
     });
 
     if (summary) {
-      const html = `<p>Here's the AI-generated summary of your Cooachly session on ${new Intl.DateTimeFormat(
+      const brandName = SITE_CONFIG[booking.professor.site].brandName;
+      const html = `<p>Here's the AI-generated summary of your ${brandName} session on ${new Intl.DateTimeFormat(
         "en-US",
         { dateStyle: "medium" }
       ).format(booking.startAt)}:</p><pre style="white-space:pre-wrap;font-family:inherit">${summary}</pre>`;
 
       await Promise.all([
-        sendEmail({ to: booking.student.email, subject: "Your Cooachly session summary", html }),
-        sendEmail({ to: booking.professor.email, subject: "Your Cooachly session summary", html }),
+        sendEmail({ to: booking.student.email, subject: `Your ${brandName} session summary`, html }),
+        sendEmail({ to: booking.professor.email, subject: `Your ${brandName} session summary`, html }),
       ]);
     }
 

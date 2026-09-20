@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/dal";
 import { roleHomePath } from "@/lib/roles";
+import { siteBasePath } from "@/lib/site";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
 import { ChangePasswordForm } from "./change-password-form";
@@ -17,12 +18,12 @@ export default async function SettingsPage() {
     <div className="mx-auto max-w-xl px-6 py-10">
       <div className="flex items-center gap-4">
         <Link
-          href={roleHomePath(session.role)}
-          className="text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+          href={roleHomePath(session.role, session.site)}
+          className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
         >
           ← Back to dashboard
         </Link>
-        <Link href="/" className="text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+        <Link href={siteBasePath(session.site) || "/"} className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
           Home
         </Link>
       </div>

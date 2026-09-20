@@ -2,40 +2,69 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { decrypt, encrypt, sessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
+import { sitePath } from "@/lib/site";
+import type { Site } from "@prisma/client";
 
-const roleRoutePrefix: Record<string, string> = {
-  ADMIN: "/admin",
-  PROFESSOR: "/professor",
-  STUDENT: "/student",
-};
+const SITES: Site[] = ["COOACHLY", "ARTS"];
+const ROLE_SEGMENTS = [
+  { segment: "/admin", role: "ADMIN" },
+  { segment: "/professor", role: "PROFESSOR" },
+  { segment: "/student", role: "STUDENT" },
+] as const;
 
-const authRoutes = ["/login", "/register"];
+// Every role-gated prefix for every site, e.g. "/admin", "/arts/admin", "/professor", "/arts/professor", …
+const roleRoutePrefixes = SITES.flatMap((site) =>
+  ROLE_SEGMENTS.map(({ segment, role }) => ({ site, role, prefix: sitePath(site, segment) }))
+);
+
+const authRoutes = SITES.flatMap((site) => [sitePath(site, "/login"), sitePath(site, "/register")]);
+const sessionOnlyRoutes = SITES.flatMap((site) => [sitePath(site, "/dashboard"), sitePath(site, "/settings")]);
+
+function siteOf(pathname: string): Site {
+  return pathname === "/arts" || pathname.startsWith("/arts/") ? "ARTS" : "COOACHLY";
+}
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Redirect the capitalized spelling people naturally type ("/Arts") to the
+  // conventional lowercase route. Done here (case-sensitive string match)
+  // rather than via next.config.ts `redirects()`, whose source matching is
+  // case-insensitive and would otherwise redirect "/arts" to itself in a loop.
+  if (pathname === "/Arts" || pathname.startsWith("/Arts/")) {
+    const target = new URL(`/arts${pathname.slice("/Arts".length)}${req.nextUrl.search}`, req.url);
+    return NextResponse.redirect(target, 308);
+  }
+
   const cookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = await decrypt(cookie);
 
-  const isAuthRoute = authRoutes.includes(pathname);
-  const protectedPrefix = Object.values(roleRoutePrefix).find((prefix) =>
-    pathname.startsWith(prefix)
-  );
+  const currentSite = siteOf(pathname);
+  // A session only counts as "logged in" for routes on its own site — an
+  // Arts session hitting /admin (Cooachly) is treated as anonymous there,
+  // and vice versa. This is what keeps the two platforms' users separate.
+  const sessionForSite = session && session.site === currentSite ? session : null;
 
-  if (protectedPrefix && !session) {
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
+  const matchedRolePrefix = roleRoutePrefixes.find(
+    ({ site, prefix }) => site === currentSite && (pathname === prefix || pathname.startsWith(`${prefix}/`))
+  );
+  const isAuthRoute = authRoutes.includes(pathname);
+  const isSessionOnlyRoute = sessionOnlyRoutes.includes(pathname);
 
   let response: NextResponse;
 
-  if (protectedPrefix && session && roleRoutePrefix[session.role] !== protectedPrefix) {
-    response = NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
-  } else if (isAuthRoute && session) {
-    response = NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
-  } else if (pathname === "/dashboard" && session) {
-    response = NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
+  if (matchedRolePrefix && !sessionForSite) {
+    const loginUrl = new URL(sitePath(currentSite, "/login"), req.url);
+    loginUrl.searchParams.set("next", pathname);
+    response = NextResponse.redirect(loginUrl);
+  } else if (isSessionOnlyRoute && !sessionForSite) {
+    const loginUrl = new URL(sitePath(currentSite, "/login"), req.url);
+    loginUrl.searchParams.set("next", pathname);
+    response = NextResponse.redirect(loginUrl);
+  } else if (matchedRolePrefix && sessionForSite && matchedRolePrefix.role !== sessionForSite.role) {
+    response = NextResponse.redirect(new URL(roleHomePath(sessionForSite.role, sessionForSite.site), req.url));
+  } else if (isAuthRoute && sessionForSite) {
+    response = NextResponse.redirect(new URL(roleHomePath(sessionForSite.role, sessionForSite.site), req.url));
   } else {
     response = NextResponse.next();
   }

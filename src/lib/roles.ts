@@ -1,14 +1,15 @@
-import type { Role } from "@prisma/client";
+import type { Role, Site } from "@prisma/client";
+import { sitePath } from "@/lib/site";
 
-export function roleHomePath(role: Role): string {
+export function roleHomePath(role: Role, site: Site = "COOACHLY"): string {
   switch (role) {
     case "ADMIN":
-      return "/admin";
+      return sitePath(site, "/admin");
     case "PROFESSOR":
-      return "/professor";
+      return sitePath(site, "/professor");
     case "STUDENT":
     default:
-      return "/student";
+      return sitePath(site, "/student");
   }
 }
 

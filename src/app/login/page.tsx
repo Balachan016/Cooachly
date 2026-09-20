@@ -11,7 +11,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-      <Link href="/" className="mb-2 text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+      <Link href="/" className="mb-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
         ← Home
       </Link>
       <Link href="/" className="mb-8">
@@ -30,7 +30,7 @@ export default function LoginPage() {
           <div>
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
-              <Link href="/forgot-password" className="mb-1 text-sm font-medium text-green-700 hover:underline">
+              <Link href="/forgot-password" className="mb-1 text-sm font-medium text-brand-700 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -47,7 +47,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-black/60 dark:text-white/60">
           Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-medium text-green-700 hover:underline">
+          <Link href="/register" className="font-medium text-brand-700 hover:underline">
             Sign up
           </Link>
         </p>

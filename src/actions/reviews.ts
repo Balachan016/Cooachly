@@ -4,6 +4,7 @@ import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
+import { sitePath } from "@/lib/site";
 
 const ReviewSchema = z.object({
   bookingId: z.string().min(1),
@@ -40,8 +41,8 @@ export async function submitReview(_state: ReviewFormState, formData: FormData):
     update: { rating, comment: comment || null },
   });
 
-  revalidatePath("/student/bookings");
-  revalidatePath("/professor/bookings");
-  revalidatePath("/student/professors");
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/student/professors"));
   return { message: "Thanks for your review!", success: true };
 }

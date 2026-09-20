@@ -4,12 +4,13 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
+import { sitePath } from "@/lib/site";
 
 export async function subscribeToProfessor(professorId: string) {
   const session = await requireRole("STUDENT");
 
   if (!isStripeConfigured) {
-    redirect(`/student/professors/${professorId}?error=stripe-not-configured`);
+    redirect(sitePath(session.site, `/student/professors/${professorId}?error=stripe-not-configured`));
   }
 
   const professor = await prisma.user.findUnique({
@@ -17,8 +18,8 @@ export async function subscribeToProfessor(professorId: string) {
     include: { professorProfile: true },
   });
 
-  if (!professor?.professorProfile?.monthlyPriceCents) {
-    redirect(`/student/professors/${professorId}?error=no-subscription-plan`);
+  if (!professor || professor.site !== session.site || !professor.professorProfile?.monthlyPriceCents) {
+    redirect(sitePath(session.site, `/student/professors/${professorId}?error=no-subscription-plan`));
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -45,10 +46,10 @@ export async function subscribeToProfessor(professorId: string) {
         quantity: 1,
       },
     ],
-    success_url: `${appUrl}/student/professors/${professorId}?subscribed=1`,
-    cancel_url: `${appUrl}/student/professors/${professorId}?cancelled=1`,
+    success_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?subscribed=1`)}`,
+    cancel_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?cancelled=1`)}`,
     metadata: { studentId: session.userId, professorId, type: "subscription" },
   });
 
-  redirect(checkoutSession.url ?? `${appUrl}/student/professors/${professorId}`);
+  redirect(checkoutSession.url ?? `${appUrl}${sitePath(session.site, `/student/professors/${professorId}`)}`);
 }

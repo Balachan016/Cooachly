@@ -4,6 +4,7 @@ import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
+import { sitePath } from "@/lib/site";
 
 const AvailabilitySchema = z.object({
   dayOfWeek: z.coerce.number().int().min(0).max(6),
@@ -34,7 +35,7 @@ export async function addAvailability(formData: FormData) {
     data: { professorId: session.userId, dayOfWeek, startTime, endTime, timezone, sessionLengthMinutes },
   });
 
-  revalidatePath("/professor/availability");
+  revalidatePath(sitePath(session.site, "/professor/availability"));
 }
 
 export async function removeAvailability(availabilityId: string) {
@@ -44,5 +45,5 @@ export async function removeAvailability(availabilityId: string) {
     where: { id: availabilityId, professorId: session.userId },
   });
 
-  revalidatePath("/professor/availability");
+  revalidatePath(sitePath(session.site, "/professor/availability"));
 }

@@ -39,7 +39,7 @@ export default function AboutPage() {
       <main className="mx-auto max-w-4xl px-6 py-16">
         <div className="grid items-center gap-10 lg:grid-cols-2">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-green-900 dark:text-green-300 sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-4xl">
               About Cooachly
             </h1>
             <p className="mt-4 text-lg text-black/70 dark:text-white/70">
@@ -56,9 +56,9 @@ export default function AboutPage() {
           <HeroIllustration className="w-full max-w-sm justify-self-center" />
         </div>
 
-        <div className="mt-10 rounded-xl bg-green-900 px-6 py-4 text-white">
+        <div className="mt-10 rounded-xl bg-brand-900 px-6 py-4 text-white">
           <p className="font-semibold">Learn online, excel everywhere.</p>
-          <p className="mt-1 text-sm text-lime-300">
+          <p className="mt-1 text-sm text-accent-300">
             Concept clarity &nbsp;•&nbsp; Personal attention &nbsp;•&nbsp; Better results &nbsp;•&nbsp; Future ready
           </p>
         </div>
@@ -69,21 +69,21 @@ export default function AboutPage() {
           <AboutCard title="Flexible scheduling" description="Weekday and weekend batches, in your own timezone." />
         </div>
 
-        <h2 className="mt-16 text-center text-sm font-semibold uppercase tracking-wide text-green-700 dark:text-green-400">
+        <h2 className="mt-16 text-center text-sm font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">
           Subjects we specialize in
         </h2>
         <div className="mt-8 grid gap-8 sm:grid-cols-3">
           <div className="flex flex-col items-center gap-3 text-center">
             <MathIcon />
-            <span className="font-semibold text-green-900 dark:text-green-300">Mathematics</span>
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Mathematics</span>
           </div>
           <div className="flex flex-col items-center gap-3 text-center">
             <ChemistryIcon />
-            <span className="font-semibold text-green-900 dark:text-green-300">Chemistry</span>
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Chemistry</span>
           </div>
           <div className="flex flex-col items-center gap-3 text-center">
             <PhysicsIcon />
-            <span className="font-semibold text-green-900 dark:text-green-300">Physics</span>
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Physics</span>
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export default function AboutPage() {
 function AboutCard({ title, description }: { title: string; description: string }) {
   return (
     <Card>
-      <h3 className="font-semibold text-green-800 dark:text-green-400">{title}</h3>
+      <h3 className="font-semibold text-brand-800 dark:text-brand-400">{title}</h3>
       <p className="mt-2 text-sm text-black/60 dark:text-white/60">{description}</p>
     </Card>
   );
