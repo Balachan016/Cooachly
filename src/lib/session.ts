@@ -10,7 +10,11 @@ if (!secretKey) {
 const encodedKey = new TextEncoder().encode(secretKey);
 
 const SESSION_COOKIE = "cooachly_session";
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// Idle timeout: the session expires 10 minutes after the last request. Every
+// authenticated request re-signs the cookie with a fresh expiry (see
+// src/proxy.ts), so staying active keeps you logged in indefinitely, but
+// closing the tab or walking away logs you out automatically.
+const SESSION_IDLE_DURATION_MS = 10 * 60 * 1000;
 
 export type SessionPayload = {
   userId: string;
@@ -23,7 +27,7 @@ export async function encrypt(payload: SessionPayload) {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime(Math.floor((Date.now() + SESSION_IDLE_DURATION_MS) / 1000))
     .sign(encodedKey);
 }
 
@@ -40,17 +44,10 @@ export async function decrypt(session: string | undefined = ""): Promise<Session
 }
 
 export async function createSession(payload: SessionPayload) {
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
   const session = await encrypt(payload);
   const cookieStore = await cookies();
 
-  cookieStore.set(SESSION_COOKIE, session, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    expires: expiresAt,
-    sameSite: "lax",
-    path: "/",
-  });
+  cookieStore.set(SESSION_COOKIE, session, sessionCookieOptions());
 }
 
 export async function getSessionCookie() {
@@ -64,3 +61,13 @@ export async function deleteSession() {
 }
 
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;
+
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: SESSION_IDLE_DURATION_MS / 1000,
+    sameSite: "lax" as const,
+    path: "/",
+  };
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { decrypt, SESSION_COOKIE_NAME } from "@/lib/session";
+import { decrypt, encrypt, sessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 
 const roleRoutePrefix: Record<string, string> = {
@@ -28,19 +28,27 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  let response: NextResponse;
+
   if (protectedPrefix && session && roleRoutePrefix[session.role] !== protectedPrefix) {
-    return NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
+    response = NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
+  } else if (isAuthRoute && session) {
+    response = NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
+  } else if (pathname === "/dashboard" && session) {
+    response = NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
+  } else {
+    response = NextResponse.next();
   }
 
-  if (isAuthRoute && session) {
-    return NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
+  // Sliding idle timeout: every authenticated request re-signs the session
+  // cookie with a fresh 10-minute expiry, so staying active keeps you logged
+  // in but going idle (or closing the browser) logs you out automatically.
+  if (session) {
+    const refreshed = await encrypt(session);
+    response.cookies.set(SESSION_COOKIE_NAME, refreshed, sessionCookieOptions());
   }
 
-  if (pathname === "/dashboard" && session) {
-    return NextResponse.redirect(new URL(roleHomePath(session.role), req.url));
-  }
-
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {

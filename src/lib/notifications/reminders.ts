@@ -1,7 +1,7 @@
 import "server-only";
 import type { Booking, User } from "@prisma/client";
 import { sendEmail } from "./email";
-import { sendWhatsApp } from "./sms";
+import { sendWhatsAppReminder } from "./sms";
 import { logNotification } from "./log";
 
 export type ReminderKind = "24h" | "1h" | "5m";
@@ -60,14 +60,22 @@ async function notifyPerson(
   });
   await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
 
+  const variables = {
+    recipientName: person.name,
+    peerName: info.peerName,
+    label: info.label,
+    when: info.when,
+    joinLink: info.joinLink ?? "",
+  };
+
   if (person.phone) {
-    const waResult = await sendWhatsApp({ to: person.phone, body: textBody });
+    const waResult = await sendWhatsAppReminder({ to: person.phone, body: textBody, variables });
     await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: waResult });
   }
 
   // Also notify a parent/guardian's WhatsApp number, if one is on file.
   if (person.parentPhone) {
-    const parentResult = await sendWhatsApp({ to: person.parentPhone, body: textBody });
+    const parentResult = await sendWhatsAppReminder({ to: person.parentPhone, body: textBody, variables });
     await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: parentResult });
   }
 }

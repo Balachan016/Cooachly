@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Attachment, Booking, NotificationLog, User } from "@prisma/client";
 import { extendBooking } from "@/actions/bookings";
+import { isPastDate } from "@/lib/time";
 import { Badge, Button } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
 
@@ -20,6 +21,7 @@ export function AdminBookingRow({
 }) {
   const [isPending, startTransition] = useTransition();
   const [showReminders, setShowReminders] = useState(false);
+  const isPast = isPastDate(booking.endAt);
   const canExtend = booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
 
   const failedCount = booking.notificationLogs.filter((l) => l.status === "FAILED").length;
@@ -28,8 +30,13 @@ export function AdminBookingRow({
   return (
     <>
     <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
-      <td className="px-4 py-3">
-        {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(booking.startAt)}
+      <td className="whitespace-nowrap px-4 py-3">
+        <div className="font-medium">
+          {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(booking.startAt)}
+        </div>
+        <div className="text-xs text-black/50 dark:text-white/50">
+          {new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(booking.startAt)}
+        </div>
       </td>
       <td className="px-4 py-3">{booking.student.name}</td>
       <td className="px-4 py-3">{booking.professor.name}</td>
@@ -41,9 +48,9 @@ export function AdminBookingRow({
       <td className="px-4 py-3">
         <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
       </td>
-      <td className="px-4 py-3">${(booking.priceCents / 100).toFixed(2)}</td>
+      <td className="px-4 py-3 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
       <td className="px-4 py-3">
-        {booking.meetingLink && booking.status !== "CANCELLED" ? (
+        {booking.meetingLink && booking.status !== "CANCELLED" && !isPast ? (
           <a
             href={booking.meetingLink}
             target="_blank"

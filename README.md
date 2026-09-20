@@ -150,12 +150,30 @@ Open [http://localhost:3000](http://localhost:3000).
    template pre-registration with Indian telecom regulators before Twilio will even deliver it.
 
    **Before going live**, submit your reminder message as a WhatsApp message template for Meta's
-   approval in the Twilio console. Meta requires an approved template for any business-initiated
-   message sent outside a 24-hour customer-service window — which reminders always are — so
-   free-form messages will be rejected in production once you're off the sandbox.
+   approval in the Twilio console (Messaging → Content Editor). Meta requires an approved template
+   for any business-initiated message sent outside a 24-hour customer-service window — which
+   reminders always are — so free-form messages are rejected once you're off the sandbox, with
+   Twilio error **21654 "ContentSid Required"**.
+
+   Submit a template that looks like this (Category: **Utility**, so it doesn't need marketing
+   opt-in):
+
+   ```
+   Hi {{1}}, this is a reminder that your Cooachly session with {{2}} starts {{3}} ({{4}}).
+   Join here: {{5}}
+   ```
+
+   Once Meta approves it, copy its **Content SID** (starts with `HX...`) into
+   `TWILIO_REMINDER_CONTENT_SID`. Until that's set, reminders send free-form text, which only
+   works on the sandbox and will keep failing with 21654 on a real WhatsApp sender.
 3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then use a free
    external scheduler like [cron-job.org](https://cron-job.org) to call
    `https://your-domain.com/api/cron/reminders?secret=<CRON_SECRET>` every 5 minutes.
+
+   **This step is easy to miss** — without it, `/api/cron/reminders` is never called by anything,
+   so no reminder (and no entry in Admin → Bookings' "Reminders" log) will ever appear, even with
+   email/WhatsApp fully configured. Check Admin → Bookings after setting this up: you should start
+   seeing "Reminders" entries appear within a few minutes of a session's 24h/1h/5m mark.
 
    (Vercel's own Cron Jobs feature can also call this endpoint via a `vercel.json` `crons` entry,
    but Vercel's **Hobby plan only allows once-a-day cron schedules** — a 5-minute schedule is
