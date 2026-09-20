@@ -42,6 +42,17 @@ enum CoachApplicationStatus {
   REJECTED
 }
 
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
 model User {
   id                   String    @id @default(cuid())
   name                 String
@@ -80,6 +91,8 @@ model User {
 
   reviewsGiven         Review[] @relation("ReviewsGiven")
   reviewsReceived      Review[] @relation("ReviewsReceived")
+
+  notificationLogs     NotificationLog[]
 }
 
 model StudentProfile {
@@ -201,9 +214,25 @@ model Booking {
   messages               Message[]
   attachments            Attachment[]
   reviews                Review[]
+  notificationLogs       NotificationLog[]
 
   @@index([professorId, startAt])
   @@index([studentId, startAt])
+}
+
+model NotificationLog {
+  id        String              @id @default(cuid())
+  bookingId String?
+  booking   Booking?            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  channel   NotificationChannel
+  kind      String              // "24h" | "1h" | "5m" | "test"
+  status    NotificationStatus
+  error     String?
+  createdAt DateTime            @default(now())
+
+  @@index([bookingId])
 }
 
 enum AttachmentKind {

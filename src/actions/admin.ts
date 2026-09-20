@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/dal";
 import { hashPassword } from "@/lib/password";
 import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
+import { logNotification } from "@/lib/notifications/log";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role } from "@prisma/client";
@@ -154,14 +155,16 @@ export async function sendTestNotification(): Promise<{ message: string }> {
   `;
 
   const emailResult = await sendEmail({ to: admin.email, subject: "Cooachly test notification", html: emailHtml });
-  const emailStatus = emailResult.skipped ? "not configured" : emailResult.error ? "failed" : "sent";
+  await logNotification({ userId: admin.id, channel: "EMAIL", kind: "test", result: emailResult });
+  const emailStatus = emailResult.skipped ? "not configured" : emailResult.error ? `failed — ${emailResult.error}` : "sent";
 
   let whatsappStatus: string;
   if (!admin.phone) {
     whatsappStatus = "skipped — no phone number on your account (add one under Settings)";
   } else {
     const waResult = await sendWhatsApp({ to: admin.phone, body: textBody });
-    whatsappStatus = waResult.skipped ? "not configured" : waResult.error ? "failed" : "sent";
+    await logNotification({ userId: admin.id, channel: "WHATSAPP", kind: "test", result: waResult });
+    whatsappStatus = waResult.skipped ? "not configured" : waResult.error ? `failed — ${waResult.error}` : "sent";
   }
 
   const videoStatus = isDailyConfigured

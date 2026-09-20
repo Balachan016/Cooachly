@@ -15,15 +15,20 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
   }
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: fromAddress,
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
     });
+    if (result.error) {
+      console.error("Failed to send email", result.error);
+      return { skipped: false as const, error: result.error.message };
+    }
     return { skipped: false as const };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.error("Failed to send email", err);
-    return { skipped: false as const, error: err };
+    return { skipped: false as const, error: message };
   }
 }

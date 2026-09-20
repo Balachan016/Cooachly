@@ -23,7 +23,9 @@ export async function sendWhatsApp(opts: { to: string; body: string }) {
     });
     return { skipped: false as const };
   } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
+    const message = err instanceof Error ? err.message : String(err);
     console.error("Failed to send WhatsApp message", err);
-    return { skipped: false as const, error: err };
+    return { skipped: false as const, error: `${message}${code}` };
   }
 }

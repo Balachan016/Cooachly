@@ -2,6 +2,7 @@ import "server-only";
 import type { Booking, User } from "@prisma/client";
 import { sendEmail } from "./email";
 import { sendWhatsApp } from "./sms";
+import { logNotification } from "./log";
 
 export type ReminderKind = "24h" | "1h" | "5m";
 
@@ -21,24 +22,26 @@ export async function sendBookingReminder(booking: BookingWithParties, kind: Rem
   );
 
   await Promise.all([
-    notifyPerson(booking.student, {
-      peerName: booking.professor.name,
-      label,
-      when,
-      joinLink,
-    }),
-    notifyPerson(booking.professor, {
-      peerName: booking.student.name,
-      label,
-      when,
-      joinLink,
-    }),
+    notifyPerson(
+      booking.student,
+      { peerName: booking.professor.name, label, when, joinLink },
+      booking.id,
+      kind
+    ),
+    notifyPerson(
+      booking.professor,
+      { peerName: booking.student.name, label, when, joinLink },
+      booking.id,
+      kind
+    ),
   ]);
 }
 
 async function notifyPerson(
   person: User,
-  info: { peerName: string; label: string; when: string; joinLink: string | null }
+  info: { peerName: string; label: string; when: string; joinLink: string | null },
+  bookingId: string,
+  kind: ReminderKind
 ) {
   const linkLine = info.joinLink ? `\n\nJoin here: ${info.joinLink}` : "";
   const textBody = `Reminder: your Cooachly session with ${info.peerName} starts ${info.label} (${info.when}).${linkLine}`;
@@ -50,18 +53,21 @@ async function notifyPerson(
     <p>— Cooachly</p>
   `;
 
-  const tasks: Promise<unknown>[] = [
-    sendEmail({ to: person.email, subject: `Your Cooachly session starts ${info.label}`, html: emailHtml }),
-  ];
+  const emailResult = await sendEmail({
+    to: person.email,
+    subject: `Your Cooachly session starts ${info.label}`,
+    html: emailHtml,
+  });
+  await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
 
   if (person.phone) {
-    tasks.push(sendWhatsApp({ to: person.phone, body: textBody }));
+    const waResult = await sendWhatsApp({ to: person.phone, body: textBody });
+    await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: waResult });
   }
 
   // Also notify a parent/guardian's WhatsApp number, if one is on file.
   if (person.parentPhone) {
-    tasks.push(sendWhatsApp({ to: person.parentPhone, body: textBody }));
+    const parentResult = await sendWhatsApp({ to: person.parentPhone, body: textBody });
+    await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: parentResult });
   }
-
-  await Promise.all(tasks);
 }
