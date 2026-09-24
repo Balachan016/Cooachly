@@ -55,6 +55,7 @@ enum CoachApplicationStatus {
 enum NotificationChannel {
   EMAIL
   WHATSAPP
+  PUSH
 }
 
 enum NotificationStatus {
@@ -104,6 +105,7 @@ model User {
   reviewsReceived      Review[] @relation("ReviewsReceived")
 
   notificationLogs     NotificationLog[]
+  pushSubscriptions    PushSubscription[]
 
   @@unique([site, email])
 }
@@ -252,6 +254,22 @@ model NotificationLog {
   createdAt DateTime            @default(now())
 
   @@index([bookingId])
+}
+
+// A browser/device the user has allowed to receive Web Push notifications
+// (installed PWA on iOS/Android, or a desktop browser). One user can have
+// several — one per device.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 enum AttachmentKind {

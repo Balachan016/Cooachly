@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/dal";
 import { hashPassword } from "@/lib/password";
 import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
+import { isPushConfigured, sendPushToUser } from "@/lib/notifications/push";
 import { logNotification } from "@/lib/notifications/log";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
 import { sitePath } from "@/lib/site";
@@ -174,11 +175,27 @@ export async function sendTestNotification(): Promise<{ message: string }> {
     whatsappStatus = waResult.skipped ? "not configured" : waResult.error ? `failed — ${waResult.error}` : "sent";
   }
 
+  const pushResult = await sendPushToUser(admin.id, {
+    title: "Cooachly test notification",
+    body: "Push notifications are working on this device.",
+    url: sitePath(admin.site, "/admin"),
+  });
+  if (!pushResult.skipped) {
+    await logNotification({ userId: admin.id, channel: "PUSH", kind: "test", result: pushResult });
+  }
+  const pushStatus = !isPushConfigured
+    ? "not configured"
+    : pushResult.skipped
+      ? "skipped — enable notifications under Settings on your phone first"
+      : pushResult.error
+        ? `failed — ${pushResult.error}`
+        : "sent";
+
   const videoStatus = isDailyConfigured
     ? joinLink
       ? "video link included"
       : "video room creation failed"
     : "Daily.co not configured, no link generated";
 
-  return { message: `Email: ${emailStatus}. WhatsApp: ${whatsappStatus}. Video: ${videoStatus}.` };
+  return { message: `Email: ${emailStatus}. WhatsApp: ${whatsappStatus}. Push: ${pushStatus}. Video: ${videoStatus}.` };
 }

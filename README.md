@@ -29,6 +29,10 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
   upload their answer back, both stored via Vercel Blob.
 - **Reminders** — automatic email (Resend) and WhatsApp (Twilio) reminders 1 day, 1 hour, and
   5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
+- **Installable mobile app (PWA)** — Cooachly and Cooachly Arts can each be installed to an iPhone or
+  Android home screen from the browser, with their own icon and name, and send push notifications
+  for session reminders and new messages. Turned on per device under **Settings → Mobile app &
+  notifications**.
 - **Admin panel** — manage user roles/access, extend or join any booking's video call, and see all
   bookings and revenue.
 - **About page** at `/about`.
@@ -183,6 +187,36 @@ Open [http://localhost:3000](http://localhost:3000).
 Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
 job frequently is safe. WhatsApp is skipped for anyone without a phone number on file.
+
+## Setting up the mobile app & push notifications
+
+The app ships a web app manifest per site (`/manifest.webmanifest` and `/arts/manifest.webmanifest`)
+and a service worker (`public/sw.js`), so on any HTTPS deployment it can be installed straight from
+the browser — no App Store or Play Store submission needed:
+
+- **Android (Chrome):** browser menu → **Install app**, or the **Install app** button under
+  Settings → Mobile app & notifications.
+- **iPhone/iPad (Safari):** Share → **Add to Home Screen**. Push notifications on iOS need iOS 16.4+
+  and only work from the installed app, not a Safari tab.
+
+Push notifications (session reminders at 1 day / 1 hour / 5 minutes, and new messages) need a VAPID
+key pair. Generate it once and add both values to your environment:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+| Variable | Description |
+| --- | --- |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public VAPID key (sent to browsers) |
+| `VAPID_PRIVATE_KEY` | Private VAPID key (server only) |
+| `VAPID_SUBJECT` | `mailto:` address push services can contact you at |
+
+Keep the same keys forever — rotating them silently breaks every existing device subscription.
+Without them, push is skipped and reminders still go out by email/WhatsApp. Each user then turns on
+notifications per device under **Settings → Mobile app & notifications**; the admin **Send test
+notification** button also sends a test push. The service worker never caches pages or data (so
+nobody sees stale bookings); it only shows an offline page when there's no connection.
 
 ## Setting up video calls & AI summaries (Daily.co + OpenAI)
 

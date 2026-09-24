@@ -3,8 +3,15 @@ import type { Booking, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "./email";
 import { sendWhatsAppReminder } from "./sms";
+import { sendPushToUser } from "./push";
 import { logNotification } from "./log";
-import { SITE_CONFIG } from "@/lib/site";
+import { SITE_CONFIG, sitePath } from "@/lib/site";
+
+const BOOKINGS_PATH: Record<User["role"], string> = {
+  ADMIN: "/admin/bookings",
+  PROFESSOR: "/professor/bookings",
+  STUDENT: "/student/bookings",
+};
 
 export type ReminderKind = "24h" | "1h" | "5m" | "manual";
 
@@ -66,6 +73,18 @@ async function notifyPerson(
     html: emailHtml,
   });
   await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
+
+  // Push goes to every device the person enabled notifications on (installed
+  // app or browser). Right before the session, tapping it opens the call.
+  const pushResult = await sendPushToUser(person.id, {
+    title: kind === "manual" ? `Upcoming ${brandName} session` : `Session starts ${RELATIVE_LABEL[kind]}`,
+    body: `With ${info.peerName} — ${info.when}`,
+    url: kind === "5m" && info.joinLink ? info.joinLink : sitePath(person.site, BOOKINGS_PATH[person.role]),
+    tag: `booking-${bookingId}`,
+  });
+  if (!pushResult.skipped) {
+    await logNotification({ bookingId, userId: person.id, channel: "PUSH", kind, result: pushResult });
+  }
 
   const variables = {
     recipientName: person.name,
