@@ -112,8 +112,8 @@ async function main() {
   if (!existingArtsAvailability) {
     await prisma.availability.createMany({
       data: [
-        { professorId: artsGuru.id, dayOfWeek: 6, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata" },
-        { professorId: artsGuru.id, dayOfWeek: 0, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata" },
+        { professorId: artsGuru.id, dayOfWeek: 6, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata", sessionLengthMinutes: 30 },
+        { professorId: artsGuru.id, dayOfWeek: 0, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata", sessionLengthMinutes: 30 },
       ],
     });
   }

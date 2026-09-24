@@ -54,8 +54,8 @@ export default function ArtsHome() {
                 one voice at a time.
               </h1>
               <p className="mt-6 max-w-md text-lg text-black/60 dark:text-white/60">
-                Live online Carnatic vocal classes, mentored by qualified gurus — book 1:1 music
-                sessions that fit your schedule, in your own timezone.
+                Live online Carnatic vocal classes, mentored by qualified gurus — book fixed
+                30-minute 1:1 classes that fit your schedule, in your own timezone.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link href="/arts/demo">
@@ -68,7 +68,7 @@ export default function ArtsHome() {
                 </Link>
               </div>
               <p className="mt-3 text-sm text-black/50 dark:text-white/50">
-                No payment required for your first class.
+                No payment through the platform, ever — you and your guru arrange your rate directly.
               </p>
             </div>
             <CarnaticHeroIllustration className="w-full max-w-lg justify-self-center" />
@@ -137,8 +137,8 @@ export default function ArtsHome() {
               description="Coordinate ragas, homework, and practice notes with your guru or student directly in Cooachly Arts."
             />
             <Feature
-              title="Secure payments"
-              description="Students pay per class or subscribe monthly via Stripe. Gurus track earnings from their dashboard."
+              title="No platform fees"
+              description="Cooachly Arts doesn't charge for classes or take a cut — you and your guru agree on a rate directly, the way you would with a private teacher."
             />
           </div>
         </section>

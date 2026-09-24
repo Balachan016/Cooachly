@@ -37,28 +37,26 @@ export default function PricingPage() {
 
       <main className="mx-auto max-w-4xl px-6 py-12">
         <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-4xl">
-          Simple, straightforward pricing
+          Pricing is between you and your guru
         </h1>
         <p className="mt-3 max-w-2xl text-black/60 dark:text-white/60">
-          One standard monthly plan covers everything — no hidden fees. Your first class is
-          always a free demo, so you can meet your guru before you commit.
+          Cooachly Arts doesn&apos;t charge for classes or take a cut — we just handle scheduling,
+          reminders, video calls, and messaging. You and your guru agree on a rate directly, the
+          same way you would with a private teacher.
         </p>
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
           <Card className="relative border-brand-600">
             <span className="absolute -top-3 left-6 rounded-full bg-brand-700 px-3 py-1 text-xs font-semibold text-white">
-              Standard plan
+              What Cooachly Arts provides
             </span>
-            <div className="mt-2 flex items-baseline gap-1">
-              <span className="text-4xl font-bold text-brand-900 dark:text-brand-300">$120</span>
-              <span className="text-black/50 dark:text-white/50">/ month</span>
-            </div>
             <ul className="mt-4 space-y-2 text-sm text-black/70 dark:text-white/70">
-              <li>• 8 classes per month (2 classes per week)</li>
-              <li>• ~45-minute classes — extendable up to 1 hour if needed</li>
-              <li>• Weekend and evening scheduling, in your own timezone</li>
+              <li>• Fixed 30-minute classes, booked in your own timezone</li>
+              <li>• Your first class is always a free demo</li>
               <li>• Reminders by email and WhatsApp before every class</li>
+              <li>• A video room for every confirmed booking — no separate app or link</li>
               <li>• Messaging with your guru between classes</li>
+              <li>• No booking fee, no subscription, no platform cut</li>
             </ul>
             <Link href="/arts/demo" className="mt-6 block">
               <Button className="w-full">Book your free demo</Button>
@@ -69,21 +67,25 @@ export default function PricingPage() {
             <h2 className="font-semibold text-brand-900 dark:text-brand-300">Good to know</h2>
             <ul className="mt-4 space-y-3 text-sm text-black/70 dark:text-white/70">
               <li>
-                <strong>Weekday classes:</strong> once the school year is in session, weekday slots
-                can be more limited and may carry a small premium over the standard weekend rate.
-                Weekend scheduling remains the most economical option.
+                <strong>How rates work:</strong> every guru sets their own rate and shares it with
+                you directly — usually on their profile bio or the first time you message them.
+                It varies guru to guru and can vary student to student.
               </li>
               <li>
-                <strong>Individual guru rates:</strong> Cooachly Arts is a marketplace — some gurus set
-                their own per-class or monthly rate, shown on their profile before you book.
+                <strong>Booking is free either way:</strong> classes auto-confirm the moment you
+                pick a slot — there&apos;s no payment step in Cooachly Arts itself.
               </li>
               <li>
-                <strong>Referral discounts:</strong> refer friends and save on your own plan — see
-                our <Link href="/arts/faq#referrals" className="font-medium text-brand-700 hover:underline dark:text-brand-400">FAQ</Link> for details.
+                <strong>How you pay your guru:</strong> that&apos;s arranged between the two of you —
+                Cooachly Arts doesn&apos;t process or track payment.
               </li>
               <li>
-                <strong>Payments:</strong> handled securely through Stripe, billed monthly or per
-                class — no manual transfers required.
+                Questions about a specific guru&apos;s rate? Message them directly from their
+                profile, or{" "}
+                <Link href="/arts/contact" className="font-medium text-brand-700 hover:underline dark:text-brand-400">
+                  contact us
+                </Link>{" "}
+                if you need help.
               </li>
             </ul>
           </Card>

@@ -53,22 +53,24 @@ export default function BecomeACoachPage() {
                   schedules a short call and a demo class.
                 </li>
                 <li>
-                  <strong>3. Onboarding.</strong> Once approved, we&apos;ll set up your profile,
-                  availability, and payment details together.
+                  <strong>3. Onboarding.</strong> Once approved, we&apos;ll set up your profile
+                  and availability together.
                 </li>
                 <li>
                   <strong>4. Start teaching.</strong> Set your own weekly availability and start
-                  getting matched with students.
+                  getting matched with students. Classes are fixed at 30 minutes.
                 </li>
               </ol>
             </Card>
 
             <Card>
-              <h2 className="font-semibold text-brand-900 dark:text-brand-300">Getting paid</h2>
+              <h2 className="font-semibold text-brand-900 dark:text-brand-300">Setting your rate</h2>
               <p className="mt-3 text-sm text-black/70 dark:text-white/70">
-                Gurus are paid based on completed classes each month. Since every guru&apos;s
-                situation is a little different, our team will walk you through the details and set
-                up your payment method individually during onboarding.
+                Cooachly Arts doesn&apos;t process payment or take a cut — we handle scheduling,
+                reminders, video calls, and messaging, and you set your own rate and collect it
+                directly from each student, the same way you would as an independent teacher.
+                Most gurus mention their rate in their profile bio or in their first message with
+                a new student.
               </p>
             </Card>
           </div>

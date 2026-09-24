@@ -48,7 +48,7 @@ export function BookingPicker({ professorId, groups, timezone }: { professorId: 
       {state?.message && <FormMessage>{state.message}</FormMessage>}
 
       <Button type="submit" disabled={!selected || pending} className="w-full">
-        {pending ? "Booking…" : "Book session"}
+        {pending ? "Booking…" : "Book class"}
       </Button>
     </form>
   );

@@ -46,9 +46,8 @@ export function AdminBookingRow({
         </Badge>
       </td>
       <td className="px-4 py-3">
-        <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
+        <Badge>Pay guru directly</Badge>
       </td>
-      <td className="px-4 py-3 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
       <td className="px-4 py-3">
         {booking.meetingLink && booking.status !== "CANCELLED" && !isPast ? (
           <a
@@ -109,7 +108,7 @@ export function AdminBookingRow({
     </tr>
     {showReminders && booking.notificationLogs.length > 0 && (
       <tr className="border-b border-black/5 bg-black/[0.02] last:border-0 dark:border-white/5 dark:bg-white/[0.03]">
-        <td colSpan={10} className="px-4 py-3">
+        <td colSpan={9} className="px-4 py-3">
           <div className="space-y-1.5">
             {booking.notificationLogs.map((log) => (
               <div key={log.id} className="flex flex-wrap items-center gap-2 text-xs">

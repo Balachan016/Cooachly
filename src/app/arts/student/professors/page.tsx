@@ -3,7 +3,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
-import { Badge, Card, Select } from "@/components/ui";
+import { Badge, Card } from "@/components/ui";
+import { AutoSubmitSelect } from "@/components/auto-submit-select";
 import { curriculumOptionsForSite } from "@/lib/curricula";
 import { getProfessorRatingSummaries } from "@/lib/reviews";
 
@@ -33,14 +34,14 @@ export default async function BrowseProfessorsPage(props: PageProps<"/arts/stude
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">Browse gurus and book a class.</p>
 
       <form method="get" className="mt-4 max-w-xs">
-        <Select name="curriculum" defaultValue={curriculum} onChange={(e) => e.currentTarget.form?.submit()}>
+        <AutoSubmitSelect name="curriculum" defaultValue={curriculum}>
           <option value="">All curricula</option>
           {curriculumOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
           ))}
-        </Select>
+        </AutoSubmitSelect>
       </form>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -64,8 +65,8 @@ export default async function BrowseProfessorsPage(props: PageProps<"/arts/stude
                   ))}
                 </div>
               )}
-              <p className="mt-3 text-sm font-medium">
-                ${((p.professorProfile?.hourlyRateCents ?? 0) / 100).toFixed(2)} / session
+              <p className="mt-3 text-sm text-black/50 dark:text-white/50">
+                30-min classes · rate shared directly by the guru
               </p>
             </Card>
           </Link>

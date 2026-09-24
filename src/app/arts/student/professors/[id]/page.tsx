@@ -5,13 +5,11 @@ import { getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { getAvailableSlots, groupSlotsByLocalDay } from "@/lib/scheduling";
 import { getProfessorRatingSummary } from "@/lib/reviews";
-import { subscribeToProfessor } from "@/actions/billing";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Card } from "@/components/ui";
 import { BookingPicker } from "./booking-picker";
 
 export default async function ProfessorDetailPage(props: PageProps<"/arts/student/professors/[id]">) {
   const { id } = await props.params;
-  const searchParams = await props.searchParams;
 
   const user = await getCurrentUser();
   if (!user) return null;
@@ -22,23 +20,19 @@ export default async function ProfessorDetailPage(props: PageProps<"/arts/studen
   });
   if (!professor || professor.site !== user.site) notFound();
 
-  const [slots, subscription, rating] = await Promise.all([
+  const [slots, rating] = await Promise.all([
     getAvailableSlots(professor.id),
-    prisma.subscription.findFirst({
-      where: { studentId: user.id, professorId: professor.id, status: "ACTIVE", currentPeriodEnd: { gt: new Date() } },
-    }),
     getProfessorRatingSummary(professor.id),
   ]);
 
   const groups = groupSlotsByLocalDay(slots, user.timezone);
-  const errorParam = typeof searchParams.error === "string" ? searchParams.error : null;
 
   return (
     <div>
       <div className="flex flex-col gap-6 lg:flex-row">
         <Card className="flex-1">
           <h1 className="text-2xl font-semibold">{professor.name}</h1>
-          <p className="mt-1 text-brand-700 dark:text-brand-400">{professor.professorProfile?.subject || "Coaching"}</p>
+          <p className="mt-1 text-brand-700 dark:text-brand-400">{professor.professorProfile?.subject || "Carnatic Vocals"}</p>
           {rating.count > 0 && (
             <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
               {"★".repeat(Math.round(rating.average))}
@@ -62,13 +56,8 @@ export default async function ProfessorDetailPage(props: PageProps<"/arts/studen
             {professor.professorProfile?.bio}
           </p>
 
-          <div className="mt-4 flex items-center gap-3">
-            <span className="text-lg font-semibold">
-              ${((professor.professorProfile?.hourlyRateCents ?? 0) / 100).toFixed(2)}
-            </span>
-            <span className="text-sm text-black/50 dark:text-white/50">
-              / 60-minute session (final price shown per slot below)
-            </span>
+          <div className="mt-4 rounded-lg bg-black/5 px-3 py-2 text-sm text-black/60 dark:bg-white/5 dark:text-white/60">
+            30-minute classes. Rates aren&apos;t set by the platform — message {professor.name.split(" ")[0]} to discuss pricing directly.
           </div>
 
           <Link
@@ -77,43 +66,10 @@ export default async function ProfessorDetailPage(props: PageProps<"/arts/studen
           >
             Message {professor.name.split(" ")[0]} →
           </Link>
-
-          {professor.professorProfile?.monthlyPriceCents ? (
-            <div className="mt-6 border-t border-black/10 pt-4 dark:border-white/10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">Monthly subscription</div>
-                  <div className="text-sm text-black/50 dark:text-white/50">
-                    ${(professor.professorProfile.monthlyPriceCents / 100).toFixed(2)} / month — unlimited sessions
-                  </div>
-                </div>
-                {subscription ? (
-                  <Badge tone="success">Subscribed</Badge>
-                ) : (
-                  <form action={subscribeToProfessor.bind(null, professor.id)}>
-                    <Button type="submit" variant="secondary">
-                      Subscribe
-                    </Button>
-                  </form>
-                )}
-              </div>
-            </div>
-          ) : null}
-
-          {errorParam === "stripe-not-configured" && (
-            <p className="mt-4 text-sm text-amber-600 dark:text-amber-400">
-              Payments aren&apos;t configured on this instance yet.
-            </p>
-          )}
-          {errorParam === "no-subscription-plan" && (
-            <p className="mt-4 text-sm text-amber-600 dark:text-amber-400">
-              This professor hasn&apos;t set up a subscription plan.
-            </p>
-          )}
         </Card>
 
         <Card className="w-full lg:w-96">
-          <h2 className="font-semibold">Book a session</h2>
+          <h2 className="font-semibold">Book a class</h2>
           <div className="mt-4">
             <BookingPicker professorId={professor.id} groups={groups} timezone={user.timezone} />
           </div>

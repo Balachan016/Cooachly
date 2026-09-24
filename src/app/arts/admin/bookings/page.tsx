@@ -42,7 +42,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
     <div>
       <h1 className="text-2xl font-semibold">Bookings</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        {hasFilters ? "Sessions matching your filters." : "The most recent 100 sessions booked across the platform."}
+        {hasFilters ? "Classes matching your filters." : "The most recent 100 classes booked across the platform."} Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
       </p>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
@@ -93,10 +93,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
             <tr>
               <th className="px-4 py-3">When</th>
               <th className="px-4 py-3">Student</th>
-              <th className="px-4 py-3">Professor</th>
+              <th className="px-4 py-3">Guru</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Payment</th>
-              <th className="px-4 py-3 text-right">Price</th>
               <th className="px-4 py-3">Video</th>
               <th className="px-4 py-3">Extend</th>
               <th className="px-4 py-3">Files</th>
@@ -109,8 +108,8 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
-                  {hasFilters ? "No sessions match your filters." : "No bookings yet."}
+                <td colSpan={9} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+                  {hasFilters ? "No classes match your filters." : "No bookings yet."}
                 </td>
               </tr>
             )}

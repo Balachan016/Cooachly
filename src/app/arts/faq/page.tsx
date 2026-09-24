@@ -8,45 +8,37 @@ export const metadata = {
 
 const FAQS: { id?: string; question: string; answer: React.ReactNode }[] = [
   {
-    question: "What does the standard plan include?",
-    answer: "The standard plan is $120/month and includes 8 classes (2 per week), each roughly 45 minutes — extendable up to an hour if your guru needs the extra time. Individual gurus may also offer their own per-class or monthly pricing, shown on their profile.",
+    question: "Is there a subscription or plan I need to buy?",
+    answer: "No. Cooachly Arts doesn't sell plans or charge for classes — every class is fixed at 30 minutes and simply auto-confirms once you pick a slot. Your rate is whatever you and your guru agree on directly, not something the platform sets.",
   },
   {
     question: "How does the free demo work?",
-    answer: "Your very first class with Cooachly Arts is always a free, no-obligation demo session. Pick a level and an available time slot, and you'll get a video call link right away — no payment required. Regular paid classes only begin once you're ready to enroll and payment is confirmed.",
+    answer: "Your very first class with Cooachly Arts is always a free, no-obligation demo session. Pick a level and an available time slot, and you'll get a video call link right away — no payment involved, same as every other class.",
   },
   {
     id: "rescheduling",
     question: "What's the rescheduling and cancellation policy?",
     answer: (
       <>
-        You can reschedule a class for free if you let your guru know at least 24 hours in
-        advance. Each class comes with one free reschedule under this notice window. If a
-        class is cancelled or rescheduled with less than 24 hours&apos; notice (or missed without
-        notice), 50% of that class&apos;s fee may apply. If you need more flexibility, just{" "}
+        You can cancel or reschedule a class from your bookings page any time before it starts.
+        Since Cooachly Arts doesn&apos;t collect payment, there&apos;s no platform cancellation fee —
+        if your guru asks for notice or a fee for late cancellations, that&apos;s something you
+        agree on directly with them. If you need help, just{" "}
         <Link href="/arts/contact" className="font-medium text-brand-700 hover:underline dark:text-brand-400">
           reach out
-        </Link>{" "}
-        and we&apos;ll work with you.
+        </Link>
+        .
       </>
     ),
-  },
-  {
-    id: "referrals",
-    question: "Is there a referral program?",
-    answer: "Yes! Refer 3 actively enrolled students and get 15% off your monthly plan; refer 5 and get 25% off. The discount applies as long as the referred students remain actively enrolled, and referrals must enroll within 6 months of being referred. Ask your guru or contact us to get started.",
-  },
-  {
-    question: "Do weekday classes cost more than weekend classes?",
-    answer: "Weekend classes are the standard, most economical option. Once the school year is in session, weekday availability can be more limited, so weekday slots may carry a small premium — your guru will always let you know before you book.",
   },
   {
     question: "How does scheduling work across timezones?",
     answer: "Every guru sets their weekly availability once. When you book, all times are automatically converted and shown in your own local timezone — no manual conversion needed.",
   },
   {
-    question: "How do I pay?",
-    answer: "All payments are handled securely through Stripe — pay per class or subscribe monthly. No manual transfers or cash payments are needed.",
+    id: "how-rates-work",
+    question: "How do rates and payment work?",
+    answer: "Cooachly Arts doesn't process payment at all — there's no price shown at booking, and no charge on your card. Each guru sets and shares their own rate directly with students, usually in their profile bio or your first message with them, and payment is arranged between the two of you outside the platform.",
   },
   {
     question: "Are gurus vetted?",

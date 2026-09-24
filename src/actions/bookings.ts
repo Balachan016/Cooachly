@@ -40,6 +40,27 @@ export async function bookSlot(_state: unknown, formData: FormData) {
   const match = slots.find((s) => s.startAt.getTime() === startDate.getTime());
   if (!match) return { message: "That slot is no longer available. Please pick another." };
 
+  // Cooachly Arts doesn't run payment through the platform at all — gurus
+  // quote and collect their own rate directly with each student, so every
+  // class just auto-confirms with no Stripe step and no price on record.
+  if (session.site === "ARTS") {
+    const booking = await prisma.booking.create({
+      data: {
+        studentId: session.userId,
+        professorId,
+        startAt: match.startAt,
+        endAt: match.endAt,
+        status: "CONFIRMED",
+        paymentStatus: "UNPAID",
+        priceCents: 0,
+      },
+    });
+    await provisionVideoRoomForBooking(booking);
+    revalidatePath(sitePath(session.site, "/student/bookings"));
+    revalidatePath(sitePath(session.site, "/professor/bookings"));
+    redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
+  }
+
   const activeSubscription = await prisma.subscription.findFirst({
     where: {
       studentId: session.userId,

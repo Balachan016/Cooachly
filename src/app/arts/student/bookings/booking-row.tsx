@@ -30,7 +30,7 @@ export function StudentBookingRow({
           <Badge tone={booking.status === "CANCELLED" ? "danger" : booking.status === "COMPLETED" ? "success" : "default"}>
             {booking.status}
           </Badge>
-          <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
+          <Badge>Pay guru directly</Badge>
         </div>
         {booking.meetingLink && booking.status !== "CANCELLED" && (
           canJoin ? (
@@ -45,7 +45,7 @@ export function StudentBookingRow({
           ) : (
             !isPast && (
               <p className="mt-2 text-sm text-black/40 dark:text-white/40">
-                Join link opens 5 minutes before your session.
+                Join link opens 5 minutes before your class.
               </p>
             )
           )

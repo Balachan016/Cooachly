@@ -35,7 +35,7 @@ export function ProfessorBookingRow({
           <Badge tone={booking.status === "CANCELLED" ? "danger" : booking.status === "COMPLETED" ? "success" : "default"}>
             {booking.status}
           </Badge>
-          <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
+          <Badge>Pay guru directly</Badge>
           {booking.isDemo && <Badge tone="default">Free demo</Badge>}
         </div>
         {booking.student.studentProfile && (
@@ -72,7 +72,7 @@ export function ProfessorBookingRow({
           ) : (
             !isPast && (
               <p className="mt-2 text-sm text-black/40 dark:text-white/40">
-                Join link opens 5 minutes before the session.
+                Join link opens 5 minutes before the class.
               </p>
             )
           )

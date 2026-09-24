@@ -6,18 +6,12 @@ import { TestNotificationButton } from "./test-notification-button";
 export default async function AdminOverviewPage() {
   const session = await requireRole("ADMIN");
 
-  const [userCount, professorCount, studentCount, bookingCount, paidBookings] = await Promise.all([
+  const [userCount, professorCount, studentCount, bookingCount] = await Promise.all([
     prisma.user.count({ where: { site: session.site } }),
     prisma.user.count({ where: { role: "PROFESSOR", site: session.site } }),
     prisma.user.count({ where: { role: "STUDENT", site: session.site } }),
     prisma.booking.count({ where: { professor: { site: session.site } } }),
-    prisma.booking.findMany({
-      where: { paymentStatus: "PAID", professor: { site: session.site } },
-      select: { priceCents: true },
-    }),
   ]);
-
-  const revenueCents = paidBookings.reduce((sum, b) => sum + b.priceCents, 0);
 
   return (
     <div>
@@ -28,15 +22,17 @@ export default async function AdminOverviewPage() {
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Total users" value={userCount} />
-        <Stat label="Professors" value={professorCount} />
+        <Stat label="Gurus" value={professorCount} />
         <Stat label="Students" value={studentCount} />
-        <Stat label="Total bookings" value={bookingCount} />
+        <Stat label="Total classes" value={bookingCount} />
       </div>
 
       <Card className="mt-6">
-        <h2 className="font-semibold">Revenue collected</h2>
-        <p className="mt-2 text-3xl font-bold">${(revenueCents / 100).toFixed(2)}</p>
-        <p className="mt-1 text-sm text-black/50 dark:text-white/50">From {paidBookings.length} paid bookings</p>
+        <h2 className="font-semibold">Payments</h2>
+        <p className="mt-2 text-sm text-black/60 dark:text-white/60">
+          Cooachly Arts doesn&apos;t process payment on the platform — every class auto-confirms
+          at booking, and gurus arrange and collect their rate directly with each student.
+        </p>
       </Card>
 
       <Card className="mt-6">
