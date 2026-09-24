@@ -1,5 +1,6 @@
 import "server-only";
 import type { Booking, User } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { sendEmail } from "./email";
 import { sendWhatsAppReminder } from "./sms";
 import { logNotification } from "./log";
@@ -27,9 +28,13 @@ export async function sendBookingReminder(booking: BookingWithParties, kind: Rem
     booking.startAt
   );
 
+  const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true } });
+  const pairName = `${booking.student.name} & ${booking.professor.name}`;
+
   await Promise.all([
     notifyPerson(booking.student, { peerName: booking.professor.name, when, joinLink }, booking.id, kind),
     notifyPerson(booking.professor, { peerName: booking.student.name, when, joinLink }, booking.id, kind),
+    ...admins.map((admin) => notifyPerson(admin, { peerName: pairName, when, joinLink }, booking.id, kind)),
   ]);
 }
 
