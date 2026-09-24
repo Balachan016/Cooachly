@@ -95,11 +95,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
               <th className="px-4 py-3">Student</th>
               <th className="px-4 py-3">Guru</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Payment</th>
-              <th className="px-4 py-3">Video</th>
-              <th className="px-4 py-3">Extend</th>
-              <th className="px-4 py-3">Files</th>
-              <th className="px-4 py-3">Reminders</th>
+              <th className="px-4 py-3">Details</th>
             </tr>
           </thead>
           <tbody>
@@ -108,7 +104,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+                <td colSpan={5} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
                   {hasFilters ? "No classes match your filters." : "No bookings yet."}
                 </td>
               </tr>

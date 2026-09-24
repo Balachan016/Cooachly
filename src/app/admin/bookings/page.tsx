@@ -95,12 +95,8 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
               <th className="px-4 py-3">Student</th>
               <th className="px-4 py-3">Professor</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3 text-right">Price</th>
-              <th className="px-4 py-3">Video</th>
-              <th className="px-4 py-3">Extend</th>
-              <th className="px-4 py-3">Files</th>
-              <th className="px-4 py-3">Reminders</th>
+              <th className="px-4 py-3">Details</th>
             </tr>
           </thead>
           <tbody>
@@ -109,7 +105,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+                <td colSpan={6} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
                   {hasFilters ? "No sessions match your filters." : "No bookings yet."}
                 </td>
               </tr>
