@@ -9,20 +9,25 @@ import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
 import { logNotification } from "@/lib/notifications/log";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
+import { sitePath } from "@/lib/site";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role } from "@prisma/client";
 
 export async function setUserRole(userId: string, role: Role) {
-  await requireRole("ADMIN");
+  const session = await requireRole("ADMIN");
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || target.site !== session.site) return;
   await prisma.user.update({ where: { id: userId }, data: { role } });
-  revalidatePath("/admin/users");
+  revalidatePath(sitePath(session.site, "/admin/users"));
 }
 
 export async function setUserActive(userId: string, isActive: boolean) {
   const session = await requireRole("ADMIN");
   if (session.userId === userId) return;
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || target.site !== session.site) return;
   await prisma.user.update({ where: { id: userId }, data: { isActive } });
-  revalidatePath("/admin/users");
+  revalidatePath(sitePath(session.site, "/admin/users"));
 }
 
 const UserDetailsSchema = z.object({
@@ -40,7 +45,7 @@ const UserDetailsSchema = z.object({
 });
 
 export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, formData: FormData) {
-  await requireRole("ADMIN");
+  const session = await requireRole("ADMIN");
 
   const parsed = UserDetailsSchema.safeParse({
     name: formData.get("name"),
@@ -63,9 +68,11 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
   const data = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { id: userId }, include: { professorProfile: true } });
-  if (!existing) return { message: "User not found." };
+  if (!existing || existing.site !== session.site) return { message: "User not found." };
 
-  const emailTaken = await prisma.user.findFirst({ where: { email: data.email, NOT: { id: userId } } });
+  const emailTaken = await prisma.user.findFirst({
+    where: { site: existing.site, email: data.email, NOT: { id: userId } },
+  });
   if (emailTaken) return { message: "Another account already uses that email." };
 
   await prisma.user.update({
@@ -101,8 +108,8 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
     });
   }
 
-  revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath(sitePath(session.site, "/admin/users"));
+  revalidatePath(sitePath(session.site, `/admin/users/${userId}`));
   return { message: "Saved.", success: true as const };
 }
 
@@ -115,7 +122,7 @@ export async function adminResetPassword(
   _state: SimpleFormState,
   formData: FormData
 ): Promise<SimpleFormState> {
-  await requireRole("ADMIN");
+  const session = await requireRole("ADMIN");
 
   const parsed = AdminResetPasswordSchema.safeParse({ newPassword: formData.get("newPassword") });
   if (!parsed.success) {
@@ -123,7 +130,7 @@ export async function adminResetPassword(
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return { message: "User not found." };
+  if (!user || user.site !== session.site) return { message: "User not found." };
 
   const passwordHash = await hashPassword(parsed.data.newPassword);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });

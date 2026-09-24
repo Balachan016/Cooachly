@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { logout } from "@/actions/auth";
 import { Button } from "@/components/ui";
@@ -10,20 +11,24 @@ export function DashboardShell({
   navLinks,
   roleLabel,
   userName,
+  homeHref = "/",
+  settingsHref = "/settings",
+  logo = <Logo />,
 }: {
   children: React.ReactNode;
   navLinks: NavLink[];
   roleLabel: string;
   userName: string;
+  homeHref?: string;
+  settingsHref?: string;
+  logo?: ReactNode;
 }) {
   return (
     <div className="flex min-h-screen flex-1 flex-col">
       <header className="border-b border-black/10 dark:border-white/10">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-8">
-            <Link href="/">
-              <Logo />
-            </Link>
+            <Link href={homeHref}>{logo}</Link>
             <nav className="hidden gap-1 sm:flex">
               {navLinks.map((link) => (
                 <Link
@@ -41,12 +46,12 @@ export function DashboardShell({
               <div className="font-medium">{userName}</div>
               <div className="text-xs text-black/50 dark:text-white/50">{roleLabel}</div>
             </div>
-            <Link href="/">
+            <Link href={homeHref}>
               <Button variant="secondary" type="button">
                 Home
               </Button>
             </Link>
-            <Link href="/settings">
+            <Link href={settingsHref}>
               <Button variant="secondary" type="button">
                 Settings
               </Button>

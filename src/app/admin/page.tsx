@@ -1,15 +1,18 @@
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { TestNotificationButton } from "./test-notification-button";
 
 export default async function AdminOverviewPage() {
+  const session = await requireRole("ADMIN");
+
   const [userCount, professorCount, studentCount, bookingCount, paidBookings] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.count({ where: { role: "PROFESSOR" } }),
-    prisma.user.count({ where: { role: "STUDENT" } }),
-    prisma.booking.count(),
+    prisma.user.count({ where: { site: session.site } }),
+    prisma.user.count({ where: { role: "PROFESSOR", site: session.site } }),
+    prisma.user.count({ where: { role: "STUDENT", site: session.site } }),
+    prisma.booking.count({ where: { professor: { site: session.site } } }),
     prisma.booking.findMany({
-      where: { paymentStatus: "PAID" },
+      where: { paymentStatus: "PAID", professor: { site: session.site } },
       select: { priceCents: true },
     }),
   ]);

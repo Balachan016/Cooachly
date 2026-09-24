@@ -3,6 +3,37 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Brand palette — Cooachly's default green/lime. Overridden per-site
+     below (see [data-theme="arts"]) so shared components (buttons,
+     illustrations, message bubbles, etc.) render on-brand for whichever
+     site tree they're rendered inside, without duplicating components. */
+  --brand-50: #f0fdf4;
+  --brand-300: #86efac;
+  --brand-400: #4ade80;
+  --brand-600: #16a34a;
+  --brand-700: #15803d;
+  --brand-800: #166534;
+  --brand-900: #14532d;
+  --brand-950: #052e16;
+  --accent-100: #ecfccb;
+  --accent-300: #bef264;
+  --accent-500: #84cc16;
+}
+
+[data-theme="arts"] {
+  /* Cooachly Arts — deep maroon and temple gold, for the Carnatic vocals tab. */
+  --brand-50: #fef2f2;
+  --brand-300: #fca5a5;
+  --brand-400: #f87171;
+  --brand-600: #dc2626;
+  --brand-700: #b91c1c;
+  --brand-800: #991b1b;
+  --brand-900: #7f1d1d;
+  --brand-950: #450a0a;
+  --accent-100: #fef3c7;
+  --accent-300: #fcd34d;
+  --accent-500: #d97706;
 }
 
 @theme inline {
@@ -10,6 +41,18 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-brand-50: var(--brand-50);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-brand-950: var(--brand-950);
+  --color-accent-100: var(--accent-100);
+  --color-accent-300: var(--accent-300);
+  --color-accent-500: var(--accent-500);
 }
 
 @media (prefers-color-scheme: dark) {

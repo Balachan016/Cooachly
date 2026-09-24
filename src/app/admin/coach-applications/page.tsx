@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/dal";
 import { Badge, Card } from "@/components/ui";
 import { CoachApplicationStatusActions } from "./status-actions";
 
@@ -10,7 +11,12 @@ const STATUS_TONE = {
 } as const;
 
 export default async function AdminCoachApplicationsPage() {
-  const applications = await prisma.coachApplication.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+  const session = await requireRole("ADMIN");
+  const applications = await prisma.coachApplication.findMany({
+    where: { site: session.site },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
 
   return (
     <div>

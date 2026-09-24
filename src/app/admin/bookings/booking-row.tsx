@@ -60,7 +60,7 @@ export function AdminBookingRow({
           <button
             type="button"
             onClick={() => setShowDetails((v) => !v)}
-            className="whitespace-nowrap text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+            className="whitespace-nowrap text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
           >
             {showDetails ? "Hide details" : "Details"}
             {failedCount > 0 && (
@@ -82,7 +82,7 @@ export function AdminBookingRow({
                     href={booking.meetingLink}
                     target="_blank"
                     rel="noreferrer"
-                    className="mt-1 inline-block text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+                    className="mt-1 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
                   >
                     Join call →
                   </a>

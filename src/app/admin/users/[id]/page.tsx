@@ -1,17 +1,19 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { EditUserForm } from "./edit-user-form";
 import { ResetPasswordForm } from "./reset-password-form";
 
 export default async function AdminEditUserPage(props: PageProps<"/admin/users/[id]">) {
   const { id } = await props.params;
+  const session = await requireRole("ADMIN");
 
   const user = await prisma.user.findUnique({
     where: { id },
     include: { professorProfile: true },
   });
-  if (!user) notFound();
+  if (!user || user.site !== session.site) notFound();
 
   return (
     <div>

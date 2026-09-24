@@ -11,7 +11,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-      <Link href="/" className="mb-2 text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+      <Link href="/" className="mb-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
         ← Home
       </Link>
       <Link href="/" className="mb-8">
@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-black/60 dark:text-white/60">
-          <Link href="/login" className="font-medium text-green-700 hover:underline">
+          <Link href="/login" className="font-medium text-brand-700 hover:underline">
             Back to login
           </Link>
         </p>

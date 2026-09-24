@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
+import { sitePath } from "@/lib/site";
 import { Badge, Button, Card } from "@/components/ui";
 
 export default async function ProfessorDashboardPage() {
@@ -53,7 +54,7 @@ export default async function ProfessorDashboardPage() {
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
             Students can&apos;t book sessions until you add weekly availability windows.
           </p>
-          <Link href="/professor/availability" className="mt-3 inline-block">
+          <Link href={sitePath(user.site, "/professor/availability")} className="mt-3 inline-block">
             <Button>Set availability</Button>
           </Link>
         </Card>

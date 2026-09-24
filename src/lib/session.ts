@@ -1,7 +1,7 @@
 import "server-only";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import type { Role } from "@prisma/client";
+import type { Role, Site } from "@prisma/client";
 
 const secretKey = process.env.SESSION_SECRET;
 if (!secretKey) {
@@ -19,6 +19,7 @@ const SESSION_IDLE_DURATION_MS = 10 * 60 * 1000;
 export type SessionPayload = {
   userId: string;
   role: Role;
+  site: Site;
   name: string;
   email: string;
 };

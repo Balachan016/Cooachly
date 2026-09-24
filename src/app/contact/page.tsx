@@ -34,7 +34,7 @@ export default function ContactPage() {
       </header>
 
       <main className="mx-auto max-w-xl px-6 py-12">
-        <h1 className="text-3xl font-bold tracking-tight text-green-900 dark:text-green-300">Get in touch</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300">Get in touch</h1>
         <p className="mt-2 text-black/60 dark:text-white/60">
           Questions about subjects, pricing, or scheduling? Send us a message and we&apos;ll reply soon.
         </p>
