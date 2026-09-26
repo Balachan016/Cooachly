@@ -1,7 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isDailyConfigured } from "@/lib/daily";
 import { Card, Select } from "@/components/ui";
 import { AdminBookingRow } from "./booking-row";
+import { InstantCallForm } from "./instant-call-form";
 
 export default async function AdminBookingsPage(props: PageProps<"/admin/bookings">) {
   const searchParams = await props.searchParams;
@@ -13,7 +15,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
     ...(date ? { startAt: { gte: new Date(`${date}T00:00:00.000Z`), lt: new Date(`${date}T23:59:59.999Z`) } } : {}),
   };
 
-  const [bookings, students] = await Promise.all([
+  const [bookings, filterStudents, allStudents, allProfessors] = await Promise.all([
     prisma.booking.findMany({
       where,
       orderBy: { startAt: "desc" },
@@ -30,6 +32,16 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    prisma.user.findMany({
+      where: { role: "STUDENT", isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { role: "PROFESSOR", isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const hasFilters = Boolean(studentId || date);
@@ -41,6 +53,16 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
         {hasFilters ? "Sessions matching your filters." : "The most recent 100 sessions booked across the platform."}
       </p>
 
+      <Card className="mt-6">
+        <h2 className="font-semibold">Start an instant call</h2>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          Creates a session starting right now and emails/WhatsApps the join link to both the student and professor automatically.
+        </p>
+        <div className="mt-4">
+          <InstantCallForm students={allStudents} professors={allProfessors} isDailyConfigured={isDailyConfigured} />
+        </div>
+      </Card>
+
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <div className="w-56">
           <label htmlFor="student" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
@@ -48,7 +70,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
           </label>
           <Select id="student" name="student" defaultValue={studentId}>
             <option value="">All students</option>
-            {students.map((s) => (
+            {filterStudents.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>

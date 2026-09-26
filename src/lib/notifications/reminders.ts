@@ -5,20 +5,23 @@ import { sendEmail } from "./email";
 import { sendWhatsAppReminder } from "./sms";
 import { logNotification } from "./log";
 
-export type ReminderKind = "24h" | "1h" | "5m" | "manual";
+export type ReminderKind = "24h" | "1h" | "5m" | "manual" | "instant";
 
-const RELATIVE_LABEL: Record<Exclude<ReminderKind, "manual">, string> = {
+const LABEL: Record<ReminderKind, string> = {
   "24h": "in 1 day",
   "1h": "in 1 hour",
   "5m": "in 5 minutes",
+  manual: "as scheduled",
+  instant: "now",
 };
 
-function reminderSentence(kind: ReminderKind, peerName: string, when: string) {
-  if (kind === "manual") {
-    return `your Cooachly session with ${peerName} is scheduled for ${when}`;
-  }
-  return `your Cooachly session with ${peerName} starts ${RELATIVE_LABEL[kind]} (${when})`;
-}
+const SUBJECT_PHRASE: Record<ReminderKind, string> = {
+  "24h": "starts in 1 day",
+  "1h": "starts in 1 hour",
+  "5m": "starts in 5 minutes",
+  manual: "is coming up",
+  instant: "is starting now",
+};
 
 type BookingWithParties = Booking & { student: User; professor: User };
 
@@ -44,7 +47,7 @@ async function notifyPerson(
   bookingId: string,
   kind: ReminderKind
 ) {
-  const sentence = reminderSentence(kind, info.peerName, info.when);
+  const sentence = `your Cooachly session with ${info.peerName} starts ${LABEL[kind]} (${info.when})`;
   const linkLine = info.joinLink ? `\n\nJoin here: ${info.joinLink}` : "";
   const textBody = `Reminder: ${sentence}.${linkLine}`;
 
@@ -57,7 +60,7 @@ async function notifyPerson(
 
   const emailResult = await sendEmail({
     to: person.email,
-    subject: kind === "manual" ? "Your upcoming Cooachly session" : `Your Cooachly session starts ${RELATIVE_LABEL[kind]}`,
+    subject: `Your Cooachly session ${SUBJECT_PHRASE[kind]}`,
     html: emailHtml,
   });
   await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
@@ -65,7 +68,7 @@ async function notifyPerson(
   const variables = {
     recipientName: person.name,
     peerName: info.peerName,
-    label: kind === "manual" ? "as scheduled" : RELATIVE_LABEL[kind],
+    label: LABEL[kind],
     when: info.when,
     joinLink: info.joinLink ?? "",
   };

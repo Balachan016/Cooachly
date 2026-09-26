@@ -13,6 +13,7 @@ const KIND_LABEL: Record<string, string> = {
   "1h": "1h reminder",
   "5m": "5m reminder",
   manual: "Manual reminder",
+  instant: "Instant call",
   test: "Test",
 };
 
