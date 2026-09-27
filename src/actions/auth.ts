@@ -5,14 +5,23 @@ import crypto from "crypto";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { createSession, deleteSession } from "@/lib/session";
+import { createSession, deleteSession, getSessionCookie, decrypt } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
+import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
+import type { Site } from "@prisma/client";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// Every auth form carries a hidden `site` field so a single shared action
+// knows which platform (Cooachly or Arts) it's authenticating against;
+// an absent/invalid value falls back to Cooachly rather than failing.
+function readSite(formData: FormData): Site {
+  return formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
 }
 
 const SignupSchema = z.object({
@@ -53,8 +62,9 @@ export async function signup(_state: AuthFormState, formData: FormData): Promise
   }
 
   const { name, email, phone, password, role, timezone } = validated.data;
+  const site = readSite(formData);
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
   if (existing) {
     return { message: "An account with this email already exists." };
   }
@@ -63,6 +73,7 @@ export async function signup(_state: AuthFormState, formData: FormData): Promise
 
   const user = await prisma.user.create({
     data: {
+      site,
       name,
       email,
       phone: phone || null,
@@ -76,8 +87,8 @@ export async function signup(_state: AuthFormState, formData: FormData): Promise
     },
   });
 
-  await createSession({ userId: user.id, role: user.role, name: user.name, email: user.email });
-  redirect(roleHomePath(user.role));
+  await createSession({ userId: user.id, role: user.role, site: user.site, name: user.name, email: user.email });
+  redirect(roleHomePath(user.role, user.site));
 }
 
 const LoginSchema = z.object({
@@ -96,8 +107,9 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
   }
 
   const { email, password } = validated.data;
+  const site = readSite(formData);
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { site_email: { site, email } } });
   if (!user || !user.isActive) {
     return { message: "Invalid email or password." };
   }
@@ -107,13 +119,15 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
     return { message: "Invalid email or password." };
   }
 
-  await createSession({ userId: user.id, role: user.role, name: user.name, email: user.email });
-  redirect(roleHomePath(user.role));
+  await createSession({ userId: user.id, role: user.role, site: user.site, name: user.name, email: user.email });
+  redirect(roleHomePath(user.role, user.site));
 }
 
 export async function logout() {
+  const session = await decrypt(await getSessionCookie());
+  const site = session?.site ?? DEFAULT_SITE;
   await deleteSession();
-  redirect("/login");
+  redirect(sitePath(site, "/login"));
 }
 
 export type SimpleFormState = { message?: string; success?: true } | undefined;
@@ -131,7 +145,8 @@ export async function requestPasswordReset(_state: SimpleFormState, formData: Fo
     return { message: genericMessage };
   }
 
-  const user = await prisma.user.findUnique({ where: { email: validated.data.email } });
+  const site = readSite(formData);
+  const user = await prisma.user.findUnique({ where: { site_email: { site, email: validated.data.email } } });
 
   if (user && user.isActive) {
     const rawToken = crypto.randomBytes(32).toString("hex");
@@ -144,15 +159,16 @@ export async function requestPasswordReset(_state: SimpleFormState, formData: Fo
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const resetUrl = `${appUrl}/reset-password/${rawToken}`;
+    const resetUrl = `${appUrl}${sitePath(site, `/reset-password/${rawToken}`)}`;
+    const brandName = SITE_CONFIG[site].brandName;
 
     if (isEmailConfigured) {
       await sendEmail({
         to: user.email,
-        subject: "Reset your Cooachly password",
+        subject: `Reset your ${brandName} password`,
         html: `
           <p>Hi ${user.name},</p>
-          <p>We received a request to reset your Cooachly password. This link expires in 1 hour.</p>
+          <p>We received a request to reset your ${brandName} password. This link expires in 1 hour.</p>
           <p><a href="${resetUrl}">Reset your password</a></p>
           <p>If you didn't request this, you can safely ignore this email.</p>
         `,

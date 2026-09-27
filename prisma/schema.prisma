@@ -15,6 +15,16 @@ enum Role {
   STUDENT
 }
 
+// Which tab/vertical a user, enquiry, or coach application belongs to.
+// Cooachly (academic tutoring) and Arts (Carnatic vocals) are run as
+// fully separate platforms sharing one codebase and database: distinct
+// admins, distinct professors/students, distinct marketing site — a user
+// or lead created under one Site never appears in the other's queries.
+enum Site {
+  COOACHLY
+  ARTS
+}
+
 enum BookingStatus {
   PENDING
   CONFIRMED
@@ -55,8 +65,9 @@ enum NotificationStatus {
 
 model User {
   id                   String    @id @default(cuid())
+  site                 Site      @default(COOACHLY)
   name                 String
-  email                String    @unique
+  email                String
   phone                String?
   parentName           String?
   parentPhone          String?
@@ -93,6 +104,8 @@ model User {
   reviewsReceived      Review[] @relation("ReviewsReceived")
 
   notificationLogs     NotificationLog[]
+
+  @@unique([site, email])
 }
 
 model StudentProfile {
@@ -111,16 +124,20 @@ model StudentProfile {
 
 model Enquiry {
   id        String   @id @default(cuid())
+  site      Site     @default(COOACHLY)
   name      String
   email     String
   phone     String?
   country   String?
   message   String
   createdAt DateTime @default(now())
+
+  @@index([site])
 }
 
 model CoachApplication {
   id              String                 @id @default(cuid())
+  site            Site                   @default(COOACHLY)
   name            String
   email           String
   phone           String?
@@ -132,6 +149,8 @@ model CoachApplication {
   message         String?
   status          CoachApplicationStatus @default(PENDING)
   createdAt       DateTime               @default(now())
+
+  @@index([site])
 }
 
 model PasswordResetToken {

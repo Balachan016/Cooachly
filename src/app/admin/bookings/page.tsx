@@ -1,16 +1,20 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isDailyConfigured } from "@/lib/daily";
+import { requireRole } from "@/lib/dal";
+import { sitePath } from "@/lib/site";
 import { Card, Select } from "@/components/ui";
 import { AdminBookingRow } from "./booking-row";
 import { InstantCallForm } from "./instant-call-form";
 
 export default async function AdminBookingsPage(props: PageProps<"/admin/bookings">) {
+  const session = await requireRole("ADMIN");
   const searchParams = await props.searchParams;
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
 
   const where: Prisma.BookingWhereInput = {
+    professor: { site: session.site },
     ...(studentId ? { studentId } : {}),
     ...(date ? { startAt: { gte: new Date(`${date}T00:00:00.000Z`), lt: new Date(`${date}T23:59:59.999Z`) } } : {}),
   };
@@ -28,17 +32,17 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
       },
     }),
     prisma.user.findMany({
-      where: { role: "STUDENT", bookingsAsStudent: { some: {} } },
+      where: { role: "STUDENT", site: session.site, bookingsAsStudent: { some: {} } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.user.findMany({
-      where: { role: "STUDENT", isActive: true },
+      where: { role: "STUDENT", isActive: true, site: session.site },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.user.findMany({
-      where: { role: "PROFESSOR", isActive: true },
+      where: { role: "PROFESSOR", isActive: true, site: session.site },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -86,17 +90,20 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
             name="date"
             type="date"
             defaultValue={date}
-            className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 dark:border-white/15 dark:bg-neutral-800"
+            className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 dark:border-white/15 dark:bg-neutral-800"
           />
         </div>
         <button
           type="submit"
-          className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-600"
+          className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
         >
           Filter
         </button>
         {hasFilters && (
-          <a href="/admin/bookings" className="text-sm font-medium text-black/50 hover:underline dark:text-white/50">
+          <a
+            href={sitePath(session.site, "/admin/bookings")}
+            className="text-sm font-medium text-black/50 hover:underline dark:text-white/50"
+          >
             Clear filters
           </a>
         )}

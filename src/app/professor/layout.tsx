@@ -1,19 +1,26 @@
 import { requireRole } from "@/lib/dal";
+import { sitePath, SITE_CONFIG } from "@/lib/site";
 import { DashboardShell } from "@/components/dashboard-shell";
-
-const navLinks = [
-  { href: "/professor", label: "Dashboard" },
-  { href: "/professor/availability", label: "Availability" },
-  { href: "/professor/bookings", label: "Bookings" },
-  { href: "/professor/messages", label: "Messages" },
-  { href: "/professor/profile", label: "Profile" },
-];
 
 export default async function ProfessorLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole("PROFESSOR");
+  const p = (path: string) => sitePath(session.site, path);
+  const navLinks = [
+    { href: p("/professor"), label: "Dashboard" },
+    { href: p("/professor/availability"), label: "Availability" },
+    { href: p("/professor/bookings"), label: "Bookings" },
+    { href: p("/professor/messages"), label: "Messages" },
+    { href: p("/professor/profile"), label: "Profile" },
+  ];
 
   return (
-    <DashboardShell navLinks={navLinks} roleLabel="Professor" userName={session.name}>
+    <DashboardShell
+      navLinks={navLinks}
+      roleLabel="Professor"
+      userName={session.name}
+      homeHref={SITE_CONFIG[session.site].homeHref}
+      settingsHref={p("/settings")}
+    >
       {children}
     </DashboardShell>
   );

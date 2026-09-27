@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { UserRow } from "./user-row";
 
 export default async function AdminUsersPage() {
+  const session = await requireRole("ADMIN");
   const users = await prisma.user.findMany({
+    where: { site: session.site },
     orderBy: { createdAt: "desc" },
   });
 

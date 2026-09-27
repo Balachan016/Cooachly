@@ -53,7 +53,7 @@ export function InstantCallForm({
         {pending ? "Starting…" : "Start instant call"}
       </Button>
       {state?.message && (
-        <p className={`w-full text-sm ${state.success ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+        <p className={`w-full text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
           {state.message}
         </p>
       )}

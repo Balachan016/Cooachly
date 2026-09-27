@@ -31,7 +31,7 @@ export default function BecomeACoachPage() {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-12">
-        <h1 className="text-3xl font-bold tracking-tight text-green-900 dark:text-green-300 sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-4xl">
           Become a Cooachly coach
         </h1>
         <p className="mt-3 max-w-2xl text-black/60 dark:text-white/60">
@@ -42,7 +42,7 @@ export default function BecomeACoachPage() {
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
           <div className="space-y-6">
             <Card>
-              <h2 className="font-semibold text-green-900 dark:text-green-300">How it works</h2>
+              <h2 className="font-semibold text-brand-900 dark:text-brand-300">How it works</h2>
               <ol className="mt-4 space-y-3 text-sm text-black/70 dark:text-white/70">
                 <li>
                   <strong>1. Apply.</strong> Share your subjects, curricula, and background using
@@ -64,7 +64,7 @@ export default function BecomeACoachPage() {
             </Card>
 
             <Card>
-              <h2 className="font-semibold text-green-900 dark:text-green-300">Getting paid</h2>
+              <h2 className="font-semibold text-brand-900 dark:text-brand-300">Getting paid</h2>
               <p className="mt-3 text-sm text-black/70 dark:text-white/70">
                 Coaches are paid based on completed sessions each month. Since every coach&apos;s
                 situation is a little different, our team will walk you through the details and set
@@ -74,7 +74,7 @@ export default function BecomeACoachPage() {
           </div>
 
           <Card>
-            <h2 className="font-semibold text-green-900 dark:text-green-300">Apply to teach</h2>
+            <h2 className="font-semibold text-brand-900 dark:text-brand-300">Apply to teach</h2>
             <div className="mt-4">
               <CoachApplicationForm />
             </div>

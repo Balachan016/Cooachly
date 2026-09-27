@@ -1,17 +1,23 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { Badge, Card, Select } from "@/components/ui";
-import { CURRICULUM_OPTIONS } from "@/lib/curricula";
+import { requireRole } from "@/lib/dal";
+import { sitePath } from "@/lib/site";
+import { Badge, Card } from "@/components/ui";
+import { AutoSubmitSelect } from "@/components/auto-submit-select";
+import { curriculumOptionsForSite } from "@/lib/curricula";
 import { getProfessorRatingSummaries } from "@/lib/reviews";
 
 export default async function BrowseProfessorsPage(props: PageProps<"/student/professors">) {
+  const session = await requireRole("STUDENT");
   const searchParams = await props.searchParams;
   const curriculum = typeof searchParams.curriculum === "string" ? searchParams.curriculum : "";
+  const curriculumOptions = curriculumOptionsForSite(session.site);
 
   const where: Prisma.UserWhereInput = {
     role: "PROFESSOR",
     isActive: true,
+    site: session.site,
     ...(curriculum ? { professorProfile: { curricula: { has: curriculum } } } : {}),
   };
 
@@ -28,22 +34,22 @@ export default async function BrowseProfessorsPage(props: PageProps<"/student/pr
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">Browse professors and book a session.</p>
 
       <form method="get" className="mt-4 max-w-xs">
-        <Select name="curriculum" defaultValue={curriculum} onChange={(e) => e.currentTarget.form?.submit()}>
+        <AutoSubmitSelect name="curriculum" defaultValue={curriculum}>
           <option value="">All curricula</option>
-          {CURRICULUM_OPTIONS.map((option) => (
+          {curriculumOptions.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
           ))}
-        </Select>
+        </AutoSubmitSelect>
       </form>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {professors.map((p) => (
-          <Link key={p.id} href={`/student/professors/${p.id}`}>
+          <Link key={p.id} href={sitePath(session.site, `/student/professors/${p.id}`)}>
             <Card className="h-full transition-shadow hover:shadow-md">
               <h2 className="font-semibold">{p.name}</h2>
-              <p className="mt-1 text-sm text-green-700 dark:text-green-400">{p.professorProfile?.subject || "Coaching"}</p>
+              <p className="mt-1 text-sm text-brand-700 dark:text-brand-400">{p.professorProfile?.subject || "Coaching"}</p>
               {ratings.get(p.id)?.count ? (
                 <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
                   {"★".repeat(Math.round(ratings.get(p.id)!.average))}

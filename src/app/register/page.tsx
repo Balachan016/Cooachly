@@ -20,7 +20,7 @@ export default function RegisterPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-      <Link href="/" className="mb-2 text-sm font-medium text-green-700 hover:underline dark:text-green-400">
+      <Link href="/" className="mb-2 text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
         ← Home
       </Link>
       <Link href="/" className="mb-8">
@@ -43,7 +43,7 @@ export default function RegisterPage() {
                   onClick={() => setRole(r)}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                     role === r
-                      ? "border-green-700 bg-green-50 text-green-800 dark:bg-green-950 dark:text-lime-500"
+                      ? "border-brand-700 bg-brand-50 text-brand-800 dark:bg-brand-950 dark:text-accent-500"
                       : "border-black/15 text-black/70 dark:border-white/15 dark:text-white/70"
                   }`}
                 >
@@ -98,7 +98,7 @@ export default function RegisterPage() {
 
         <p className="mt-6 text-center text-sm text-black/60 dark:text-white/60">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-green-700 hover:underline">
+          <Link href="/login" className="font-medium text-brand-700 hover:underline">
             Log in
           </Link>
         </p>

@@ -47,7 +47,7 @@ export function StudentProfileForm({ profile }: { profile: StudentProfile | null
         {profile?.syllabusFileName && (
           <p className="mt-1 text-xs text-black/50 dark:text-white/50">
             Current file:{" "}
-            <a href={profile.syllabusFileUrl ?? "#"} target="_blank" rel="noreferrer" className="text-green-700 hover:underline dark:text-green-400">
+            <a href={profile.syllabusFileUrl ?? "#"} target="_blank" rel="noreferrer" className="text-brand-700 hover:underline dark:text-brand-400">
               {profile.syllabusFileName}
             </a>
           </p>
@@ -55,7 +55,7 @@ export function StudentProfileForm({ profile }: { profile: StudentProfile | null
       </div>
 
       {state?.message && (
-        <p className={`text-sm ${state.success ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+        <p className={`text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
           {state.message}
         </p>
       )}

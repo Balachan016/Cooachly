@@ -36,7 +36,7 @@ export default function PricingPage() {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-12">
-        <h1 className="text-3xl font-bold tracking-tight text-green-900 dark:text-green-300 sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-4xl">
           Simple, straightforward pricing
         </h1>
         <p className="mt-3 max-w-2xl text-black/60 dark:text-white/60">
@@ -45,12 +45,12 @@ export default function PricingPage() {
         </p>
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
-          <Card className="relative border-green-600">
-            <span className="absolute -top-3 left-6 rounded-full bg-green-700 px-3 py-1 text-xs font-semibold text-white">
+          <Card className="relative border-brand-600">
+            <span className="absolute -top-3 left-6 rounded-full bg-brand-700 px-3 py-1 text-xs font-semibold text-white">
               Standard plan
             </span>
             <div className="mt-2 flex items-baseline gap-1">
-              <span className="text-4xl font-bold text-green-900 dark:text-green-300">$120</span>
+              <span className="text-4xl font-bold text-brand-900 dark:text-brand-300">$120</span>
               <span className="text-black/50 dark:text-white/50">/ month</span>
             </div>
             <ul className="mt-4 space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -66,7 +66,7 @@ export default function PricingPage() {
           </Card>
 
           <Card>
-            <h2 className="font-semibold text-green-900 dark:text-green-300">Good to know</h2>
+            <h2 className="font-semibold text-brand-900 dark:text-brand-300">Good to know</h2>
             <ul className="mt-4 space-y-3 text-sm text-black/70 dark:text-white/70">
               <li>
                 <strong>Weekday sessions:</strong> once the school year is in session, weekday slots
@@ -79,7 +79,7 @@ export default function PricingPage() {
               </li>
               <li>
                 <strong>Referral discounts:</strong> refer friends and save on your own plan — see
-                our <Link href="/faq#referrals" className="font-medium text-green-700 hover:underline dark:text-green-400">FAQ</Link> for details.
+                our <Link href="/faq#referrals" className="font-medium text-brand-700 hover:underline dark:text-brand-400">FAQ</Link> for details.
               </li>
               <li>
                 <strong>Payments:</strong> handled securely through Stripe, billed monthly or per
@@ -91,7 +91,7 @@ export default function PricingPage() {
 
         <div className="mt-12 text-center">
           <p className="text-black/60 dark:text-white/60">Questions about pricing or plans?</p>
-          <Link href="/contact" className="mt-2 inline-block font-medium text-green-700 hover:underline dark:text-green-400">
+          <Link href="/contact" className="mt-2 inline-block font-medium text-brand-700 hover:underline dark:text-brand-400">
             Get in touch →
           </Link>
         </div>

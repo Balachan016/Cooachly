@@ -2,6 +2,7 @@ import "server-only";
 import { addDays, addMinutes, isBefore, startOfDay } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
+import type { Site } from "@prisma/client";
 
 export const SESSION_LENGTH_MINUTES = 60;
 export const BOOKING_WINDOW_DAYS = 14;
@@ -80,11 +81,12 @@ export type DemoSlot = AvailableSlot & { professorId: string; professorName: str
  * Aggregates 30-minute demo slots across every active professor teaching
  * the given subject, for the public demo-booking page (no login required).
  */
-export async function getDemoSlotsForSubject(subject: string): Promise<DemoSlot[]> {
+export async function getDemoSlotsForSubject(subject: string, site: Site): Promise<DemoSlot[]> {
   const professors = await prisma.user.findMany({
     where: {
       role: "PROFESSOR",
       isActive: true,
+      site,
       professorProfile: { subject: { equals: subject, mode: "insensitive" } },
     },
     select: { id: true, name: true },

@@ -51,7 +51,7 @@ export function ProfessorBookingRow({
                   href={booking.student.studentProfile.syllabusFileUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-green-700 hover:underline dark:text-green-400"
+                  className="font-medium text-brand-700 hover:underline dark:text-brand-400"
                 >
                   Syllabus
                 </a>
@@ -65,7 +65,7 @@ export function ProfessorBookingRow({
               href={booking.meetingLink}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-block text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+              className="mt-2 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
             >
               Join video call →
             </a>

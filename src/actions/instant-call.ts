@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { isDailyConfigured, provisionVideoRoomForBooking } from "@/lib/daily";
 import { sendBookingReminder } from "@/lib/notifications/reminders";
+import { sitePath } from "@/lib/site";
 
 export type InstantCallState = { message?: string; success?: true } | undefined;
 
@@ -16,7 +17,7 @@ const InstantCallSchema = z.object({
 });
 
 export async function startInstantCall(_state: InstantCallState, formData: FormData): Promise<InstantCallState> {
-  await requireRole("ADMIN");
+  const session = await requireRole("ADMIN");
 
   const parsed = InstantCallSchema.safeParse({
     studentId: formData.get("studentId"),
@@ -30,8 +31,8 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
   const { studentId, professorId, meetingLink } = parsed.data;
 
   const [student, professor] = await Promise.all([
-    prisma.user.findUnique({ where: { id: studentId, role: "STUDENT" } }),
-    prisma.user.findUnique({ where: { id: professorId, role: "PROFESSOR" } }),
+    prisma.user.findUnique({ where: { id: studentId, role: "STUDENT", site: session.site } }),
+    prisma.user.findUnique({ where: { id: professorId, role: "PROFESSOR", site: session.site } }),
   ]);
   if (!student) return { message: "Selected student not found." };
   if (!professor) return { message: "Selected professor not found." };
@@ -62,7 +63,7 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
     include: { student: true, professor: true },
   });
 
-  revalidatePath("/admin/bookings");
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
 
   if (!fullBooking?.meetingLink) {
     return {

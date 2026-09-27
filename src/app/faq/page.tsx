@@ -24,7 +24,7 @@ const FAQS: { id?: string; question: string; answer: React.ReactNode }[] = [
         advance. Each session comes with one free reschedule under this notice window. If a
         session is cancelled or rescheduled with less than 24 hours&apos; notice (or missed without
         notice), 50% of that session&apos;s fee may apply. If you need more flexibility, just{" "}
-        <Link href="/contact" className="font-medium text-green-700 hover:underline dark:text-green-400">
+        <Link href="/contact" className="font-medium text-brand-700 hover:underline dark:text-brand-400">
           reach out
         </Link>{" "}
         and we&apos;ll work with you.
@@ -84,12 +84,12 @@ export default function FaqPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-6 py-12">
-        <h1 className="text-3xl font-bold tracking-tight text-green-900 dark:text-green-300 sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-4xl">
           Frequently asked questions
         </h1>
         <p className="mt-3 text-black/60 dark:text-white/60">
           General rules and policies for students and parents. Can&apos;t find your answer?{" "}
-          <Link href="/contact" className="font-medium text-green-700 hover:underline dark:text-green-400">
+          <Link href="/contact" className="font-medium text-brand-700 hover:underline dark:text-brand-400">
             Contact us
           </Link>
           .

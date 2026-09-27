@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { summarizeMonth, isAiSummaryConfigured } from "@/lib/ai-summary";
+import { sitePath } from "@/lib/site";
 
 /**
  * Generates a monthly progress recap per (student, professor, subject) for
@@ -12,7 +13,7 @@ import { summarizeMonth, isAiSummaryConfigured } from "@/lib/ai-summary";
  * existing recap rather than duplicating it.
  */
 export async function generateMonthlySummaries(): Promise<{ message: string }> {
-  await requireRole("ADMIN");
+  const session = await requireRole("ADMIN");
 
   if (!isAiSummaryConfigured) {
     return { message: "OpenAI isn't configured, so monthly summaries can't be generated yet." };
@@ -27,6 +28,7 @@ export async function generateMonthlySummaries(): Promise<{ message: string }> {
       status: "COMPLETED",
       startAt: { gte: periodStart, lt: periodEnd },
       aiSummary: { not: null },
+      professor: { site: session.site },
     },
     include: { student: true, professor: { include: { professorProfile: true } } },
   });
@@ -87,7 +89,7 @@ export async function generateMonthlySummaries(): Promise<{ message: string }> {
     generated += 1;
   }
 
-  revalidatePath("/admin/class-logs");
+  revalidatePath(sitePath(session.site, "/admin/class-logs"));
 
   if (groups.size === 0) {
     return { message: "No completed sessions with summaries found for last month." };

@@ -1,20 +1,27 @@
 import { requireRole } from "@/lib/dal";
+import { sitePath, SITE_CONFIG } from "@/lib/site";
 import { DashboardShell } from "@/components/dashboard-shell";
-
-const navLinks = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/bookings", label: "Bookings" },
-  { href: "/admin/class-logs", label: "Class logs" },
-  { href: "/admin/enquiries", label: "Enquiries" },
-  { href: "/admin/coach-applications", label: "Coach applications" },
-];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole("ADMIN");
+  const p = (path: string) => sitePath(session.site, path);
+  const navLinks = [
+    { href: p("/admin"), label: "Overview" },
+    { href: p("/admin/users"), label: "Users" },
+    { href: p("/admin/bookings"), label: "Bookings" },
+    { href: p("/admin/class-logs"), label: "Class logs" },
+    { href: p("/admin/enquiries"), label: "Enquiries" },
+    { href: p("/admin/coach-applications"), label: "Coach applications" },
+  ];
 
   return (
-    <DashboardShell navLinks={navLinks} roleLabel="Admin" userName={session.name}>
+    <DashboardShell
+      navLinks={navLinks}
+      roleLabel="Admin"
+      userName={session.name}
+      homeHref={SITE_CONFIG[session.site].homeHref}
+      settingsHref={p("/settings")}
+    >
       {children}
     </DashboardShell>
   );

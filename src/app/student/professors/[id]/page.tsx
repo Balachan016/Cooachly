@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
+import { sitePath } from "@/lib/site";
 import { getAvailableSlots, groupSlotsByLocalDay } from "@/lib/scheduling";
 import { getProfessorRatingSummary } from "@/lib/reviews";
 import { subscribeToProfessor } from "@/actions/billing";
@@ -19,7 +20,7 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
     where: { id, role: "PROFESSOR" },
     include: { professorProfile: true },
   });
-  if (!professor) notFound();
+  if (!professor || professor.site !== user.site) notFound();
 
   const [slots, subscription, rating] = await Promise.all([
     getAvailableSlots(professor.id),
@@ -37,7 +38,7 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
       <div className="flex flex-col gap-6 lg:flex-row">
         <Card className="flex-1">
           <h1 className="text-2xl font-semibold">{professor.name}</h1>
-          <p className="mt-1 text-green-700 dark:text-green-400">{professor.professorProfile?.subject || "Coaching"}</p>
+          <p className="mt-1 text-brand-700 dark:text-brand-400">{professor.professorProfile?.subject || "Coaching"}</p>
           {rating.count > 0 && (
             <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
               {"★".repeat(Math.round(rating.average))}
@@ -71,8 +72,8 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
           </div>
 
           <Link
-            href={`/student/messages/${professor.id}`}
-            className="mt-3 inline-block text-sm font-medium text-green-700 hover:underline dark:text-green-400"
+            href={sitePath(user.site, `/student/messages/${professor.id}`)}
+            className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
           >
             Message {professor.name.split(" ")[0]} →
           </Link>

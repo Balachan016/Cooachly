@@ -9,7 +9,7 @@ export default async function StudentMessageThreadPage(props: PageProps<"/studen
   if (!user) return null;
 
   const peer = await prisma.user.findUnique({ where: { id: peerId } });
-  if (!peer) notFound();
+  if (!peer || peer.site !== user.site) notFound();
 
   const messages = await prisma.message.findMany({
     where: {

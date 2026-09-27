@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "./email";
 import { sendWhatsAppReminder } from "./sms";
 import { logNotification } from "./log";
+import { SITE_CONFIG } from "@/lib/site";
 
 export type ReminderKind = "24h" | "1h" | "5m" | "manual" | "instant";
 
@@ -31,7 +32,9 @@ export async function sendBookingReminder(booking: BookingWithParties, kind: Rem
     booking.startAt
   );
 
-  const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true } });
+  const admins = await prisma.user.findMany({
+    where: { role: "ADMIN", isActive: true, site: booking.professor.site },
+  });
   const pairName = `${booking.student.name} & ${booking.professor.name}`;
 
   await Promise.all([
@@ -47,7 +50,8 @@ async function notifyPerson(
   bookingId: string,
   kind: ReminderKind
 ) {
-  const sentence = `your Cooachly session with ${info.peerName} starts ${LABEL[kind]} (${info.when})`;
+  const brandName = SITE_CONFIG[person.site].brandName;
+  const sentence = `your ${brandName} session with ${info.peerName} starts ${LABEL[kind]} (${info.when})`;
   const linkLine = info.joinLink ? `\n\nJoin here: ${info.joinLink}` : "";
   const textBody = `Reminder: ${sentence}.${linkLine}`;
 
@@ -55,12 +59,12 @@ async function notifyPerson(
     <p>Hi ${person.name},</p>
     <p>This is a reminder that ${sentence}.</p>
     ${info.joinLink ? `<p><a href="${info.joinLink}">Click here to join the video call</a></p>` : ""}
-    <p>— Cooachly</p>
+    <p>— ${brandName}</p>
   `;
 
   const emailResult = await sendEmail({
     to: person.email,
-    subject: `Your Cooachly session ${SUBJECT_PHRASE[kind]}`,
+    subject: `Your ${brandName} session ${SUBJECT_PHRASE[kind]}`,
     html: emailHtml,
   });
   await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });

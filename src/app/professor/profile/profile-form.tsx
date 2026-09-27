@@ -33,7 +33,7 @@ export function ProfileForm({ profile }: { profile: ProfessorProfile | null }) {
                 name="curricula"
                 value={option}
                 defaultChecked={profile?.curricula?.includes(option)}
-                className="h-4 w-4 rounded border-black/20 text-green-700 focus:ring-green-600 dark:border-white/20"
+                className="h-4 w-4 rounded border-black/20 text-brand-700 focus:ring-brand-600 dark:border-white/20"
               />
               {option}
             </label>

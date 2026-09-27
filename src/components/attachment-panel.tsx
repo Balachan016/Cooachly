@@ -45,7 +45,7 @@ function FileList({ label, files }: { label: string; files: Attachment[] }) {
             href={f.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className="font-medium text-green-700 hover:underline dark:text-green-400"
+            className="font-medium text-brand-700 hover:underline dark:text-brand-400"
           >
             {f.fileName}
           </a>
@@ -74,7 +74,7 @@ function UploadForm({ bookingId, kind, label }: { bookingId: string; kind: Attac
         {pending ? "Uploading…" : label}
       </Button>
       {state?.message && (
-        <span className={state.success ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+        <span className={state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}>
           {state.message}
         </span>
       )}
