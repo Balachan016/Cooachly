@@ -165,6 +165,26 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Accounts are no longer created via open public self-registration — an
+// admin sends a personalized invite (typically after a free demo), and the
+// recipient redeems it at /register/[token] to set their own password. No
+// User row exists until the invite is redeemed.
+model AccountInviteToken {
+  id        String    @id @default(cuid())
+  site      Site      @default(COOACHLY)
+  name      String
+  email     String
+  role      Role      @default(STUDENT)
+  phone     String?
+  message   String?
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([site, email])
+}
+
 model ProfessorProfile {
   id                   String   @id @default(cuid())
   userId               String   @unique

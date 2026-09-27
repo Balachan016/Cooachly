@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
+import { InviteUserForm } from "@/components/invite-user-form";
 import { UserRow } from "./user-row";
 
 export default async function AdminUsersPage() {
@@ -16,6 +17,17 @@ export default async function AdminUsersPage() {
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
         Manage roles and access for everyone on Cooachly.
       </p>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Invite a new user</h2>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          Sends a personal link (with an optional welcome message) so they can create their own
+          login — typically once they&apos;ve confirmed they&apos;d like to continue after a free demo.
+        </p>
+        <div className="mt-4">
+          <InviteUserForm />
+        </div>
+      </Card>
 
       <Card className="mt-6 overflow-x-auto p-0">
         <table className="w-full text-left text-sm">

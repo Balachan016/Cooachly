@@ -37,11 +37,11 @@ export default function PricingPage() {
 
       <main className="mx-auto max-w-4xl px-6 py-12">
         <h1 className="text-3xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-4xl">
-          Simple, straightforward pricing
+          Pricing, made personal
         </h1>
         <p className="mt-3 max-w-2xl text-black/60 dark:text-white/60">
-          One standard monthly plan covers everything — no hidden fees. Your first session is
-          always a free demo, so you can meet your coach before you commit.
+          Your first session is always a free demo — no payment, no commitment. Once you&apos;ve
+          met your coach, we&apos;ll share a plan and price tailored to your subject and schedule.
         </p>
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2">
@@ -49,10 +49,13 @@ export default function PricingPage() {
             <span className="absolute -top-3 left-6 rounded-full bg-brand-700 px-3 py-1 text-xs font-semibold text-white">
               Standard plan
             </span>
-            <div className="mt-2 flex items-baseline gap-1">
-              <span className="text-4xl font-bold text-brand-900 dark:text-brand-300">$120</span>
-              <span className="text-black/50 dark:text-white/50">/ month</span>
-            </div>
+            <p className="mt-2 text-2xl font-bold text-brand-900 dark:text-brand-300">
+              Shared after your free demo
+            </p>
+            <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+              We tailor pricing to your subject, schedule, and coach — your coach will walk you
+              through it right after your demo session.
+            </p>
             <ul className="mt-4 space-y-2 text-sm text-black/70 dark:text-white/70">
               <li>• 8 sessions per month (2 sessions per week)</li>
               <li>• ~45-minute sessions — extendable up to 1 hour if needed</li>
@@ -70,12 +73,13 @@ export default function PricingPage() {
             <ul className="mt-4 space-y-3 text-sm text-black/70 dark:text-white/70">
               <li>
                 <strong>Weekday sessions:</strong> once the school year is in session, weekday slots
-                can be more limited and may carry a small premium over the standard weekend rate.
-                Weekend scheduling remains the most economical option.
+                can be more limited and may cost a little more than weekend sessions — your coach
+                will confirm exact pricing with you. Weekend scheduling remains the most economical
+                option.
               </li>
               <li>
-                <strong>Individual coach rates:</strong> Cooachly is a marketplace — some coaches set
-                their own per-session or monthly rate, shown on their profile before you book.
+                <strong>Individual coach rates:</strong> Cooachly is a marketplace — coaches set
+                their own per-session or monthly rate, shared with you before you commit.
               </li>
               <li>
                 <strong>Referral discounts:</strong> refer friends and save on your own plan — see

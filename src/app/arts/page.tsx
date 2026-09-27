@@ -32,9 +32,6 @@ export default function ArtsHome() {
           <Link href="/arts/login" className="text-sm font-medium text-black/70 hover:text-black dark:text-white/70 dark:hover:text-white">
             Log in
           </Link>
-          <Link href="/arts/register">
-            <Button>Get started</Button>
-          </Link>
         </nav>
       </header>
 
@@ -60,11 +57,6 @@ export default function ArtsHome() {
               <div className="mt-8 flex flex-wrap gap-4">
                 <Link href="/arts/demo">
                   <Button className="px-6 py-3 text-base">Book a free 30-min demo</Button>
-                </Link>
-                <Link href="/arts/register">
-                  <Button variant="secondary" className="px-6 py-3 text-base">
-                    Create your account
-                  </Button>
                 </Link>
               </div>
               <p className="mt-3 text-sm text-black/50 dark:text-white/50">
@@ -169,8 +161,8 @@ export default function ArtsHome() {
               Join Cooachly Arts today and book your first class.
             </p>
             <div className="mt-6">
-              <Link href="/arts/register">
-                <Button className="px-8 py-3 text-base">Get started free</Button>
+              <Link href="/arts/demo">
+                <Button className="px-8 py-3 text-base">Book your free demo</Button>
               </Link>
             </div>
           </Card>

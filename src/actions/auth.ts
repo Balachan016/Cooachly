@@ -24,15 +24,6 @@ function readSite(formData: FormData): Site {
   return formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
 }
 
-const SignupSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters."),
-  email: z.string().trim().email("Please enter a valid email."),
-  phone: z.string().trim().optional(),
-  password: z.string().min(8, "Password must be at least 8 characters."),
-  role: z.enum(["STUDENT", "PROFESSOR"]),
-  timezone: z.string().min(1, "Please select your timezone."),
-});
-
 export type AuthFormState =
   | {
       errors?: {
@@ -46,50 +37,6 @@ export type AuthFormState =
       message?: string;
     }
   | undefined;
-
-export async function signup(_state: AuthFormState, formData: FormData): Promise<AuthFormState> {
-  const validated = SignupSchema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
-    phone: formData.get("phone"),
-    password: formData.get("password"),
-    role: formData.get("role"),
-    timezone: formData.get("timezone"),
-  });
-
-  if (!validated.success) {
-    return { errors: validated.error.flatten().fieldErrors };
-  }
-
-  const { name, email, phone, password, role, timezone } = validated.data;
-  const site = readSite(formData);
-
-  const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
-  if (existing) {
-    return { message: "An account with this email already exists." };
-  }
-
-  const passwordHash = await hashPassword(password);
-
-  const user = await prisma.user.create({
-    data: {
-      site,
-      name,
-      email,
-      phone: phone || null,
-      passwordHash,
-      role,
-      timezone,
-      professorProfile:
-        role === "PROFESSOR"
-          ? { create: { headline: "", bio: "", subject: "" } }
-          : undefined,
-    },
-  });
-
-  await createSession({ userId: user.id, role: user.role, site: user.site, name: user.name, email: user.email });
-  redirect(roleHomePath(user.role, user.site));
-}
 
 const LoginSchema = z.object({
   email: z.string().trim().email("Please enter a valid email."),

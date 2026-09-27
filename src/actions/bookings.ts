@@ -8,6 +8,7 @@ import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
+import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
 import { sitePath } from "@/lib/site";
 
 const BookSlotSchema = z.object({
@@ -205,13 +206,22 @@ export async function extendBooking(bookingId: string, minutes: 15 | 30) {
 export async function markBookingCompleted(bookingId: string) {
   const session = await requireRole("PROFESSOR");
 
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { student: true, professor: true },
+  });
   if (!booking || booking.professorId !== session.userId) return;
+
+  const wasAlreadyCompleted = booking.status === "COMPLETED";
 
   await prisma.booking.update({
     where: { id: bookingId },
     data: { status: "COMPLETED" },
   });
+
+  if (booking.isDemo && !wasAlreadyCompleted) {
+    await sendDemoFollowUpEmail(booking);
+  }
 
   revalidatePath(sitePath(session.site, "/professor/bookings"));
   revalidatePath(sitePath(session.site, "/student/bookings"));
