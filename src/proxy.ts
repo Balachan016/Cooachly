@@ -20,6 +20,12 @@ const roleRoutePrefixes = SITES.flatMap((site) =>
 const authRoutes = SITES.flatMap((site) => [sitePath(site, "/login"), sitePath(site, "/register")]);
 const sessionOnlyRoutes = SITES.flatMap((site) => [sitePath(site, "/dashboard"), sitePath(site, "/settings")]);
 
+const CASE_REDIRECTS = [
+  ["/Arts", "/arts"],
+  ["/KKCA", "/kkca"],
+  ["/Kkca", "/kkca"],
+] as const;
+
 function siteOf(pathname: string): Site {
   return pathname === "/arts" || pathname.startsWith("/arts/") ? "ARTS" : "COOACHLY";
 }
@@ -31,9 +37,11 @@ export async function proxy(req: NextRequest) {
   // conventional lowercase route. Done here (case-sensitive string match)
   // rather than via next.config.ts `redirects()`, whose source matching is
   // case-insensitive and would otherwise redirect "/arts" to itself in a loop.
-  if (pathname === "/Arts" || pathname.startsWith("/Arts/")) {
-    const target = new URL(`/arts${pathname.slice("/Arts".length)}${req.nextUrl.search}`, req.url);
-    return NextResponse.redirect(target, 308);
+  for (const [typed, canonical] of CASE_REDIRECTS) {
+    if (pathname === typed || pathname.startsWith(`${typed}/`)) {
+      const target = new URL(`${canonical}${pathname.slice(typed.length)}${req.nextUrl.search}`, req.url);
+      return NextResponse.redirect(target, 308);
+    }
   }
 
   const cookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
