@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
+import { logAudit } from "@/lib/audit";
 import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import type { CoachApplicationStatus, Site } from "@prisma/client";
 
@@ -84,5 +85,13 @@ export async function updateCoachApplicationStatus(id: string, status: CoachAppl
   const application = await prisma.coachApplication.findUnique({ where: { id } });
   if (!application || application.site !== session.site) return;
   await prisma.coachApplication.update({ where: { id }, data: { status } });
+  await logAudit({
+    site: session.site,
+    action: "COACH_APPLICATION_STATUS_CHANGED",
+    actorId: session.userId,
+    targetType: "CoachApplication",
+    targetId: id,
+    detail: `${application.email}: ${application.status} → ${status}`,
+  });
   revalidatePath(sitePath(session.site, "/admin/coach-applications"));
 }

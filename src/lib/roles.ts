@@ -3,6 +3,8 @@ import { sitePath } from "@/lib/site";
 
 export function roleHomePath(role: Role, site: Site = "COOACHLY"): string {
   switch (role) {
+    case "SUPERADMIN":
+      return "/superadmin";
     case "ADMIN":
       return sitePath(site, "/admin");
     case "PROFESSOR":
