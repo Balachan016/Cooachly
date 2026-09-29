@@ -9,22 +9,27 @@ import { Badge, Button, Select } from "@/components/ui";
 
 export function UserRow({ user }: { user: User }) {
   const [isPending, startTransition] = useTransition();
+  const isElevated = user.role === "ADMIN" || user.role === "SUPERADMIN";
 
   return (
     <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
       <td className="px-4 py-3 font-medium">{user.name}</td>
       <td className="px-4 py-3 text-black/60 dark:text-white/60">{user.email}</td>
       <td className="px-4 py-3">
-        <Select
-          defaultValue={user.role}
-          disabled={isPending}
-          onChange={(e) => startTransition(() => setUserRole(user.id, e.target.value as Role))}
-          className="w-auto"
-        >
-          <option value="STUDENT">Student</option>
-          <option value="PROFESSOR">Professor</option>
-          <option value="ADMIN">Admin</option>
-        </Select>
+        {isElevated ? (
+          <Badge>{user.role}</Badge>
+        ) : (
+          <Select
+            defaultValue={user.role}
+            disabled={isPending}
+            onChange={(e) => startTransition(() => setUserRole(user.id, e.target.value as Role))}
+            className="w-auto"
+          >
+            <option value="STUDENT">Student</option>
+            <option value="PROFESSOR">Professor</option>
+            <option value="ADMIN">Admin</option>
+          </Select>
+        )}
       </td>
       <td className="px-4 py-3">
         <Badge tone={user.isActive ? "success" : "danger"}>{user.isActive ? "Active" : "Disabled"}</Badge>
@@ -33,18 +38,22 @@ export function UserRow({ user }: { user: User }) {
         {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(user.createdAt)}
       </td>
       <td className="px-4 py-3">
-        <div className="flex gap-2">
-          <Link href={sitePath(user.site, `/admin/users/${user.id}`)}>
-            <Button variant="secondary">Edit</Button>
-          </Link>
-          <Button
-            variant={user.isActive ? "danger" : "secondary"}
-            disabled={isPending}
-            onClick={() => startTransition(() => setUserActive(user.id, !user.isActive))}
-          >
-            {user.isActive ? "Disable" : "Enable"}
-          </Button>
-        </div>
+        {isElevated ? (
+          <span className="text-xs text-black/40 dark:text-white/40">Only a superadmin can manage this account.</span>
+        ) : (
+          <div className="flex gap-2">
+            <Link href={sitePath(user.site, `/admin/users/${user.id}`)}>
+              <Button variant="secondary">Edit</Button>
+            </Link>
+            <Button
+              variant={user.isActive ? "danger" : "secondary"}
+              disabled={isPending}
+              onClick={() => startTransition(() => setUserActive(user.id, !user.isActive))}
+            >
+              {user.isActive ? "Disable" : "Enable"}
+            </Button>
+          </div>
+        )}
       </td>
     </tr>
   );

@@ -10,6 +10,7 @@ datasource db {
 }
 
 enum Role {
+  SUPERADMIN
   ADMIN
   PROFESSOR
   STUDENT
@@ -63,6 +64,22 @@ enum NotificationStatus {
   SKIPPED
 }
 
+// What a logged admin/superadmin action or account event was. Free-text
+// `detail` on AuditLog carries the specifics (e.g. "STUDENT -> PROFESSOR").
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  BOOKING_CANCELLED
+  COACH_APPLICATION_STATUS_CHANGED
+  USER_ROLE_CHANGED
+  USER_ACTIVATED
+  USER_DEACTIVATED
+  USER_PROFILE_UPDATED
+  PASSWORD_RESET_BY_ADMIN
+  ACCOUNT_INVITE_SENT
+  ACCOUNT_INVITE_REDEEMED
+}
+
 model User {
   id                   String    @id @default(cuid())
   site                 Site      @default(COOACHLY)
@@ -105,7 +122,30 @@ model User {
 
   notificationLogs     NotificationLog[]
 
+  auditLogsAsActor     AuditLog[] @relation("AuditActor")
+
   @@unique([site, email])
+}
+
+// General-purpose audit trail for the superadmin dashboard: authentication
+// events, booking cancellations, admin-approval decisions, and admin/account
+// management actions. `actor` is nullable so a record survives the actor's
+// account being deleted; `targetType`/`targetId` point at whatever entity
+// the action was about (a User, a Booking, a CoachApplication, ...).
+model AuditLog {
+  id         String      @id @default(cuid())
+  site       Site        @default(COOACHLY)
+  action     AuditAction
+  actorId    String?
+  actor      User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  targetType String?
+  targetId   String?
+  detail     String?
+  createdAt  DateTime    @default(now())
+
+  @@index([site, createdAt])
+  @@index([actorId])
+  @@index([targetType, targetId])
 }
 
 model StudentProfile {

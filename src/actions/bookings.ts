@@ -9,6 +9,7 @@ import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
+import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 
 const BookSlotSchema = z.object({
@@ -163,6 +164,15 @@ export async function cancelBooking(bookingId: string) {
   await prisma.booking.update({
     where: { id: bookingId },
     data: { status: "CANCELLED" },
+  });
+
+  await logAudit({
+    site: session.site,
+    action: "BOOKING_CANCELLED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: bookingId,
+    detail: `Cancelled by ${session.role.toLowerCase()}`,
   });
 
   revalidatePath(sitePath(session.site, "/student/bookings"));

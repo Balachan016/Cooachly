@@ -9,6 +9,7 @@ import { createSession, deleteSession, getSessionCookie, decrypt } from "@/lib/s
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
+import { logAudit } from "@/lib/audit";
 import type { Site } from "@prisma/client";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -67,12 +68,30 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
   }
 
   await createSession({ userId: user.id, role: user.role, site: user.site, name: user.name, email: user.email });
+  await logAudit({
+    site: user.site,
+    action: "LOGIN",
+    actorId: user.id,
+    targetType: "User",
+    targetId: user.id,
+    detail: `${user.role} login`,
+  });
   redirect(roleHomePath(user.role, user.site));
 }
 
 export async function logout() {
   const session = await decrypt(await getSessionCookie());
   const site = session?.site ?? DEFAULT_SITE;
+  if (session) {
+    await logAudit({
+      site: session.site,
+      action: "LOGOUT",
+      actorId: session.userId,
+      targetType: "User",
+      targetId: session.userId,
+      detail: `${session.role} logout`,
+    });
+  }
   await deleteSession();
   redirect(sitePath(site, "/login"));
 }

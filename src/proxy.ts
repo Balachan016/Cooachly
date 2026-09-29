@@ -26,8 +26,17 @@ const CASE_REDIRECTS = [
   ["/Kkca", "/kkca"],
 ] as const;
 
+// The superadmin dashboard is cross-site (one login oversees both Cooachly
+// and Arts), so it lives at a single unprefixed path rather than being
+// duplicated per site like /admin, /professor, /student are.
+const SUPERADMIN_PREFIX = "/superadmin";
+
 function siteOf(pathname: string): Site {
   return pathname === "/arts" || pathname.startsWith("/arts/") ? "ARTS" : "COOACHLY";
+}
+
+function isSuperadminRoute(pathname: string): boolean {
+  return pathname === SUPERADMIN_PREFIX || pathname.startsWith(`${SUPERADMIN_PREFIX}/`);
 }
 
 export async function proxy(req: NextRequest) {
@@ -61,7 +70,15 @@ export async function proxy(req: NextRequest) {
 
   let response: NextResponse;
 
-  if (matchedRolePrefix && !sessionForSite) {
+  if (isSuperadminRoute(pathname)) {
+    if (!session || session.role !== "SUPERADMIN") {
+      const loginUrl = new URL("/login", req.url);
+      loginUrl.searchParams.set("next", pathname);
+      response = NextResponse.redirect(loginUrl);
+    } else {
+      response = NextResponse.next();
+    }
+  } else if (matchedRolePrefix && !sessionForSite) {
     const loginUrl = new URL(sitePath(currentSite, "/login"), req.url);
     loginUrl.searchParams.set("next", pathname);
     response = NextResponse.redirect(loginUrl);
