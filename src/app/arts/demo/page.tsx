@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
 import { ArtsLogo } from "@/components/arts/logo";
 import { DemoBookingForm } from "./demo-booking-form";
@@ -9,13 +8,6 @@ export const metadata = {
 };
 
 export default async function DemoPage() {
-  const professorProfiles = await prisma.professorProfile.findMany({
-    where: { subject: { not: "" }, user: { isActive: true, site: "ARTS" } },
-    select: { subject: true },
-    distinct: ["subject"],
-  });
-  const subjects = professorProfiles.map((p) => p.subject).sort();
-
   return (
     <div className="flex-1">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
@@ -46,18 +38,12 @@ export default async function DemoPage() {
           Book a free 30-minute demo
         </h1>
         <p className="mt-2 text-black/60 dark:text-white/60">
-          No payment required. Pick a level and a time that works for you — we&apos;ll send a
-          confirmation with your video call link right away.
+          No payment required. Tell us a bit about what you&apos;re looking for and we&apos;ll reach
+          out shortly to schedule a time that works for you.
         </p>
 
         <Card className="mt-8">
-          {subjects.length === 0 ? (
-            <p className="text-sm text-black/50 dark:text-white/50">
-              No demo slots are available right now — please check back soon.
-            </p>
-          ) : (
-            <DemoBookingForm subjects={subjects} site="ARTS" />
-          )}
+          <DemoBookingForm site="ARTS" />
         </Card>
       </main>
     </div>

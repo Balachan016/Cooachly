@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { addHours, addMinutes } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { sendBookingReminder } from "@/lib/notifications/reminders";
+import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
 // cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
@@ -10,6 +11,7 @@ import { sendBookingReminder } from "@/lib/notifications/reminders";
 // configured).
 
 const WINDOW_MINUTES = 5;
+const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day
 
 const REMINDER_WINDOWS = [
   { kind: "24h" as const, field: "reminder24hSentAt" as const, target: () => addHours(new Date(), 24) },
@@ -53,6 +55,23 @@ export async function GET(request: Request) {
       });
       sentCount += 1;
     }
+  }
+
+  const dueSince = new Date(Date.now() - DEMO_REQUEST_REMINDER_INTERVAL_MS);
+  const dueDemoRequests = await prisma.demoRequest.findMany({
+    where: {
+      status: { in: ["PENDING", "SCHEDULED"] },
+      OR: [{ lastReminderSentAt: null, createdAt: { lte: dueSince } }, { lastReminderSentAt: { lte: dueSince } }],
+    },
+  });
+
+  for (const demoRequest of dueDemoRequests) {
+    await sendDemoRequestReminder(demoRequest);
+    await prisma.demoRequest.update({
+      where: { id: demoRequest.id },
+      data: { lastReminderSentAt: new Date() },
+    });
+    sentCount += 1;
   }
 
   return NextResponse.json({ ok: true, remindersSent: sentCount });
