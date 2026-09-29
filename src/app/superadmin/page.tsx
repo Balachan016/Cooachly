@@ -13,6 +13,9 @@ const ACTION_LABEL: Record<string, string> = {
   PASSWORD_RESET_BY_ADMIN: "Password reset by admin",
   ACCOUNT_INVITE_SENT: "Invite sent",
   ACCOUNT_INVITE_REDEEMED: "Invite redeemed",
+  DEMO_REQUEST_SCHEDULED: "Demo call scheduled",
+  DEMO_REQUEST_STATUS_CHANGED: "Demo request status changed",
+  ADMIN_ACCOUNT_CREATED: "Admin account created",
 };
 
 export default async function SuperadminOverviewPage() {

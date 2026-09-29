@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
-import { InviteAdminForm } from "./invite-admin-form";
+import { CreateAdminForm } from "./create-admin-form";
 import { AdminRow } from "./admin-row";
 
 export default async function SuperadminAdminsPage() {
@@ -21,12 +21,13 @@ export default async function SuperadminAdminsPage() {
       </p>
 
       <Card className="mt-6">
-        <h2 className="font-semibold">Invite a new admin</h2>
+        <h2 className="font-semibold">Create a new admin</h2>
         <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-          Sends a personal link so they can create their own admin login for the site you choose.
+          Creates the admin login for the site you choose right away and emails them the login
+          link and password.
         </p>
         <div className="mt-4">
-          <InviteAdminForm />
+          <CreateAdminForm />
         </div>
       </Card>
 

@@ -4,15 +4,15 @@ import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
-import { hashPassword } from "@/lib/password";
-import { sendEmail } from "@/lib/notifications/email";
+import { hashPassword, generateTempPassword } from "@/lib/password";
+import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
 import { logNotification } from "@/lib/notifications/log";
 import { logAudit } from "@/lib/audit";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
-import { sitePath } from "@/lib/site";
+import { sitePath, SITE_CONFIG, DEFAULT_SITE } from "@/lib/site";
 import type { SimpleFormState } from "@/actions/auth";
-import type { Role } from "@prisma/client";
+import type { Role, Site } from "@prisma/client";
 
 // A plain ADMIN may manage students/professors, but only a SUPERADMIN may
 // touch another ADMIN (or SUPERADMIN) account — promote to admin, disable,
@@ -154,6 +154,87 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
   revalidatePath(sitePath(session.site, "/admin/users"));
   revalidatePath(sitePath(session.site, `/admin/users/${userId}`));
   return { message: "Saved.", success: true as const };
+}
+
+const CreateAdminAccountSchema = z.object({
+  name: z.string().trim().min(2, "Please enter a name."),
+  email: z.string().trim().email("Please enter a valid email."),
+  phone: z.string().trim().optional(),
+  site: z.enum(["COOACHLY", "ARTS"]),
+});
+
+export type CreateAdminAccountState = { message?: string; success?: true } | undefined;
+
+export async function createAdminAccount(
+  _state: CreateAdminAccountState,
+  formData: FormData
+): Promise<CreateAdminAccountState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const parsed = CreateAdminAccountSchema.safeParse({
+    name: formData.get("name"),
+    email: formData.get("email"),
+    phone: formData.get("phone") || undefined,
+    site: formData.get("site") || DEFAULT_SITE,
+  });
+  if (!parsed.success) {
+    return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
+  }
+
+  const { name, email, phone, site } = parsed.data as { name: string; email: string; phone?: string; site: Site };
+
+  const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
+  if (existing) {
+    return { message: "This email already has an account on this platform." };
+  }
+
+  const tempPassword = generateTempPassword();
+  const passwordHash = await hashPassword(tempPassword);
+
+  const admin = await prisma.user.create({
+    data: { site, name, email, phone: phone || null, passwordHash, role: "ADMIN", timezone: "UTC" },
+  });
+
+  await logAudit({
+    site,
+    action: "ADMIN_ACCOUNT_CREATED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: admin.id,
+    detail: `${admin.name} (${admin.email})`,
+  });
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const loginUrl = `${appUrl}${sitePath(site, "/login")}`;
+  const settingsUrl = `${appUrl}${sitePath(site, "/settings")}`;
+  const brandName = SITE_CONFIG[site].brandName;
+
+  let emailStatus: "sent" | "skipped" | "failed" = "skipped";
+  if (isEmailConfigured) {
+    const result = await sendEmail({
+      to: email,
+      subject: `Your ${brandName} admin login`,
+      html: `
+        <p>Hi ${name},</p>
+        <p>An admin account has been created for you on ${brandName}. Here's how to log in:</p>
+        <p><a href="${loginUrl}">${loginUrl}</a></p>
+        <p>Email: <strong>${email}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
+        <p>For security, please <a href="${settingsUrl}">change your password</a> after you log in.</p>
+        <p>— ${brandName}</p>
+      `,
+    });
+    emailStatus = result.skipped ? "skipped" : result.error ? "failed" : "sent";
+  }
+
+  revalidatePath("/superadmin/admins");
+
+  if (emailStatus === "sent") {
+    return { message: `Admin account created and login details emailed to ${email}.`, success: true };
+  }
+  return {
+    message: `Admin account created. Email wasn't sent (${emailStatus === "failed" ? "delivery failed" : "email isn't configured"}) — share these directly: ${loginUrl} · ${email} / ${tempPassword}`,
+    success: true,
+  };
 }
 
 const AdminResetPasswordSchema = z.object({
