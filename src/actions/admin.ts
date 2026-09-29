@@ -8,25 +8,56 @@ import { hashPassword } from "@/lib/password";
 import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
 import { logNotification } from "@/lib/notifications/log";
+import { logAudit } from "@/lib/audit";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
 import { sitePath } from "@/lib/site";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role } from "@prisma/client";
 
+// A plain ADMIN may manage students/professors, but only a SUPERADMIN may
+// touch another ADMIN (or SUPERADMIN) account — promote to admin, disable,
+// reset password, or edit their profile. This is the "superadmin controls
+// admin logins" boundary.
+const ELEVATED_ROLES: Role[] = ["ADMIN", "SUPERADMIN"];
+
 export async function setUserRole(userId: string, role: Role) {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+  if (role === "SUPERADMIN") return; // superadmin accounts are never created via this dropdown
+
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target || target.site !== session.site) return;
+  const touchesElevatedAccount = ELEVATED_ROLES.includes(target.role) || role === "ADMIN";
+  if (touchesElevatedAccount && session.role !== "SUPERADMIN") return;
+
   await prisma.user.update({ where: { id: userId }, data: { role } });
+  await logAudit({
+    site: session.site,
+    action: "USER_ROLE_CHANGED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `${target.role} → ${role}`,
+  });
   revalidatePath(sitePath(session.site, "/admin/users"));
 }
 
 export async function setUserActive(userId: string, isActive: boolean) {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
   if (session.userId === userId) return;
+
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target || target.site !== session.site) return;
+  if (ELEVATED_ROLES.includes(target.role) && session.role !== "SUPERADMIN") return;
+
   await prisma.user.update({ where: { id: userId }, data: { isActive } });
+  await logAudit({
+    site: session.site,
+    action: isActive ? "USER_ACTIVATED" : "USER_DEACTIVATED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `${target.name} (${target.email})`,
+  });
   revalidatePath(sitePath(session.site, "/admin/users"));
 }
 
@@ -45,7 +76,7 @@ const UserDetailsSchema = z.object({
 });
 
 export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, formData: FormData) {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
 
   const parsed = UserDetailsSchema.safeParse({
     name: formData.get("name"),
@@ -69,6 +100,9 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
 
   const existing = await prisma.user.findUnique({ where: { id: userId }, include: { professorProfile: true } });
   if (!existing || existing.site !== session.site) return { message: "User not found." };
+  if (ELEVATED_ROLES.includes(existing.role) && session.role !== "SUPERADMIN") {
+    return { message: "Only a superadmin can edit an admin account." };
+  }
 
   const emailTaken = await prisma.user.findFirst({
     where: { site: existing.site, email: data.email, NOT: { id: userId } },
@@ -108,6 +142,15 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
     });
   }
 
+  await logAudit({
+    site: session.site,
+    action: "USER_PROFILE_UPDATED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `${data.name} (${data.email})`,
+  });
+
   revalidatePath(sitePath(session.site, "/admin/users"));
   revalidatePath(sitePath(session.site, `/admin/users/${userId}`));
   return { message: "Saved.", success: true as const };
@@ -122,7 +165,7 @@ export async function adminResetPassword(
   _state: SimpleFormState,
   formData: FormData
 ): Promise<SimpleFormState> {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
 
   const parsed = AdminResetPasswordSchema.safeParse({ newPassword: formData.get("newPassword") });
   if (!parsed.success) {
@@ -131,9 +174,21 @@ export async function adminResetPassword(
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || user.site !== session.site) return { message: "User not found." };
+  if (ELEVATED_ROLES.includes(user.role) && session.role !== "SUPERADMIN") {
+    return { message: "Only a superadmin can reset an admin's password." };
+  }
 
   const passwordHash = await hashPassword(parsed.data.newPassword);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+  await logAudit({
+    site: session.site,
+    action: "PASSWORD_RESET_BY_ADMIN",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `${user.name} (${user.email})`,
+  });
 
   return { message: "Password reset.", success: true };
 }

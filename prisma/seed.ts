@@ -7,7 +7,7 @@ async function upsertUser(opts: {
   name: string;
   email: string;
   password: string;
-  role: "ADMIN" | "PROFESSOR" | "STUDENT";
+  role: "SUPERADMIN" | "ADMIN" | "PROFESSOR" | "STUDENT";
   timezone: string;
   site?: Site;
   headline?: string;
@@ -42,6 +42,14 @@ async function upsertUser(opts: {
 }
 
 async function main() {
+  const superadmin = await upsertUser({
+    name: "Super Admin",
+    email: "superadmin@cooachly.com",
+    password: "ChangeMe123!",
+    role: "SUPERADMIN",
+    timezone: "UTC",
+  });
+
   const admin = await upsertUser({
     name: "Admin",
     email: "admin@cooachly.com",
@@ -119,6 +127,7 @@ async function main() {
   }
 
   console.log("Seeded Cooachly users:");
+  console.log(` - Superadmin: ${superadmin.email} / ChangeMe123!`);
   console.log(` - Admin:     ${admin.email} / ChangeMe123!`);
   console.log(` - Professor: ${professor.email} / ChangeMe123!`);
   console.log(` - Student:   ${student.email} / ChangeMe123!`);

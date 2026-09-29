@@ -11,6 +11,8 @@ import { createSession } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
 import { sendEmail } from "@/lib/notifications/email";
+import { logAudit } from "@/lib/audit";
+import type { Site } from "@prisma/client";
 
 const INVITE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -23,18 +25,21 @@ export type InviteFormState = { message?: string; success?: true } | undefined;
 const SendInviteSchema = z.object({
   name: z.string().trim().min(2, "Please enter a name."),
   email: z.string().trim().email("Please enter a valid email."),
-  role: z.enum(["STUDENT", "PROFESSOR"]),
+  role: z.enum(["STUDENT", "PROFESSOR", "ADMIN"]),
+  site: z.enum(["COOACHLY", "ARTS"]).optional(),
   phone: z.string().trim().optional(),
   message: z.string().trim().max(1000).optional(),
 });
 
 export async function sendAccountInvite(_state: InviteFormState, formData: FormData): Promise<InviteFormState> {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+  const isSuperadmin = session.role === "SUPERADMIN";
 
   const parsed = SendInviteSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
     role: formData.get("role"),
+    site: formData.get("site") || undefined,
     phone: formData.get("phone") || undefined,
     message: formData.get("message") || undefined,
   });
@@ -44,7 +49,15 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
 
   const { name, email, role, phone, message } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { site_email: { site: session.site, email } } });
+  if (role === "ADMIN" && !isSuperadmin) {
+    return { message: "Only a superadmin can invite an admin." };
+  }
+  // Only a superadmin can choose which site the invite is for — a plain
+  // admin's invites always stay on their own site, ignoring any client-sent
+  // value, since that field isn't meant to be attacker/admin-controlled.
+  const site: Site = isSuperadmin && parsed.data.site ? parsed.data.site : session.site;
+
+  const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
   if (existing) {
     return { message: "This email already has an account on this platform." };
   }
@@ -52,7 +65,7 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
   const rawToken = crypto.randomBytes(32).toString("hex");
   await prisma.accountInviteToken.create({
     data: {
-      site: session.site,
+      site,
       name,
       email,
       role,
@@ -63,9 +76,17 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
     },
   });
 
+  await logAudit({
+    site,
+    action: "ACCOUNT_INVITE_SENT",
+    actorId: session.userId,
+    targetType: "AccountInviteToken",
+    detail: `${email} invited as ${role}`,
+  });
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const inviteUrl = `${appUrl}${sitePath(session.site, `/register/${rawToken}`)}`;
-  const brandName = SITE_CONFIG[session.site].brandName;
+  const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
+  const brandName = SITE_CONFIG[site].brandName;
 
   const result = await sendEmail({
     to: email,
@@ -80,7 +101,8 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
     `,
   });
 
-  revalidatePath(sitePath(session.site, "/admin/users"));
+  revalidatePath(sitePath(site, "/admin/users"));
+  revalidatePath("/superadmin/admins");
 
   if (result.skipped) {
     return { message: `Email isn't configured — share this link with them directly: ${inviteUrl}`, success: true };
@@ -154,6 +176,15 @@ export async function redeemAccountInvite(
     });
     await tx.accountInviteToken.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
     return created;
+  });
+
+  await logAudit({
+    site: user.site,
+    action: "ACCOUNT_INVITE_REDEEMED",
+    actorId: user.id,
+    targetType: "User",
+    targetId: user.id,
+    detail: `${user.role} account created via invite`,
   });
 
   await createSession({ userId: user.id, role: user.role, site: user.site, name: user.name, email: user.email });
