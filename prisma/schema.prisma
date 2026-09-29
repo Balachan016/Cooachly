@@ -53,6 +53,13 @@ enum CoachApplicationStatus {
   REJECTED
 }
 
+enum DemoRequestStatus {
+  PENDING
+  SCHEDULED
+  JOINED
+  DROPPED
+}
+
 enum NotificationChannel {
   EMAIL
   WHATSAPP
@@ -78,6 +85,8 @@ enum AuditAction {
   PASSWORD_RESET_BY_ADMIN
   ACCOUNT_INVITE_SENT
   ACCOUNT_INVITE_REDEEMED
+  DEMO_REQUEST_SCHEDULED
+  DEMO_REQUEST_STATUS_CHANGED
 }
 
 model User {
@@ -123,6 +132,8 @@ model User {
   notificationLogs     NotificationLog[]
 
   auditLogsAsActor     AuditLog[] @relation("AuditActor")
+
+  demoRequestsAsProfessor DemoRequest[] @relation("DemoRequestProfessor")
 
   @@unique([site, email])
 }
@@ -173,6 +184,34 @@ model Enquiry {
   createdAt DateTime @default(now())
 
   @@index([site])
+}
+
+// A free-demo request from the public site. No slot is picked up front —
+// the lead just lands here for an admin to review, then schedule a call
+// with the requester and a professor, and track whether it ends up
+// converting (JOINED) or not (DROPPED). Reminder emails go out to the
+// requester and admins every other day while it's PENDING or SCHEDULED.
+model DemoRequest {
+  id                 String            @id @default(cuid())
+  site               Site              @default(COOACHLY)
+  name               String
+  email              String
+  phone              String?
+  subject            String
+  timezone           String?
+  status             DemoRequestStatus @default(PENDING)
+  professorId        String?
+  professor          User?             @relation("DemoRequestProfessor", fields: [professorId], references: [id], onDelete: SetNull)
+  scheduledAt        DateTime?
+  meetingLink        String?
+  adminNotes         String?
+  lastReminderSentAt DateTime?
+  resolvedAt         DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([site, status])
+  @@index([professorId])
 }
 
 model CoachApplication {
