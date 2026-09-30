@@ -98,6 +98,16 @@ export function PhysicsIcon() {
   );
 }
 
+// A short-label version of the same circular badge, for subjects/tests that
+// don't have bespoke line-art (e.g. exam names like SAT/ACT).
+export function TextBadge({ label }: { label: string }) {
+  return (
+    <IconBadge>
+      <span className="text-sm font-bold leading-none">{label}</span>
+    </IconBadge>
+  );
+}
+
 export function GlobeReachIllustration({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 400 140" className={className} role="img" aria-label="Educators from India teaching students in the USA">

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button, Card } from "@/components/ui";
 import { Logo } from "@/components/logo";
-import { HeroIllustration, MathIcon, ChemistryIcon, PhysicsIcon } from "@/components/illustrations";
+import { HeroIllustration, MathIcon, ChemistryIcon, PhysicsIcon, TextBadge } from "@/components/illustrations";
 
 export const metadata = {
   title: "About Cooachly",
@@ -72,7 +72,7 @@ export default function AboutPage() {
         <h2 className="mt-16 text-center text-sm font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-400">
           Subjects we specialize in
         </h2>
-        <div className="mt-8 grid gap-8 sm:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 gap-8 sm:grid-cols-4 md:grid-cols-5">
           <div className="flex flex-col items-center gap-3 text-center">
             <MathIcon />
             <span className="font-semibold text-brand-900 dark:text-brand-300">Mathematics</span>
@@ -84,6 +84,34 @@ export default function AboutPage() {
           <div className="flex flex-col items-center gap-3 text-center">
             <PhysicsIcon />
             <span className="font-semibold text-brand-900 dark:text-brand-300">Physics</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="Bio" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Biology</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="PSAT" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">PSAT</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="SAT" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">SAT</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="ACT" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">ACT</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="Econ" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Economics</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="Psych" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Psychology</span>
+          </div>
+          <div className="flex flex-col items-center gap-3 text-center">
+            <TextBadge label="Law" />
+            <span className="font-semibold text-brand-900 dark:text-brand-300">Legal Studies</span>
           </div>
         </div>
 
