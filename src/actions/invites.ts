@@ -25,21 +25,18 @@ export type InviteFormState = { message?: string; success?: true } | undefined;
 const SendInviteSchema = z.object({
   name: z.string().trim().min(2, "Please enter a name."),
   email: z.string().trim().email("Please enter a valid email."),
-  role: z.enum(["STUDENT", "PROFESSOR", "ADMIN"]),
-  site: z.enum(["COOACHLY", "ARTS"]).optional(),
+  role: z.enum(["STUDENT", "PROFESSOR"]),
   phone: z.string().trim().optional(),
   message: z.string().trim().max(1000).optional(),
 });
 
 export async function sendAccountInvite(_state: InviteFormState, formData: FormData): Promise<InviteFormState> {
   const session = await requireRole("ADMIN", "SUPERADMIN");
-  const isSuperadmin = session.role === "SUPERADMIN";
 
   const parsed = SendInviteSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
     role: formData.get("role"),
-    site: formData.get("site") || undefined,
     phone: formData.get("phone") || undefined,
     message: formData.get("message") || undefined,
   });
@@ -49,13 +46,10 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
 
   const { name, email, role, phone, message } = parsed.data;
 
-  if (role === "ADMIN" && !isSuperadmin) {
-    return { message: "Only a superadmin can invite an admin." };
-  }
-  // Only a superadmin can choose which site the invite is for — a plain
-  // admin's invites always stay on their own site, ignoring any client-sent
-  // value, since that field isn't meant to be attacker/admin-controlled.
-  const site: Site = isSuperadmin && parsed.data.site ? parsed.data.site : session.site;
+  // Invites always stay on the sender's own site — admin accounts are
+  // created directly by a superadmin (see createAdminAccount) rather than
+  // through this invite-and-redeem flow, so there's no ADMIN branch here.
+  const site: Site = session.site;
 
   const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
   if (existing) {
@@ -102,7 +96,6 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
   });
 
   revalidatePath(sitePath(site, "/admin/users"));
-  revalidatePath("/superadmin/admins");
 
   if (result.skipped) {
     return { message: `Email isn't configured — share this link with them directly: ${inviteUrl}`, success: true };
