@@ -22,8 +22,6 @@ const sessionOnlyRoutes = SITES.flatMap((site) => [sitePath(site, "/dashboard"),
 
 const CASE_REDIRECTS = [
   ["/Arts", "/arts"],
-  ["/KKCA", "/kkca"],
-  ["/Kkca", "/kkca"],
 ] as const;
 
 // The superadmin dashboard is cross-site (one login oversees both Cooachly
