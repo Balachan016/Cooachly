@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-const LOGO_ASPECT_RATIO = 551 / 179;
+const LOGO_ASPECT_RATIO = 1366 / 485;
 
 export function Logo({ withTagline = false, className = "" }: { withTagline?: boolean; className?: string }) {
   const width = withTagline ? 176 : 132;
