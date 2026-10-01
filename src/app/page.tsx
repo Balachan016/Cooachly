@@ -182,7 +182,7 @@ export default function Home() {
               Together, let&apos;s learn and grow.
             </h2>
             <p className="mt-2 text-black/60 dark:text-white/60">
-              Join Cooachly today and book your first session.
+              Join Cooachly today and book your demo session.
             </p>
             <div className="mt-6">
               <Link href="/demo">
