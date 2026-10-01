@@ -1,11 +1,13 @@
 "use server";
 
-import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { AvailableSlot } from "@/lib/scheduling";
+import type { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
+import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING } from "@/lib/booking-rules";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
@@ -13,23 +15,48 @@ import { sendBookingConfirmation } from "@/lib/notifications/booking-confirmatio
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 
-const BookSlotSchema = z.object({
-  professorId: z.string().min(1),
-  startAt: z.string().min(1),
-});
+async function createConfirmedBookings(opts: {
+  studentId: string;
+  professorId: string;
+  matches: AvailableSlot[];
+  paymentStatus: PaymentStatus;
+  priceCentsFor: (slot: AvailableSlot) => number;
+}) {
+  const bookings = await prisma.$transaction(
+    opts.matches.map((slot) =>
+      prisma.booking.create({
+        data: {
+          studentId: opts.studentId,
+          professorId: opts.professorId,
+          startAt: slot.startAt,
+          endAt: slot.endAt,
+          status: "CONFIRMED",
+          paymentStatus: opts.paymentStatus,
+          priceCents: opts.priceCentsFor(slot),
+        },
+        include: { student: true, professor: true },
+      })
+    )
+  );
+  for (const booking of bookings) {
+    await provisionVideoRoomForBooking(booking);
+  }
+  await sendBookingConfirmation(bookings);
+  return bookings;
+}
 
-export async function bookSlot(_state: unknown, formData: FormData) {
+export async function bookSlots(_state: unknown, formData: FormData) {
   const session = await requireRole("STUDENT");
 
-  const parsed = BookSlotSchema.safeParse({
-    professorId: formData.get("professorId"),
-    startAt: formData.get("startAt"),
-  });
-  if (!parsed.success) return { message: "Invalid booking request." };
+  const professorId = String(formData.get("professorId") ?? "");
+  const requestedStartAts = Array.from(new Set(formData.getAll("startAts").map(String).filter(Boolean)));
+  if (!professorId) return { message: "Invalid booking request." };
+  if (requestedStartAts.length < MIN_SLOTS_PER_BOOKING || requestedStartAts.length > MAX_SLOTS_PER_BOOKING) {
+    return { message: `Please select between ${MIN_SLOTS_PER_BOOKING} and ${MAX_SLOTS_PER_BOOKING} sessions.` };
+  }
 
-  const { professorId, startAt } = parsed.data;
-  const startDate = new Date(startAt);
-  if (Number.isNaN(startDate.getTime())) return { message: "Invalid time selected." };
+  const requestedDates = requestedStartAts.map((s) => new Date(s));
+  if (requestedDates.some((d) => Number.isNaN(d.getTime()))) return { message: "Invalid time selected." };
 
   const professor = await prisma.user.findUnique({
     where: { id: professorId, role: "PROFESSOR" },
@@ -38,32 +65,32 @@ export async function bookSlot(_state: unknown, formData: FormData) {
   if (!professor || !professor.professorProfile || professor.site !== session.site) {
     return { message: "Professor not found." };
   }
+  const hourlyRateCents = professor.professorProfile.hourlyRateCents;
 
-  const slots = await getAvailableSlots(professorId);
-  const match = slots.find((s) => s.startAt.getTime() === startDate.getTime());
-  if (!match) return { message: "That slot is no longer available. Please pick another." };
+  const availableSlots = await getAvailableSlots(professorId);
+  const matches = requestedDates.map((d) => availableSlots.find((s) => s.startAt.getTime() === d.getTime()));
+  if (matches.some((m) => !m)) {
+    return { message: "One or more selected sessions are no longer available. Please reselect." };
+  }
+  const confirmedMatches = matches as AvailableSlot[];
+
+  // hourlyRateCents is the professor's price for a SESSION_LENGTH_MINUTES session; prorate for each slot's actual length.
+  const priceCentsFor = (slot: AvailableSlot) => Math.round((hourlyRateCents * slot.sessionLengthMinutes) / SESSION_LENGTH_MINUTES);
 
   // Cooachly Arts doesn't run payment through the platform at all — gurus
   // quote and collect their own rate directly with each student, so every
   // class just auto-confirms with no Stripe step and no price on record.
   if (session.site === "ARTS") {
-    const booking = await prisma.booking.create({
-      data: {
-        studentId: session.userId,
-        professorId,
-        startAt: match.startAt,
-        endAt: match.endAt,
-        status: "CONFIRMED",
-        paymentStatus: "UNPAID",
-        priceCents: 0,
-      },
-      include: { student: true, professor: true },
+    const bookings = await createConfirmedBookings({
+      studentId: session.userId,
+      professorId,
+      matches: confirmedMatches,
+      paymentStatus: "UNPAID",
+      priceCentsFor: () => 0,
     });
-    await provisionVideoRoomForBooking(booking);
-    await sendBookingConfirmation(booking);
     revalidatePath(sitePath(session.site, "/student/bookings"));
     revalidatePath(sitePath(session.site, "/professor/bookings"));
-    redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
+    redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
   }
 
   const activeSubscription = await prisma.subscription.findFirst({
@@ -75,51 +102,47 @@ export async function bookSlot(_state: unknown, formData: FormData) {
     },
   });
 
-  // hourlyRateCents is the professor's price for a SESSION_LENGTH_MINUTES session; prorate for the slot's actual length.
-  const priceCents = Math.round(
-    (professor.professorProfile.hourlyRateCents * match.sessionLengthMinutes) / SESSION_LENGTH_MINUTES
-  );
-
   if (activeSubscription) {
-    const booking = await prisma.booking.create({
-      data: {
-        studentId: session.userId,
-        professorId,
-        startAt: match.startAt,
-        endAt: match.endAt,
-        status: "CONFIRMED",
-        paymentStatus: "COVERED_BY_SUBSCRIPTION",
-        priceCents,
-      },
-      include: { student: true, professor: true },
-    });
-    await provisionVideoRoomForBooking(booking);
-    await sendBookingConfirmation(booking);
-    revalidatePath(sitePath(session.site, "/student/bookings"));
-    revalidatePath(sitePath(session.site, "/professor/bookings"));
-    redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
-  }
-
-  const booking = await prisma.booking.create({
-    data: {
+    const bookings = await createConfirmedBookings({
       studentId: session.userId,
       professorId,
-      startAt: match.startAt,
-      endAt: match.endAt,
-      status: isStripeConfigured ? "PENDING" : "CONFIRMED",
-      paymentStatus: "UNPAID",
-      priceCents,
-    },
-    include: { student: true, professor: true },
-  });
-
-  if (!isStripeConfigured) {
-    await provisionVideoRoomForBooking(booking);
-    await sendBookingConfirmation(booking);
+      matches: confirmedMatches,
+      paymentStatus: "COVERED_BY_SUBSCRIPTION",
+      priceCentsFor,
+    });
     revalidatePath(sitePath(session.site, "/student/bookings"));
     revalidatePath(sitePath(session.site, "/professor/bookings"));
-    redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
+    redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
   }
+
+  if (!isStripeConfigured) {
+    const bookings = await createConfirmedBookings({
+      studentId: session.userId,
+      professorId,
+      matches: confirmedMatches,
+      paymentStatus: "UNPAID",
+      priceCentsFor,
+    });
+    revalidatePath(sitePath(session.site, "/student/bookings"));
+    revalidatePath(sitePath(session.site, "/professor/bookings"));
+    redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
+  }
+
+  const pendingBookings = await prisma.$transaction(
+    confirmedMatches.map((slot) =>
+      prisma.booking.create({
+        data: {
+          studentId: session.userId,
+          professorId,
+          startAt: slot.startAt,
+          endAt: slot.endAt,
+          status: "PENDING",
+          paymentStatus: "UNPAID",
+          priceCents: priceCentsFor(slot),
+        },
+      })
+    )
+  );
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -136,25 +159,23 @@ export async function bookSlot(_state: unknown, formData: FormData) {
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: "payment",
     customer: customerId,
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          unit_amount: priceCents,
-          product_data: {
-            name: `${match.sessionLengthMinutes}-minute session with ${professor.name}`,
-          },
+    line_items: pendingBookings.map((booking, i) => ({
+      price_data: {
+        currency: "usd",
+        unit_amount: booking.priceCents,
+        product_data: {
+          name: `${confirmedMatches[i].sessionLengthMinutes}-minute session with ${professor.name} — ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(confirmedMatches[i].startAt)}`,
         },
-        quantity: 1,
       },
-    ],
-    success_url: `${appUrl}${sitePath(session.site, `/student/bookings?booked=${booking.id}`)}`,
+      quantity: 1,
+    })),
+    success_url: `${appUrl}${sitePath(session.site, `/student/bookings?booked=${pendingBookings.map((b) => b.id).join(",")}`)}`,
     cancel_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?cancelled=1`)}`,
-    metadata: { bookingId: booking.id, type: "booking" },
+    metadata: { bookingIds: pendingBookings.map((b) => b.id).join(","), type: "booking" },
   });
 
-  await prisma.booking.update({
-    where: { id: booking.id },
+  await prisma.booking.updateMany({
+    where: { id: { in: pendingBookings.map((b) => b.id) } },
     data: { stripeCheckoutSessionId: checkoutSession.id },
   });
 

@@ -35,8 +35,8 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
 
   return (
     <div>
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <Card className="flex-1">
+      <div className="flex flex-col gap-6">
+        <Card>
           <h1 className="text-2xl font-semibold">{professor.name}</h1>
           <p className="mt-1 text-brand-700 dark:text-brand-400">{professor.professorProfile?.subject || "Coaching"}</p>
           {rating.count > 0 && (
@@ -112,7 +112,7 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
           )}
         </Card>
 
-        <Card className="w-full lg:w-96">
+        <Card className="w-full">
           <h2 className="font-semibold">Book a session</h2>
           <div className="mt-4">
             <BookingCalendar professorId={professor.id} weeks={weeks} timezone={user.timezone} />
