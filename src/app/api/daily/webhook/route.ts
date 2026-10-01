@@ -68,11 +68,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Could not fetch transcript link" }, { status: 502 });
     }
 
-    const vttRes = await fetch(downloadLink);
-    if (!vttRes.ok) {
-      return NextResponse.json({ ok: false, error: "Could not download transcript file" }, { status: 502 });
+    let vttText: string;
+    try {
+      const vttRes = await fetch(downloadLink);
+      if (!vttRes.ok) {
+        return NextResponse.json({ ok: false, error: "Could not download transcript file" }, { status: 502 });
+      }
+      vttText = await vttRes.text();
+    } catch (err) {
+      console.error("Failed to download transcript file", err);
+      return NextResponse.json({ ok: false, error: "Could not reach transcript file host" }, { status: 502 });
     }
-    const transcript = parseVttTranscript(await vttRes.text());
+    const transcript = parseVttTranscript(vttText);
     if (!transcript) {
       return NextResponse.json({ ok: true, transcribed: false });
     }
@@ -95,14 +102,28 @@ export async function POST(request: Request) {
 
     if (summary) {
       const brandName = SITE_CONFIG[booking.professor.site].brandName;
-      const html = `<p>Here's the AI-generated summary of your ${brandName} session on ${new Intl.DateTimeFormat(
-        "en-US",
-        { dateStyle: "medium" }
-      ).format(booking.startAt)}:</p><pre style="white-space:pre-wrap;font-family:inherit">${summary}</pre>`;
+      const when = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(booking.startAt);
+      const summaryHtml = `<pre style="white-space:pre-wrap;font-family:inherit">${summary}</pre>`;
+
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN", isActive: true, site: booking.professor.site },
+        select: { email: true },
+      });
+      const adminEmails = admins.map((a) => a.email);
 
       await Promise.all([
-        sendEmail({ to: booking.student.email, subject: `Your ${brandName} session summary`, html }),
-        sendEmail({ to: booking.professor.email, subject: `Your ${brandName} session summary`, html }),
+        sendEmail({
+          to: booking.student.email,
+          cc: adminEmails,
+          subject: `Your ${brandName} session summary`,
+          html: `<p>Here's the AI-generated summary of your session with <strong>${booking.professor.name}</strong> on <strong>${when}</strong>:</p>${summaryHtml}`,
+        }),
+        sendEmail({
+          to: booking.professor.email,
+          cc: adminEmails,
+          subject: `Your ${brandName} session summary`,
+          html: `<p>Here's the AI-generated summary of your session with <strong>${booking.student.name}</strong> on <strong>${when}</strong>:</p>${summaryHtml}`,
+        }),
       ]);
     }
 

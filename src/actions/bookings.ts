@@ -148,40 +148,58 @@ export async function bookSlots(_state: unknown, formData: FormData) {
 
   const appUrl = await getAppUrl();
 
-  let customerId = null as string | null;
-  const student = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (student?.stripeCustomerId) {
-    customerId = student.stripeCustomerId;
-  } else {
-    const customer = await stripe.customers.create({ email: session.email, name: session.name });
-    customerId = customer.id;
-    await prisma.user.update({ where: { id: session.userId }, data: { stripeCustomerId: customerId } });
+  // Stripe calls are kept out of the surrounding redirect()'s control flow
+  // (redirect() throws internally to unwind the action — if these were in
+  // the same try block, a genuine Stripe failure couldn't be told apart
+  // from a successful redirect). On failure, the PENDING bookings created
+  // above are cancelled so their slots free up instead of being stuck
+  // PENDING forever with no checkout session to complete them.
+  let checkoutUrl: string;
+  try {
+    let customerId = null as string | null;
+    const student = await prisma.user.findUnique({ where: { id: session.userId } });
+    if (student?.stripeCustomerId) {
+      customerId = student.stripeCustomerId;
+    } else {
+      const customer = await stripe.customers.create({ email: session.email, name: session.name });
+      customerId = customer.id;
+      await prisma.user.update({ where: { id: session.userId }, data: { stripeCustomerId: customerId } });
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer: customerId,
+      line_items: pendingBookings.map((booking, i) => ({
+        price_data: {
+          currency: "usd",
+          unit_amount: booking.priceCents,
+          product_data: {
+            name: `${confirmedMatches[i].sessionLengthMinutes}-minute session with ${professor.name} — ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(confirmedMatches[i].startAt)}`,
+          },
+        },
+        quantity: 1,
+      })),
+      success_url: `${appUrl}${sitePath(session.site, `/student/bookings?booked=${pendingBookings.map((b) => b.id).join(",")}`)}`,
+      cancel_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?cancelled=1`)}`,
+      metadata: { bookingIds: pendingBookings.map((b) => b.id).join(","), type: "booking" },
+    });
+
+    await prisma.booking.updateMany({
+      where: { id: { in: pendingBookings.map((b) => b.id) } },
+      data: { stripeCheckoutSessionId: checkoutSession.id },
+    });
+
+    checkoutUrl = checkoutSession.url ?? `${appUrl}${sitePath(session.site, "/student/bookings")}`;
+  } catch (err) {
+    console.error("Failed to create Stripe checkout session for booking", err);
+    await prisma.booking.updateMany({
+      where: { id: { in: pendingBookings.map((b) => b.id) } },
+      data: { status: "CANCELLED" },
+    });
+    return { message: "We couldn't start checkout for your sessions. Please try again in a moment." };
   }
 
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer: customerId,
-    line_items: pendingBookings.map((booking, i) => ({
-      price_data: {
-        currency: "usd",
-        unit_amount: booking.priceCents,
-        product_data: {
-          name: `${confirmedMatches[i].sessionLengthMinutes}-minute session with ${professor.name} — ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(confirmedMatches[i].startAt)}`,
-        },
-      },
-      quantity: 1,
-    })),
-    success_url: `${appUrl}${sitePath(session.site, `/student/bookings?booked=${pendingBookings.map((b) => b.id).join(",")}`)}`,
-    cancel_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?cancelled=1`)}`,
-    metadata: { bookingIds: pendingBookings.map((b) => b.id).join(","), type: "booking" },
-  });
-
-  await prisma.booking.updateMany({
-    where: { id: { in: pendingBookings.map((b) => b.id) } },
-    data: { stripeCheckoutSessionId: checkoutSession.id },
-  });
-
-  redirect(checkoutSession.url ?? `${appUrl}${sitePath(session.site, "/student/bookings")}`);
+  redirect(checkoutUrl);
 }
 
 export async function cancelBooking(bookingId: string) {
@@ -394,14 +412,23 @@ export async function extendBooking(bookingId: string, minutes: 15 | 30) {
   revalidatePath(sitePath(session.site, "/professor/bookings"));
 }
 
+/**
+ * Professors mark their own bookings completed; an admin/superadmin can also
+ * close out any booking on their site directly — mainly for instant calls,
+ * which otherwise only reach Class logs once the professor remembers to mark
+ * them complete (or the Daily transcript webhook does it automatically,
+ * which depends on transcription being configured).
+ */
 export async function markBookingCompleted(bookingId: string) {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: { student: true, professor: true },
   });
-  if (!booking || booking.professorId !== session.userId) return;
+  if (!booking) return;
+  const allowed = session.role === "PROFESSOR" ? booking.professorId === session.userId : booking.professor.site === session.site;
+  if (!allowed) return;
 
   const wasAlreadyCompleted = booking.status === "COMPLETED";
 
@@ -416,4 +443,6 @@ export async function markBookingCompleted(bookingId: string) {
 
   revalidatePath(sitePath(session.site, "/professor/bookings"));
   revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/class-logs"));
 }
