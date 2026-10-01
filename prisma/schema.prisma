@@ -349,6 +349,12 @@ model NotificationLog {
   kind      String              // "24h" | "1h" | "5m" | "test"
   status    NotificationStatus
   error     String?
+  // Addresses actually used for this message: an email address (with display
+  // name, for the sender) or an E.164 WhatsApp number. Null on rows logged
+  // before these were recorded, or when the channel isn't configured.
+  sender    String?
+  recipient String?
+  cc        String? // comma-separated CC'd email addresses, if any
   createdAt DateTime            @default(now())
 
   @@index([bookingId])
