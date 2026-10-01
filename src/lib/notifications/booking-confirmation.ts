@@ -20,6 +20,14 @@ function sessionListHtml(bookings: BookingWithParties[]) {
     .join("")}</ul>`;
 }
 
+async function getAdminEmails(site: BookingWithParties["professor"]["site"]) {
+  const admins = await prisma.user.findMany({
+    where: { role: "ADMIN", isActive: true, site },
+    select: { email: true },
+  });
+  return admins.map((a) => a.email);
+}
+
 /**
  * Sent once one or more bookings for the same student/professor pair are
  * actually confirmed (immediately for free/subscription/no-Stripe bookings,
@@ -38,11 +46,7 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   const verb = sorted.length === 1 ? "is" : "are";
   const listHtml = sessionListHtml(sorted);
 
-  const admins = await prisma.user.findMany({
-    where: { role: "ADMIN", isActive: true, site: first.professor.site },
-    select: { email: true },
-  });
-  const adminEmails = admins.map((a) => a.email);
+  const adminEmails = await getAdminEmails(first.professor.site);
 
   const studentResult = await sendEmail({
     to: first.student.email,
@@ -85,4 +89,58 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
       result: professorResult,
     });
   }
+}
+
+/**
+ * Sent when a student reschedules a booking to a new time. Both the student
+ * and professor get an email showing the old and new time, each CC'd to
+ * every active admin on that site, same as a fresh booking confirmation.
+ */
+export async function sendBookingRescheduledEmail(booking: BookingWithParties, previousStartAt: Date) {
+  if (!isEmailConfigured) return;
+
+  const brandName = SITE_CONFIG[booking.student.site].brandName;
+  const joinLink = booking.dailyRoomUrl || booking.meetingLink;
+  const joinLine = joinLink ? `<p><a href="${joinLink}">Join the session</a></p>` : "";
+  const adminEmails = await getAdminEmails(booking.professor.site);
+
+  const studentResult = await sendEmail({
+    to: booking.student.email,
+    cc: adminEmails,
+    subject: `Your session with ${booking.professor.name} was rescheduled`,
+    html: `
+      <p>Hi ${booking.student.name},</p>
+      <p>Your session with <strong>${booking.professor.name}</strong> was moved from
+      <strong>${formatWhen(previousStartAt)}</strong> to <strong>${formatWhen(booking.startAt)}</strong>.</p>
+      ${joinLine}
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({
+    bookingId: booking.id,
+    userId: booking.student.id,
+    channel: "EMAIL",
+    kind: "booking_rescheduled",
+    result: studentResult,
+  });
+
+  const professorResult = await sendEmail({
+    to: booking.professor.email,
+    cc: adminEmails,
+    subject: `${booking.student.name} rescheduled their session with you`,
+    html: `
+      <p>Hi ${booking.professor.name},</p>
+      <p>Your session with <strong>${booking.student.name}</strong> was moved from
+      <strong>${formatWhen(previousStartAt)}</strong> to <strong>${formatWhen(booking.startAt)}</strong>.</p>
+      ${joinLine}
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({
+    bookingId: booking.id,
+    userId: booking.professor.id,
+    channel: "EMAIL",
+    kind: "booking_rescheduled",
+    result: professorResult,
+  });
 }

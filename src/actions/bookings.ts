@@ -2,16 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { AvailableSlot } from "@/lib/scheduling";
+import { startOfMonth, endOfMonth } from "date-fns";
+import type { AvailableSlot, CalendarDay } from "@/lib/scheduling";
 import type { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
-import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
-import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING } from "@/lib/booking-rules";
+import { getAvailableSlots, buildCalendarWeeks, SESSION_LENGTH_MINUTES, BOOKING_WINDOW_DAYS } from "@/lib/scheduling";
+import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING, MAX_RESCHEDULES_PER_MONTH } from "@/lib/booking-rules";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
-import { sendBookingConfirmation } from "@/lib/notifications/booking-confirmation";
+import { sendBookingConfirmation, sendBookingRescheduledEmail } from "@/lib/notifications/booking-confirmation";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 
@@ -205,6 +206,120 @@ export async function cancelBooking(bookingId: string) {
 
   revalidatePath(sitePath(session.site, "/student/bookings"));
   revalidatePath(sitePath(session.site, "/professor/bookings"));
+}
+
+async function monthlyReschedulesUsed(studentId: string, asOf: Date) {
+  return prisma.booking.count({
+    where: { studentId, rescheduledAt: { gte: startOfMonth(asOf), lte: endOfMonth(asOf) } },
+  });
+}
+
+export type RescheduleOptions =
+  | { eligible: true; weeks: (CalendarDay | null)[][]; timezone: string; remaining: number; limit: number }
+  | { eligible: false; message: string };
+
+/**
+ * Fetched when the student opens the reschedule picker for a booking —
+ * checks eligibility (not past/cancelled/completed, under the monthly quota)
+ * and, if eligible, returns the same professor's open slots for them to pick
+ * a new time from.
+ */
+export async function getRescheduleOptions(bookingId: string): Promise<RescheduleOptions> {
+  const session = await requireRole("STUDENT");
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { student: true } });
+  if (!booking || booking.studentId !== session.userId) return { eligible: false, message: "Booking not found." };
+  if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
+    return { eligible: false, message: "This booking can no longer be rescheduled." };
+  }
+  if (booking.startAt.getTime() <= Date.now()) {
+    return { eligible: false, message: "This session has already started." };
+  }
+
+  const used = await monthlyReschedulesUsed(session.userId, new Date());
+  const remaining = Math.max(0, MAX_RESCHEDULES_PER_MONTH - used);
+  if (remaining <= 0) {
+    return {
+      eligible: false,
+      message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
+    };
+  }
+
+  const slots = await getAvailableSlots(booking.professorId);
+  const weeks = buildCalendarWeeks(slots, booking.student.timezone, BOOKING_WINDOW_DAYS);
+  return { eligible: true, weeks, timezone: booking.student.timezone, remaining, limit: MAX_RESCHEDULES_PER_MONTH };
+}
+
+export type RescheduleFormState = { message?: string; success?: true } | undefined;
+
+/**
+ * Moves a booking to a new time with the same professor, freeing its old
+ * slot (slot availability is derived live from each booking's startAt/endAt,
+ * so updating them is all "freeing" the old slot requires) and consuming one
+ * of the student's MAX_RESCHEDULES_PER_MONTH reschedules for this calendar
+ * month.
+ */
+export async function rescheduleBooking(_state: RescheduleFormState, formData: FormData): Promise<RescheduleFormState> {
+  const session = await requireRole("STUDENT");
+
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const newStartAt = String(formData.get("newStartAt") ?? "");
+  if (!bookingId || !newStartAt) return { message: "Invalid reschedule request." };
+
+  const newStartDate = new Date(newStartAt);
+  if (Number.isNaN(newStartDate.getTime())) return { message: "Invalid time selected." };
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { student: true, professor: true },
+  });
+  if (!booking || booking.studentId !== session.userId) return { message: "Booking not found." };
+  if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
+    return { message: "This booking can no longer be rescheduled." };
+  }
+  if (booking.startAt.getTime() <= Date.now()) {
+    return { message: "This session has already started." };
+  }
+
+  const used = await monthlyReschedulesUsed(session.userId, new Date());
+  if (used >= MAX_RESCHEDULES_PER_MONTH) {
+    return {
+      message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
+    };
+  }
+
+  const slots = await getAvailableSlots(booking.professorId);
+  const match = slots.find((s) => s.startAt.getTime() === newStartDate.getTime());
+  if (!match) return { message: "That time is no longer available. Please pick another." };
+
+  const previousStartAt = booking.startAt;
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { startAt: match.startAt, endAt: match.endAt, rescheduledAt: new Date() },
+    include: { student: true, professor: true },
+  });
+
+  if (updated.dailyRoomName) {
+    const newExp = Math.floor(updated.endAt.getTime() / 1000) + 2 * 60 * 60; // same 2h wrap-up buffer as room creation
+    await updateDailyRoomExpiry(updated.dailyRoomName, newExp);
+  }
+
+  await sendBookingRescheduledEmail(updated, previousStartAt);
+
+  await logAudit({
+    site: session.site,
+    action: "BOOKING_RESCHEDULED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: booking.id,
+    detail: `${previousStartAt.toISOString()} → ${match.startAt.toISOString()}`,
+  });
+
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+
+  return { message: "Session rescheduled.", success: true };
 }
 
 export async function setMeetingLink(bookingId: string, meetingLink: string) {
