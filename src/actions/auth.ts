@@ -9,6 +9,7 @@ import { createSession, deleteSession, getSessionCookie, decrypt } from "@/lib/s
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
+import { getAppUrl } from "@/lib/url";
 import { logAudit } from "@/lib/audit";
 import type { Site } from "@prisma/client";
 
@@ -124,7 +125,7 @@ export async function requestPasswordReset(_state: SimpleFormState, formData: Fo
       },
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = await getAppUrl();
     const resetUrl = `${appUrl}${sitePath(site, `/reset-password/${rawToken}`)}`;
     const brandName = SITE_CONFIG[site].brandName;
 

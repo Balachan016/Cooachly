@@ -3,12 +3,13 @@ import type { Booking, User } from "@prisma/client";
 import { sendEmail } from "./email";
 import { logNotification } from "./log";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 
 type BookingWithParties = Booking & { student: User; professor: User };
 
 export async function sendDemoFollowUpEmail(booking: BookingWithParties) {
   const brandName = SITE_CONFIG[booking.student.site].brandName;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getAppUrl();
   const contactUrl = `${appUrl}${sitePath(booking.student.site, "/contact")}`;
 
   const result = await sendEmail({

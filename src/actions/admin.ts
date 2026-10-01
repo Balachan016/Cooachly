@@ -11,6 +11,7 @@ import { logNotification } from "@/lib/notifications/log";
 import { logAudit } from "@/lib/audit";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
 import { sitePath, SITE_CONFIG, DEFAULT_SITE } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role, Site } from "@prisma/client";
 
@@ -204,7 +205,7 @@ export async function createAdminAccount(
     detail: `${admin.name} (${admin.email})`,
   });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getAppUrl();
   const loginUrl = `${appUrl}${sitePath(site, "/login")}`;
   const settingsUrl = `${appUrl}${sitePath(site, "/settings")}`;
   const brandName = SITE_CONFIG[site].brandName;

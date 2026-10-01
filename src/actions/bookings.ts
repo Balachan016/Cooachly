@@ -15,6 +15,7 @@ import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
 import { sendBookingConfirmation, sendBookingRescheduledEmail } from "@/lib/notifications/booking-confirmation";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 
 async function createConfirmedBookings(opts: {
   studentId: string;
@@ -145,7 +146,7 @@ export async function bookSlots(_state: unknown, formData: FormData) {
     )
   );
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getAppUrl();
 
   let customerId = null as string | null;
   const student = await prisma.user.findUnique({ where: { id: session.userId } });
