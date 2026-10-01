@@ -10,6 +10,7 @@ import { hashPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
 import { logAudit } from "@/lib/audit";
@@ -79,7 +80,7 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
     detail: `${email} invited as ${role}`,
   });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getAppUrl();
   const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
   const brandName = SITE_CONFIG[site].brandName;
 

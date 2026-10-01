@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { sitePath } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 
 export async function subscribeToProfessor(professorId: string) {
   const session = await requireRole("STUDENT");
@@ -22,7 +23,7 @@ export async function subscribeToProfessor(professorId: string) {
     redirect(sitePath(session.site, `/student/professors/${professorId}?error=no-subscription-plan`));
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getAppUrl();
 
   const student = await prisma.user.findUnique({ where: { id: session.userId } });
   let customerId = student?.stripeCustomerId ?? null;

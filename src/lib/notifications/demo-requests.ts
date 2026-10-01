@@ -3,6 +3,7 @@ import type { DemoRequest, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "./email";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 
 export async function sendDemoRequestScheduledEmail(
   demoRequest: DemoRequest & { professor: User | null },
@@ -18,7 +19,7 @@ export async function sendDemoRequestScheduledEmail(
     ? `<p><a href="${demoRequest.meetingLink}">Join the call here</a></p>`
     : "";
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = await getAppUrl();
   const loginLine = opts.newAccountTempPassword
     ? `
       <p>We've also set up your ${brandName} account so you can see this booking and message
