@@ -4,7 +4,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { ArtsLogo } from "@/components/arts/logo";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
   const p = (path: string) => sitePath(session.site, path);
   const navLinks = [
     { href: p("/admin"), label: "Overview" },
@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <DashboardShell
       navLinks={navLinks}
-      roleLabel="Admin"
+      roleLabel={session.role === "SUPERADMIN" ? "Superadmin" : "Admin"}
       userName={session.name}
       homeHref={SITE_CONFIG[session.site].homeHref}
       settingsHref={p("/settings")}

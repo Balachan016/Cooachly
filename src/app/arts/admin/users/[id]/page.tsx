@@ -7,7 +7,7 @@ import { ResetPasswordForm } from "./reset-password-form";
 
 export default async function AdminEditUserPage(props: PageProps<"/arts/admin/users/[id]">) {
   const { id } = await props.params;
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
 
   const user = await prisma.user.findUnique({
     where: { id },

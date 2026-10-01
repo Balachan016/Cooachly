@@ -3,13 +3,24 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import type { User, Role } from "@prisma/client";
-import { setUserActive, setUserRole } from "@/actions/admin";
+import { setUserActive, setUserRole, deleteUserAccount } from "@/actions/admin";
 import { sitePath } from "@/lib/site";
 import { Badge, Button, Select } from "@/components/ui";
 
-export function UserRow({ user }: { user: User }) {
+export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) {
   const [isPending, startTransition] = useTransition();
   const isElevated = user.role === "ADMIN" || user.role === "SUPERADMIN";
+  const canDelete = viewerRole === "SUPERADMIN" && !isElevated;
+
+  function handleDelete() {
+    const confirmed = window.confirm(
+      `Permanently delete ${user.name}'s account? This also deletes every booking, message, and review they're part of — including the other side of any conversation or review with someone else. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    startTransition(() => {
+      void deleteUserAccount(user.id);
+    });
+  }
 
   return (
     <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
@@ -41,7 +52,7 @@ export function UserRow({ user }: { user: User }) {
         {isElevated ? (
           <span className="text-xs text-black/40 dark:text-white/40">Only a superadmin can manage this account.</span>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href={sitePath(user.site, `/admin/users/${user.id}`)}>
               <Button variant="secondary">Edit</Button>
             </Link>
@@ -52,6 +63,11 @@ export function UserRow({ user }: { user: User }) {
             >
               {user.isActive ? "Disable" : "Enable"}
             </Button>
+            {canDelete && (
+              <Button variant="danger" disabled={isPending} onClick={handleDelete}>
+                Delete
+              </Button>
+            )}
           </div>
         )}
       </td>

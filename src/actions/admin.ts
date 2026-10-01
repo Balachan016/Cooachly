@@ -62,6 +62,42 @@ export async function setUserActive(userId: string, isActive: boolean) {
   revalidatePath(sitePath(session.site, "/admin/users"));
 }
 
+export type DeleteUserState = { message?: string; success?: true } | undefined;
+
+/**
+ * Permanently deletes a STUDENT or PROFESSOR account. Superadmin-only and
+ * deliberately narrower than setUserActive (which an ADMIN can also use) —
+ * this is irreversible and, per the schema's cascade rules, also deletes
+ * every booking, message, review, and subscription the account is party to
+ * (including the other side of any conversation/review with someone else).
+ * Deactivating an account is almost always the better first move; this is
+ * for when the data genuinely needs to be gone (e.g. a fraudulent signup,
+ * or a deletion request).
+ */
+export async function deleteUserAccount(userId: string): Promise<DeleteUserState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || target.site !== session.site) return { message: "User not found." };
+  if (target.role !== "STUDENT" && target.role !== "PROFESSOR") {
+    return { message: "Only student or professor accounts can be deleted this way." };
+  }
+
+  await prisma.user.delete({ where: { id: userId } });
+
+  await logAudit({
+    site: session.site,
+    action: "USER_DELETED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `${target.role} ${target.name} (${target.email})`,
+  });
+
+  revalidatePath(sitePath(session.site, "/admin/users"));
+  return { message: "Account deleted.", success: true };
+}
+
 const UserDetailsSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters."),
   email: z.string().trim().email("Please enter a valid email."),
