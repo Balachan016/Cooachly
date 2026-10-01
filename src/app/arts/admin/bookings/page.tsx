@@ -6,7 +6,7 @@ import { Card, Select } from "@/components/ui";
 import { AdminBookingRow } from "./booking-row";
 
 export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bookings">) {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
   const searchParams = await props.searchParams;
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
@@ -100,7 +100,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
           </thead>
           <tbody>
             {bookings.map((b) => (
-              <AdminBookingRow key={b.id} booking={b} />
+              <AdminBookingRow key={b.id} booking={b} viewerRole={session.role} />
             ))}
             {bookings.length === 0 && (
               <tr>

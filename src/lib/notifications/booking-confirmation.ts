@@ -144,3 +144,54 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
     result: professorResult,
   });
 }
+
+/**
+ * Sent after a superadmin permanently deletes a confirmed booking. The
+ * booking row is already gone by the time this runs, so these logs aren't
+ * tied back to a bookingId (there's nothing left to cascade from).
+ */
+export async function sendBookingDeletedEmail(booking: BookingWithParties) {
+  if (!isEmailConfigured) return;
+
+  const brandName = SITE_CONFIG[booking.student.site].brandName;
+  const when = formatWhen(booking.startAt);
+  const adminEmails = await getAdminEmails(booking.professor.site);
+
+  const studentResult = await sendEmail({
+    to: booking.student.email,
+    cc: adminEmails,
+    subject: `Your session with ${booking.professor.name} on ${when} was removed`,
+    html: `
+      <p>Hi ${booking.student.name},</p>
+      <p>Your session with <strong>${booking.professor.name}</strong> scheduled for <strong>${when}</strong>
+      has been removed by the ${brandName} team.</p>
+      <p>If you have questions about this, please get in touch with us.</p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({
+    userId: booking.student.id,
+    channel: "EMAIL",
+    kind: "booking_deleted",
+    result: studentResult,
+  });
+
+  const professorResult = await sendEmail({
+    to: booking.professor.email,
+    cc: adminEmails,
+    subject: `Session with ${booking.student.name} on ${when} was removed`,
+    html: `
+      <p>Hi ${booking.professor.name},</p>
+      <p>The session with <strong>${booking.student.name}</strong> scheduled for <strong>${when}</strong>
+      has been removed by the ${brandName} team.</p>
+      <p>If you have questions about this, please get in touch with us.</p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({
+    userId: booking.professor.id,
+    channel: "EMAIL",
+    kind: "booking_deleted",
+    result: professorResult,
+  });
+}

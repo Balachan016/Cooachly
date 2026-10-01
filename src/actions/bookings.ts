@@ -12,7 +12,7 @@ import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING, MAX_RESCHEDULES_PER_MONTH
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
-import { sendBookingConfirmation, sendBookingRescheduledEmail } from "@/lib/notifications/booking-confirmation";
+import { sendBookingConfirmation, sendBookingRescheduledEmail, sendBookingDeletedEmail } from "@/lib/notifications/booking-confirmation";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
@@ -207,6 +207,43 @@ export async function cancelBooking(bookingId: string) {
 
   revalidatePath(sitePath(session.site, "/student/bookings"));
   revalidatePath(sitePath(session.site, "/professor/bookings"));
+}
+
+/**
+ * Superadmin-only: permanently deletes a confirmed booking (as opposed to
+ * cancelBooking, which just flips its status and keeps the row) and emails
+ * the student and professor that it was removed, CC'd to admins. Per the
+ * schema's cascade rules this also deletes the booking's attachments,
+ * reviews, and notification logs; any message thread tied to it keeps its
+ * messages but loses the booking reference.
+ */
+export async function deleteBooking(bookingId: string) {
+  const session = await requireRole("SUPERADMIN");
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { student: true, professor: true },
+  });
+  if (!booking || booking.professor.site !== session.site) return;
+  if (booking.status !== "CONFIRMED") return;
+
+  await prisma.booking.delete({ where: { id: bookingId } });
+
+  await sendBookingDeletedEmail(booking);
+
+  await logAudit({
+    site: session.site,
+    action: "BOOKING_DELETED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: bookingId,
+    detail: `${booking.student.name} with ${booking.professor.name} at ${booking.startAt.toISOString()}`,
+  });
+
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath("/superadmin/bookings");
 }
 
 async function monthlyReschedulesUsed(studentId: string, asOf: Date) {
