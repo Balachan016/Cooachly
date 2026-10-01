@@ -43,10 +43,7 @@ export default function Home() {
         <section className="mx-auto max-w-6xl px-6 py-10 sm:py-16">
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div>
-              <span className="inline-block rounded-full bg-brand-900 px-4 py-1 text-xs font-semibold tracking-wide text-accent-300">
-                GRADES 9 TO 12
-              </span>
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-5xl">
+              <h1 className="text-4xl font-bold tracking-tight text-brand-900 dark:text-brand-300 sm:text-5xl">
                 Expert guidance.
                 <br />
                 Better learning.
