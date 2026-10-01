@@ -83,8 +83,15 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
   const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
   const brandName = SITE_CONFIG[site].brandName;
 
+  const admins = await prisma.user.findMany({
+    where: { role: "ADMIN", isActive: true, site },
+    select: { email: true },
+  });
+  const adminEmails = admins.map((a) => a.email);
+
   const result = await sendEmail({
     to: email,
+    cc: adminEmails,
     subject: `Welcome to ${brandName} — create your login`,
     html: `
       <p>Hi ${name},</p>
