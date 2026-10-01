@@ -125,7 +125,8 @@ export default function Home() {
             </div>
           </div>
           <p className="mt-6 text-center text-sm text-black/50 dark:text-white/50">
-            …and more — every coach on Cooachly sets their own subjects, pricing, and availability.
+            …and more — Set your own subjects, pricing, and availability — with the flexibility to
+            learn on your terms.
           </p>
         </section>
 
