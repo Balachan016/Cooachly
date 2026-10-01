@@ -9,6 +9,7 @@ import { getAvailableSlots, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
+import { sendBookingConfirmation } from "@/lib/notifications/booking-confirmation";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 
@@ -56,8 +57,10 @@ export async function bookSlot(_state: unknown, formData: FormData) {
         paymentStatus: "UNPAID",
         priceCents: 0,
       },
+      include: { student: true, professor: true },
     });
     await provisionVideoRoomForBooking(booking);
+    await sendBookingConfirmation(booking);
     revalidatePath(sitePath(session.site, "/student/bookings"));
     revalidatePath(sitePath(session.site, "/professor/bookings"));
     redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
@@ -88,8 +91,10 @@ export async function bookSlot(_state: unknown, formData: FormData) {
         paymentStatus: "COVERED_BY_SUBSCRIPTION",
         priceCents,
       },
+      include: { student: true, professor: true },
     });
     await provisionVideoRoomForBooking(booking);
+    await sendBookingConfirmation(booking);
     revalidatePath(sitePath(session.site, "/student/bookings"));
     revalidatePath(sitePath(session.site, "/professor/bookings"));
     redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));
@@ -105,10 +110,12 @@ export async function bookSlot(_state: unknown, formData: FormData) {
       paymentStatus: "UNPAID",
       priceCents,
     },
+    include: { student: true, professor: true },
   });
 
   if (!isStripeConfigured) {
     await provisionVideoRoomForBooking(booking);
+    await sendBookingConfirmation(booking);
     revalidatePath(sitePath(session.site, "/student/bookings"));
     revalidatePath(sitePath(session.site, "/professor/bookings"));
     redirect(sitePath(session.site, `/student/bookings?booked=${booking.id}`));

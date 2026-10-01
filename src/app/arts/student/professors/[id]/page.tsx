@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
-import { getAvailableSlots, groupSlotsByLocalDay } from "@/lib/scheduling";
+import { getSlotsWithStatus, buildCalendarWeeks, BOOKING_WINDOW_DAYS } from "@/lib/scheduling";
 import { getProfessorRatingSummary } from "@/lib/reviews";
 import { Badge, Card } from "@/components/ui";
-import { BookingPicker } from "./booking-picker";
+import { BookingCalendar } from "@/components/booking-calendar";
 
 export default async function ProfessorDetailPage(props: PageProps<"/arts/student/professors/[id]">) {
   const { id } = await props.params;
@@ -21,11 +21,11 @@ export default async function ProfessorDetailPage(props: PageProps<"/arts/studen
   if (!professor || professor.site !== user.site) notFound();
 
   const [slots, rating] = await Promise.all([
-    getAvailableSlots(professor.id),
+    getSlotsWithStatus(professor.id),
     getProfessorRatingSummary(professor.id),
   ]);
 
-  const groups = groupSlotsByLocalDay(slots, user.timezone);
+  const weeks = buildCalendarWeeks(slots, user.timezone, BOOKING_WINDOW_DAYS);
 
   return (
     <div>
@@ -71,7 +71,7 @@ export default async function ProfessorDetailPage(props: PageProps<"/arts/studen
         <Card className="w-full lg:w-96">
           <h2 className="font-semibold">Book a class</h2>
           <div className="mt-4">
-            <BookingPicker professorId={professor.id} groups={groups} timezone={user.timezone} />
+            <BookingCalendar professorId={professor.id} weeks={weeks} timezone={user.timezone} bookLabel="Book class" />
           </div>
         </Card>
       </div>
