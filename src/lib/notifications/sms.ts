@@ -10,20 +10,29 @@ export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappF
 
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
 
-async function createMessage(to: string, payload: { body: string } | { contentSid: string; contentVariables: string }) {
+export type WhatsAppSendResult = { skipped: boolean; error?: string; from?: string; to: string };
+
+async function createMessage(
+  to: string,
+  payload: { body: string } | { contentSid: string; contentVariables: string }
+): Promise<WhatsAppSendResult> {
+  // Echoed back on every result so callers can log exactly which numbers it
+  // went from/to (without Twilio's "whatsapp:" channel prefix).
+  const addresses = { from: whatsappFrom?.replace(/^whatsapp:/, ""), to };
+
   if (!client || !whatsappFrom) {
     console.log(`[whatsapp:skipped, not configured] to=${to}`);
-    return { skipped: true as const };
+    return { skipped: true as const, ...addresses };
   }
 
   try {
     await client.messages.create({ from: whatsappFrom, to: `whatsapp:${to}`, ...payload });
-    return { skipped: false as const };
+    return { skipped: false as const, ...addresses };
   } catch (err) {
     const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
     const message = err instanceof Error ? err.message : String(err);
     console.error("Failed to send WhatsApp message", err);
-    return { skipped: false as const, error: `${message}${code}` };
+    return { skipped: false as const, error: `${message}${code}`, ...addresses };
   }
 }
 

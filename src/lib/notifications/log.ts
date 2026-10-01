@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { NotificationChannel } from "@prisma/client";
 
-type SendResult = { skipped: boolean; error?: string };
+type SendResult = { skipped: boolean; error?: string; from?: string; to?: string; cc?: string[] };
 
 export async function logNotification(opts: {
   bookingId?: string | null;
@@ -21,6 +21,9 @@ export async function logNotification(opts: {
       kind: opts.kind,
       status,
       error: opts.result.error ?? null,
+      sender: opts.result.from ?? null,
+      recipient: opts.result.to ?? null,
+      cc: opts.result.cc?.length ? opts.result.cc.join(", ") : null,
     },
   });
 }
