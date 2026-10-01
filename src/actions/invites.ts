@@ -11,6 +11,7 @@ import { createSession } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
 import { sendEmail } from "@/lib/notifications/email";
+import { sendWhatsApp } from "@/lib/notifications/sms";
 import { logAudit } from "@/lib/audit";
 import type { Site } from "@prisma/client";
 
@@ -94,6 +95,13 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
       <p>— ${brandName}</p>
     `,
   });
+
+  if (phone) {
+    await sendWhatsApp({
+      to: phone,
+      body: `Hi ${name}, you've been invited to create your ${brandName} account. Create your login here: ${inviteUrl} (link expires in 7 days).`,
+    });
+  }
 
   revalidatePath(sitePath(site, "/admin/users"));
 

@@ -212,6 +212,8 @@ model DemoRequest {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
+  booking            Booking?
+
   @@index([site, status])
   @@index([professorId])
 }
@@ -310,6 +312,8 @@ model Booking {
   status                 BookingStatus @default(PENDING)
   paymentStatus          PaymentStatus @default(UNPAID)
   isDemo                 Boolean       @default(false)
+  demoRequestId          String?       @unique
+  demoRequest            DemoRequest?  @relation(fields: [demoRequestId], references: [id], onDelete: SetNull)
   priceCents             Int
   currency               String        @default("usd")
   meetingLink            String?

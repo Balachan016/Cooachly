@@ -2,9 +2,12 @@ import "server-only";
 import type { DemoRequest, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "./email";
-import { SITE_CONFIG } from "@/lib/site";
+import { SITE_CONFIG, sitePath } from "@/lib/site";
 
-export async function sendDemoRequestScheduledEmail(demoRequest: DemoRequest & { professor: User | null }) {
+export async function sendDemoRequestScheduledEmail(
+  demoRequest: DemoRequest & { professor: User | null },
+  opts: { newAccountTempPassword?: string } = {}
+) {
   if (!isEmailConfigured || !demoRequest.professor || !demoRequest.scheduledAt) return;
 
   const brandName = SITE_CONFIG[demoRequest.site].brandName;
@@ -15,6 +18,17 @@ export async function sendDemoRequestScheduledEmail(demoRequest: DemoRequest & {
     ? `<p><a href="${demoRequest.meetingLink}">Join the call here</a></p>`
     : "";
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const loginLine = opts.newAccountTempPassword
+    ? `
+      <p>We've also set up your ${brandName} account so you can see this booking and message
+      ${demoRequest.professor.name} directly:</p>
+      <p><a href="${appUrl}${sitePath(demoRequest.site, "/login")}">${appUrl}${sitePath(demoRequest.site, "/login")}</a><br/>
+      Email: <strong>${demoRequest.email}</strong><br/>
+      Temporary password: <strong>${opts.newAccountTempPassword}</strong></p>
+    `
+    : "";
+
   await sendEmail({
     to: demoRequest.email,
     subject: `Your ${brandName} demo call is scheduled`,
@@ -23,6 +37,7 @@ export async function sendDemoRequestScheduledEmail(demoRequest: DemoRequest & {
       <p>Your demo call with <strong>${demoRequest.professor.name}</strong> is scheduled for
       <strong>${when}</strong>.</p>
       ${linkLine}
+      ${loginLine}
       <p>— ${brandName}</p>
     `,
   });

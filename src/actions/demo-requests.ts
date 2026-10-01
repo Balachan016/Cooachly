@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { generateTempPassword, hashPassword } from "@/lib/password";
+import { DEMO_SESSION_LENGTH_MINUTES } from "@/lib/booking-rules";
 import { sendDemoRequestScheduledEmail } from "@/lib/notifications/demo-requests";
 import { sitePath } from "@/lib/site";
 import type { DemoRequestStatus } from "@prisma/client";
@@ -44,13 +46,64 @@ export async function scheduleDemoCall(
   const professor = await prisma.user.findUnique({ where: { id: parsed.data.professorId, role: "PROFESSOR" } });
   if (!professor || professor.site !== session.site) return { message: "Professor not found." };
 
+  const meetingLink = parsed.data.meetingLink || null;
+  const endAt = new Date(scheduledAt.getTime() + DEMO_SESSION_LENGTH_MINUTES * 60_000);
+
+  // Scheduling a demo call also creates (or updates) a real Booking row for
+  // it, tagged isDemo, so it shows up in Bookings alongside paid sessions —
+  // rescheduling the same demo request updates that one booking instead of
+  // creating a duplicate.
+  const existingBooking = await prisma.booking.findUnique({ where: { demoRequestId: id } });
+  let newAccountTempPassword: string | undefined;
+
+  if (existingBooking) {
+    await prisma.booking.update({
+      where: { id: existingBooking.id },
+      data: { professorId: professor.id, startAt: scheduledAt, endAt, meetingLink },
+    });
+  } else {
+    let student = await prisma.user.findUnique({ where: { site_email: { site: session.site, email: demoRequest.email } } });
+    if (student && student.role !== "STUDENT") {
+      return { message: "This email already has a non-student account on this platform — please resolve manually." };
+    }
+    if (!student) {
+      newAccountTempPassword = generateTempPassword();
+      student = await prisma.user.create({
+        data: {
+          site: session.site,
+          name: demoRequest.name,
+          email: demoRequest.email,
+          phone: demoRequest.phone,
+          passwordHash: await hashPassword(newAccountTempPassword),
+          role: "STUDENT",
+          timezone: demoRequest.timezone || "UTC",
+        },
+      });
+    }
+
+    await prisma.booking.create({
+      data: {
+        studentId: student.id,
+        professorId: professor.id,
+        startAt: scheduledAt,
+        endAt,
+        status: "CONFIRMED",
+        paymentStatus: "UNPAID",
+        isDemo: true,
+        priceCents: 0,
+        meetingLink,
+        demoRequestId: id,
+      },
+    });
+  }
+
   const updated = await prisma.demoRequest.update({
     where: { id },
     data: {
       status: "SCHEDULED",
       professorId: professor.id,
       scheduledAt,
-      meetingLink: parsed.data.meetingLink || null,
+      meetingLink,
       adminNotes: parsed.data.adminNotes || null,
     },
     include: { professor: true },
@@ -65,9 +118,12 @@ export async function scheduleDemoCall(
     detail: `${updated.email} with ${professor.name} at ${scheduledAt.toISOString()}`,
   });
 
-  await sendDemoRequestScheduledEmail(updated);
+  await sendDemoRequestScheduledEmail(updated, { newAccountTempPassword });
 
   revalidatePath(sitePath(session.site, "/admin/demo-requests"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/student/bookings"));
   return { message: "Call scheduled.", success: true };
 }
 
