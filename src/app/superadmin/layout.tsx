@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 const navLinks = [
   { href: "/superadmin", label: "Overview" },
   { href: "/superadmin/admins", label: "Admins" },
+  { href: "/admin/users", label: "Users" },
   { href: "/superadmin/audit-log", label: "Audit log" },
   { href: "/superadmin/reminders", label: "Reminders" },
   { href: "/superadmin/bookings", label: "Bookings" },

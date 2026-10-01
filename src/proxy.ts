@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { decrypt, encrypt, sessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath } from "@/lib/site";
-import type { Site } from "@prisma/client";
+import type { Role, Site } from "@prisma/client";
 
 const SITES: Site[] = ["COOACHLY", "ARTS"];
 const ROLE_SEGMENTS = [
@@ -28,6 +28,14 @@ const CASE_REDIRECTS = [
 // and Arts), so it lives at a single unprefixed path rather than being
 // duplicated per site like /admin, /professor, /student are.
 const SUPERADMIN_PREFIX = "/superadmin";
+
+// A superadmin can do everything an admin can (see every ADMIN/SUPERADMIN
+// server action), so /admin/* should let them through too, not just an
+// exact ADMIN match.
+function canAccessRolePrefix(requiredRole: "ADMIN" | "PROFESSOR" | "STUDENT", actualRole: Role): boolean {
+  if (actualRole === requiredRole) return true;
+  return requiredRole === "ADMIN" && actualRole === "SUPERADMIN";
+}
 
 function siteOf(pathname: string): Site {
   return pathname === "/arts" || pathname.startsWith("/arts/") ? "ARTS" : "COOACHLY";
@@ -84,7 +92,7 @@ export async function proxy(req: NextRequest) {
     const loginUrl = new URL(sitePath(currentSite, "/login"), req.url);
     loginUrl.searchParams.set("next", pathname);
     response = NextResponse.redirect(loginUrl);
-  } else if (matchedRolePrefix && sessionForSite && matchedRolePrefix.role !== sessionForSite.role) {
+  } else if (matchedRolePrefix && sessionForSite && !canAccessRolePrefix(matchedRolePrefix.role, sessionForSite.role)) {
     response = NextResponse.redirect(new URL(roleHomePath(sessionForSite.role, sessionForSite.site), req.url));
   } else if (isAuthRoute && sessionForSite) {
     response = NextResponse.redirect(new URL(roleHomePath(sessionForSite.role, sessionForSite.site), req.url));

@@ -5,7 +5,7 @@ import { InviteUserForm } from "@/components/invite-user-form";
 import { UserRow } from "./user-row";
 
 export default async function AdminUsersPage() {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
   const users = await prisma.user.findMany({
     where: { site: session.site },
     orderBy: { createdAt: "desc" },
@@ -43,7 +43,7 @@ export default async function AdminUsersPage() {
           </thead>
           <tbody>
             {users.map((user) => (
-              <UserRow key={user.id} user={user} />
+              <UserRow key={user.id} user={user} viewerRole={session.role} />
             ))}
           </tbody>
         </table>
