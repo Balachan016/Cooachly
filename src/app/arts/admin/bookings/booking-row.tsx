@@ -54,6 +54,7 @@ export function AdminBookingRow({
               {booking.status}
             </Badge>
             <Badge>Pay guru directly</Badge>
+            {booking.isDemo && <Badge tone="default">Free demo</Badge>}
           </div>
         </td>
         <td className="px-4 py-3">

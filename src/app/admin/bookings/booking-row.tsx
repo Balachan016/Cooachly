@@ -55,6 +55,7 @@ export function AdminBookingRow({
               {booking.status}
             </Badge>
             <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
+            {booking.isDemo && <Badge tone="default">Free demo</Badge>}
           </div>
         </td>
         <td className="whitespace-nowrap px-4 py-3 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
