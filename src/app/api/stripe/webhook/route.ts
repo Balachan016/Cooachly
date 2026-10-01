@@ -28,22 +28,30 @@ export async function POST(request: Request) {
       const type = checkoutSession.metadata?.type;
 
       if (type === "booking") {
-        const bookingId = checkoutSession.metadata?.bookingId;
-        if (bookingId) {
-          const booking = await prisma.booking.update({
-            where: { id: bookingId },
-            data: {
-              status: "CONFIRMED",
-              paymentStatus: "PAID",
-              stripePaymentIntentId:
-                typeof checkoutSession.payment_intent === "string"
-                  ? checkoutSession.payment_intent
-                  : checkoutSession.payment_intent?.id,
-            },
+        // bookingIds (plural) covers the current multi-slot checkout; bookingId
+        // (singular) is kept for any single-booking checkout session created
+        // before this field was introduced.
+        const bookingIdsRaw = checkoutSession.metadata?.bookingIds ?? checkoutSession.metadata?.bookingId;
+        const bookingIds = bookingIdsRaw ? bookingIdsRaw.split(",").filter(Boolean) : [];
+        if (bookingIds.length > 0) {
+          const paymentIntentId =
+            typeof checkoutSession.payment_intent === "string"
+              ? checkoutSession.payment_intent
+              : checkoutSession.payment_intent?.id;
+
+          await prisma.booking.updateMany({
+            where: { id: { in: bookingIds } },
+            data: { status: "CONFIRMED", paymentStatus: "PAID", stripePaymentIntentId: paymentIntentId },
+          });
+
+          const bookings = await prisma.booking.findMany({
+            where: { id: { in: bookingIds } },
             include: { student: true, professor: true },
           });
-          await provisionVideoRoomForBooking(booking);
-          await sendBookingConfirmation(booking);
+          for (const booking of bookings) {
+            await provisionVideoRoomForBooking(booking);
+          }
+          await sendBookingConfirmation(bookings);
         }
       }
 
