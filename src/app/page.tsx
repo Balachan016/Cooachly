@@ -143,7 +143,7 @@ export default function Home() {
             />
             <Feature
               title="AI session summaries"
-              description="Sessions can be recorded and automatically summarized by AI, with the recap emailed to both student and professor afterward."
+              description="Sessions can be recorded and automatically summarized by AI, with the recap emailed to the student."
             />
             <Feature
               title="Built-in video calls"
