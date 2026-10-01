@@ -10,14 +10,17 @@ export type AvailableSlot = {
   startAt: Date;
   endAt: Date;
   sessionLengthMinutes: number;
+  booked: boolean;
 };
 
 /**
  * Expands a professor's recurring weekly availability into concrete UTC
- * slots over the next BOOKING_WINDOW_DAYS days, excluding slots that
- * overlap an existing non-cancelled booking.
+ * slots over the next BOOKING_WINDOW_DAYS days. Unlike getAvailableSlots,
+ * this keeps slots that overlap an existing booking (tagged `booked: true`)
+ * instead of dropping them, so a calendar UI can still show — and disable —
+ * a time another student already took.
  */
-export async function getAvailableSlots(
+export async function getSlotsWithStatus(
   professorId: string,
   opts: { sessionLengthOverride?: number } = {}
 ): Promise<AvailableSlot[]> {
@@ -58,12 +61,8 @@ export async function getAvailableSlots(
 
         if (isBefore(slotStart, now)) continue;
 
-        const overlaps = bookings.some(
-          (b) => isBefore(slotStart, b.endAt) && isBefore(b.startAt, slotEnd)
-        );
-        if (overlaps) continue;
-
-        slots.push({ startAt: slotStart, endAt: slotEnd, sessionLengthMinutes: length });
+        const booked = bookings.some((b) => isBefore(slotStart, b.endAt) && isBefore(b.startAt, slotEnd));
+        slots.push({ startAt: slotStart, endAt: slotEnd, sessionLengthMinutes: length, booked });
       }
     }
   }
@@ -72,32 +71,78 @@ export async function getAvailableSlots(
   return slots;
 }
 
-export function groupSlotsByLocalDay(slots: AvailableSlot[], timezone: string) {
-  const dayFormatter = new Intl.DateTimeFormat("en-US", {
+/** Only the slots a student could actually book right now. */
+export async function getAvailableSlots(
+  professorId: string,
+  opts: { sessionLengthOverride?: number } = {}
+): Promise<AvailableSlot[]> {
+  const slots = await getSlotsWithStatus(professorId, opts);
+  return slots.filter((s) => !s.booked);
+}
+
+export type CalendarSlot = { startAt: string; label: string; booked: boolean };
+export type CalendarDay = {
+  dateKey: string;
+  dayNumber: number;
+  monthLabel: string;
+  weekdayIndex: number;
+  slots: CalendarSlot[];
+};
+
+const WEEKDAY_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * Lays out the booking window as calendar weeks (Sun–Sat rows), padded with
+ * null cells so the grid aligns, for a visual month/week-style picker.
+ */
+export function buildCalendarWeeks(slots: AvailableSlot[], timezone: string, windowDays: number): (CalendarDay | null)[][] {
+  const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const timeFormatter = new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit" });
+  const partsFormatter = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     weekday: "long",
-    month: "short",
     day: "numeric",
-  });
-  const timeFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    hour: "numeric",
-    minute: "2-digit",
+    month: "short",
   });
 
-  const groups = new Map<string, { startAt: string; label: string; sessionLengthMinutes: number }[]>();
+  const slotsByDate = new Map<string, CalendarSlot[]>();
   for (const slot of slots) {
-    const dayLabel = dayFormatter.format(slot.startAt);
-    const list = groups.get(dayLabel) ?? [];
+    const dateKey = dateKeyFormatter.format(slot.startAt);
+    const list = slotsByDate.get(dateKey) ?? [];
     list.push({
       startAt: slot.startAt.toISOString(),
-      label: `${timeFormatter.format(slot.startAt)} (${slot.sessionLengthMinutes} min)`,
-      sessionLengthMinutes: slot.sessionLengthMinutes,
+      label: `${timeFormatter.format(slot.startAt)} – ${timeFormatter.format(slot.endAt)}`,
+      booked: slot.booked,
     });
-    groups.set(dayLabel, list);
+    slotsByDate.set(dateKey, list);
   }
 
-  return Array.from(groups.entries()).map(([day, times]) => ({ day, times }));
+  const now = new Date();
+  const days: CalendarDay[] = [];
+  for (let i = 0; i < windowDays; i++) {
+    const candidate = addDays(now, i);
+    const dateKey = dateKeyFormatter.format(candidate);
+    const parts = partsFormatter.formatToParts(candidate);
+    const weekday = parts.find((p) => p.type === "weekday")?.value ?? "Sunday";
+    const dayNumber = Number(parts.find((p) => p.type === "day")?.value ?? "1");
+    const monthLabel = parts.find((p) => p.type === "month")?.value ?? "";
+
+    days.push({
+      dateKey,
+      dayNumber,
+      monthLabel,
+      weekdayIndex: WEEKDAY_ORDER.indexOf(weekday),
+      slots: (slotsByDate.get(dateKey) ?? []).sort((a, b) => a.startAt.localeCompare(b.startAt)),
+    });
+  }
+
+  const leadingBlanks = days.length ? days[0].weekdayIndex : 0;
+  const padded: (CalendarDay | null)[] = [...Array(leadingBlanks).fill(null), ...days];
+  while (padded.length % 7 !== 0) padded.push(null);
+
+  const weeks: (CalendarDay | null)[][] = [];
+  for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7));
+  return weeks;
 }
 
 function formatDateOnly(date: Date): string {

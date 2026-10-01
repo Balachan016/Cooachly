@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { provisionVideoRoomForBooking } from "@/lib/daily";
+import { sendBookingConfirmation } from "@/lib/notifications/booking-confirmation";
 
 export async function POST(request: Request) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -39,8 +40,10 @@ export async function POST(request: Request) {
                   ? checkoutSession.payment_intent
                   : checkoutSession.payment_intent?.id,
             },
+            include: { student: true, professor: true },
           });
           await provisionVideoRoomForBooking(booking);
+          await sendBookingConfirmation(booking);
         }
       }
 

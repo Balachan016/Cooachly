@@ -8,7 +8,7 @@ export const isEmailConfigured = Boolean(apiKey);
 
 const resend = apiKey ? new Resend(apiKey) : null;
 
-export async function sendEmail(opts: { to: string; subject: string; html: string }) {
+export async function sendEmail(opts: { to: string; subject: string; html: string; cc?: string[] }) {
   if (!resend) {
     console.log(`[email:skipped, not configured] to=${opts.to} subject="${opts.subject}"`);
     return { skipped: true as const };
@@ -18,6 +18,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
     const result = await resend.emails.send({
       from: fromAddress,
       to: opts.to,
+      cc: opts.cc?.length ? opts.cc : undefined,
       subject: opts.subject,
       html: opts.html,
     });

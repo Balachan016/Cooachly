@@ -62,9 +62,6 @@ export default function Home() {
                   <Button className="px-6 py-3 text-base">Book a free 30-min demo</Button>
                 </Link>
               </div>
-              <p className="mt-3 text-sm text-black/50 dark:text-white/50">
-                No payment required for your first session.
-              </p>
             </div>
             <HeroIllustration className="w-full max-w-lg justify-self-center" />
           </div>
