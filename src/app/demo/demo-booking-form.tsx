@@ -33,6 +33,10 @@ export function DemoBookingForm({ site }: { site: Site }) {
         <Input id="name" name="name" required />
       </div>
       <div>
+        <Label htmlFor="grade">Grade</Label>
+        <Input id="grade" name="grade" placeholder="e.g. 10th grade" required />
+      </div>
+      <div>
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" required />
       </div>

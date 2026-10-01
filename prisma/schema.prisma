@@ -199,6 +199,7 @@ model DemoRequest {
   email              String
   phone              String?
   subject            String
+  grade              String?
   timezone           String?
   status             DemoRequestStatus @default(PENDING)
   professorId        String?

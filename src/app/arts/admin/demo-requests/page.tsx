@@ -66,7 +66,10 @@ export default async function AdminDemoRequestsPage() {
                 {r.phone ? ` · ${r.phone}` : ""}
                 {r.timezone ? ` · ${r.timezone}` : ""}
               </div>
-              <div className="mt-1 text-sm text-black/70 dark:text-white/70">Subject: {r.subject}</div>
+              <div className="mt-1 text-sm text-black/70 dark:text-white/70">
+                Subject: {r.subject}
+                {r.grade ? ` · Grade: ${r.grade}` : ""}
+              </div>
               {r.scheduledAt && (
                 <div className="mt-1 text-sm text-black/70 dark:text-white/70">
                   Call scheduled with {r.professor?.name ?? "—"} for{" "}
