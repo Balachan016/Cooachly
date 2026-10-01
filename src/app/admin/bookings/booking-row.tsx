@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Attachment, Booking, NotificationLog, User } from "@prisma/client";
-import { extendBooking } from "@/actions/bookings";
+import type { Attachment, Booking, NotificationLog, Role, User } from "@prisma/client";
+import { extendBooking, deleteBooking } from "@/actions/bookings";
 import { sendManualReminder } from "@/actions/reminders";
 import { isPastDate } from "@/lib/time";
 import { Badge, Button } from "@/components/ui";
@@ -20,6 +20,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export function AdminBookingRow({
   booking,
+  viewerRole,
 }: {
   booking: Booking & {
     student: User;
@@ -27,14 +28,26 @@ export function AdminBookingRow({
     attachments: Attachment[];
     notificationLogs: NotificationLog[];
   };
+  viewerRole: Role;
 }) {
   const [isPending, startTransition] = useTransition();
   const [showDetails, setShowDetails] = useState(false);
   const isPast = isPastDate(booking.endAt);
   const canExtend = booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
   const canRemind = booking.status !== "CANCELLED";
+  const canDelete = viewerRole === "SUPERADMIN" && booking.status === "CONFIRMED";
 
   const failedCount = booking.notificationLogs.filter((l) => l.status === "FAILED").length;
+
+  function handleDelete() {
+    const confirmed = window.confirm(
+      `Permanently delete this confirmed session (${booking.student.name} with ${booking.professor.name})? This also deletes its attachments, reviews, and reminder logs, and emails both of them (CC'd to admins) that it was removed. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    startTransition(() => {
+      void deleteBooking(booking.id);
+    });
+  }
 
   return (
     <>
@@ -60,18 +73,25 @@ export function AdminBookingRow({
         </td>
         <td className="whitespace-nowrap px-4 py-3 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
         <td className="px-4 py-3">
-          <button
-            type="button"
-            onClick={() => setShowDetails((v) => !v)}
-            className="whitespace-nowrap text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
-          >
-            {showDetails ? "Hide details" : "Details"}
-            {failedCount > 0 && (
-              <span className="ml-1.5 inline-block rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                {failedCount} failed
-              </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowDetails((v) => !v)}
+              className="whitespace-nowrap text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
+            >
+              {showDetails ? "Hide details" : "Details"}
+              {failedCount > 0 && (
+                <span className="ml-1.5 inline-block rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                  {failedCount} failed
+                </span>
+              )}
+            </button>
+            {canDelete && (
+              <Button variant="danger" disabled={isPending} onClick={handleDelete}>
+                Delete
+              </Button>
             )}
-          </button>
+          </div>
         </td>
       </tr>
       {showDetails && (

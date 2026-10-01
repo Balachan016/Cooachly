@@ -8,7 +8,7 @@ import { AdminBookingRow } from "./booking-row";
 import { InstantCallForm } from "./instant-call-form";
 
 export default async function AdminBookingsPage(props: PageProps<"/admin/bookings">) {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
   const searchParams = await props.searchParams;
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
@@ -123,7 +123,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
           </thead>
           <tbody>
             {bookings.map((b) => (
-              <AdminBookingRow key={b.id} booking={b} />
+              <AdminBookingRow key={b.id} booking={b} viewerRole={session.role} />
             ))}
             {bookings.length === 0 && (
               <tr>
