@@ -34,7 +34,9 @@ export async function sendDemoRequestScheduledEmail(demoRequest: DemoRequest & {
       <p>Hi ${demoRequest.professor.name},</p>
       <p>A demo call with <strong>${demoRequest.name}</strong> (${demoRequest.email}${
         demoRequest.phone ? `, ${demoRequest.phone}` : ""
-      }) about <strong>${demoRequest.subject}</strong> is scheduled for <strong>${when}</strong>.</p>
+      }) about <strong>${demoRequest.subject}</strong>${
+        demoRequest.grade ? ` (Grade: ${demoRequest.grade})` : ""
+      } is scheduled for <strong>${when}</strong>.</p>
       ${linkLine}
       <p>— ${brandName}</p>
     `,
@@ -71,7 +73,8 @@ export async function sendDemoRequestReminder(demoRequest: DemoRequest) {
         to: admin.email,
         subject: `Reminder: ${demoRequest.name}'s demo request is unresolved`,
         html: `
-          <p>The demo request from <strong>${demoRequest.name}</strong> (${demoRequest.email}) is
+          <p>The demo request from <strong>${demoRequest.name}</strong> (${demoRequest.email}) for
+          <strong>${demoRequest.subject}</strong>${demoRequest.grade ? ` (Grade: ${demoRequest.grade})` : ""} is
           ${statusPhrase} and still awaiting a final outcome (joining or dropped). Please follow up.</p>
         `,
       })
