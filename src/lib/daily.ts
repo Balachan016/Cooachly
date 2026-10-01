@@ -33,30 +33,38 @@ export async function createDailyRoomForBooking(opts: {
   const nbf = Math.floor(opts.startAt.getTime() / 1000) - 15 * 60; // joinable 15 min early
   const exp = Math.floor(opts.endAt.getTime() / 1000) + 2 * 60 * 60; // stays open 2h after for wrap-up
 
-  const res = await fetch(`${DAILY_API_BASE}/rooms`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: `cooachly-${opts.bookingId}`,
-      privacy: "public",
-      properties: {
-        ...(isTranscriptionEnabled ? { enable_transcription_storage: true } : {}),
-        nbf,
-        exp,
+  try {
+    const res = await fetch(`${DAILY_API_BASE}/rooms`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        name: `cooachly-${opts.bookingId}`,
+        privacy: "public",
+        properties: {
+          ...(isTranscriptionEnabled ? { enable_transcription_storage: true } : {}),
+          nbf,
+          exp,
+        },
+      }),
+    });
 
-  if (!res.ok) {
-    console.error("Failed to create Daily room", await res.text());
+    if (!res.ok) {
+      console.error("Failed to create Daily room", await res.text());
+      return null;
+    }
+
+    const data = (await res.json()) as { name: string; url: string };
+    return { name: data.name, url: data.url };
+  } catch (err) {
+    // A network-level failure reaching Daily's API shouldn't crash whatever
+    // booking flow is waiting on this (the booking itself is still valid
+    // without a video room yet).
+    console.error("Failed to reach Daily API to create room", err);
     return null;
   }
-
-  const data = (await res.json()) as { name: string; url: string };
-  return { name: data.name, url: data.url };
 }
 
 /**
@@ -92,20 +100,25 @@ export async function provisionVideoRoomForBooking(booking: {
 export async function updateDailyRoomExpiry(roomName: string, newExp: number): Promise<boolean> {
   if (!apiKey) return false;
 
-  const res = await fetch(`${DAILY_API_BASE}/rooms/${roomName}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties: { exp: newExp } }),
-  });
+  try {
+    const res = await fetch(`${DAILY_API_BASE}/rooms/${roomName}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ properties: { exp: newExp } }),
+    });
 
-  if (!res.ok) {
-    console.error("Failed to update Daily room expiry", await res.text());
+    if (!res.ok) {
+      console.error("Failed to update Daily room expiry", await res.text());
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to reach Daily API to update room expiry", err);
     return false;
   }
-  return true;
 }
 
 /**
@@ -116,36 +129,46 @@ export async function updateDailyRoomExpiry(roomName: string, newExp: number): P
 export async function startTranscription(roomName: string): Promise<boolean> {
   if (!apiKey) return false;
 
-  const res = await fetch(`${DAILY_API_BASE}/rooms/${roomName}/transcription/start`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ language: "en" }),
-  });
+  try {
+    const res = await fetch(`${DAILY_API_BASE}/rooms/${roomName}/transcription/start`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ language: "en" }),
+    });
 
-  if (!res.ok) {
-    console.error("Failed to start Daily transcription", await res.text());
+    if (!res.ok) {
+      console.error("Failed to start Daily transcription", await res.text());
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to reach Daily API to start transcription", err);
     return false;
   }
-  return true;
 }
 
 export async function getTranscriptDownloadLink(transcriptId: string): Promise<string | null> {
   if (!apiKey) return null;
 
-  const res = await fetch(`${DAILY_API_BASE}/transcript/${transcriptId}/access-link`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
+  try {
+    const res = await fetch(`${DAILY_API_BASE}/transcript/${transcriptId}/access-link`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
 
-  if (!res.ok) {
-    console.error("Failed to fetch Daily transcript access link", await res.text());
+    if (!res.ok) {
+      console.error("Failed to fetch Daily transcript access link", await res.text());
+      return null;
+    }
+
+    const data = (await res.json()) as { download_link: string };
+    return data.download_link;
+  } catch (err) {
+    console.error("Failed to reach Daily API to fetch transcript link", err);
     return null;
   }
-
-  const data = (await res.json()) as { download_link: string };
-  return data.download_link;
 }
 
 /**

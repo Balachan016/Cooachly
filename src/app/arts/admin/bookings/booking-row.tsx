@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Attachment, Booking, NotificationLog, Role, User } from "@prisma/client";
-import { extendBooking, deleteBooking } from "@/actions/bookings";
+import { extendBooking, deleteBooking, markBookingCompleted } from "@/actions/bookings";
 import { sendManualReminder } from "@/actions/reminders";
 import { isPastDate } from "@/lib/time";
 import { Badge, Button } from "@/components/ui";
@@ -95,7 +95,7 @@ export function AdminBookingRow({
       {showDetails && (
         <tr className="border-b border-black/5 bg-black/[0.02] last:border-0 dark:border-white/5 dark:bg-white/[0.03]">
           <td colSpan={5} className="px-4 py-4">
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
               <div>
                 <div className="text-xs font-semibold uppercase text-black/40 dark:text-white/40">Video call</div>
                 {booking.meetingLink && booking.status !== "CANCELLED" && !isPast ? (
@@ -162,6 +162,22 @@ export function AdminBookingRow({
                     canUploadAnswer={false}
                   />
                 </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold uppercase text-black/40 dark:text-white/40">Completion</div>
+                {canExtend ? (
+                  <Button
+                    variant="secondary"
+                    className="mt-1"
+                    disabled={isPending}
+                    onClick={() => startTransition(() => markBookingCompleted(booking.id))}
+                  >
+                    Mark complete
+                  </Button>
+                ) : (
+                  <p className="mt-1 text-sm text-black/40 dark:text-white/40">—</p>
+                )}
               </div>
             </div>
 
