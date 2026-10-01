@@ -125,7 +125,8 @@ export default function Home() {
             </div>
           </div>
           <p className="mt-6 text-center text-sm text-black/50 dark:text-white/50">
-            …and more — every coach on Cooachly sets their own subjects, pricing, and availability.
+            …and more — Set your own subjects, pricing, and availability — with the flexibility to
+            learn on your terms.
           </p>
         </section>
 
@@ -142,7 +143,7 @@ export default function Home() {
             />
             <Feature
               title="AI session summaries"
-              description="Sessions can be recorded and automatically summarized by AI, with the recap emailed to both student and professor afterward."
+              description="Sessions can be recorded and automatically summarized by AI, with the recap emailed to the student."
             />
             <Feature
               title="Built-in video calls"
@@ -181,7 +182,7 @@ export default function Home() {
               Together, let&apos;s learn and grow.
             </h2>
             <p className="mt-2 text-black/60 dark:text-white/60">
-              Join Cooachly today and book your first session.
+              Join Cooachly today and book your demo session.
             </p>
             <div className="mt-6">
               <Link href="/demo">
