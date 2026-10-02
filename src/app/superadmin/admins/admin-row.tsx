@@ -2,15 +2,28 @@
 
 import { useActionState, useState, useTransition } from "react";
 import type { User } from "@prisma/client";
-import { setUserActive, adminResetPassword } from "@/actions/admin";
+import { setUserActive, adminResetPassword, changeAdminEmail, deleteUserAccount } from "@/actions/admin";
 import { Badge, Button, Input } from "@/components/ui";
 
 export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId: string }) {
   const [isPending, startTransition] = useTransition();
   const [showReset, setShowReset] = useState(false);
+  const [showEmail, setShowEmail] = useState(false);
   const resetAction = adminResetPassword.bind(null, admin.id);
   const [resetState, resetFormAction, resetPending] = useActionState(resetAction, undefined);
+  const emailAction = changeAdminEmail.bind(null, admin.id);
+  const [emailState, emailFormAction, emailPending] = useActionState(emailAction, undefined);
   const isSelf = admin.id === currentUserId;
+
+  function handleDelete() {
+    const confirmed = window.confirm(
+      `Permanently delete ${admin.name}'s (${admin.email}) ${admin.role === "SUPERADMIN" ? "superadmin" : "admin"} account? This also deletes every booking, message, review, and subscription they're party to. This cannot be undone.`
+    );
+    if (!confirmed) return;
+    startTransition(() => {
+      void deleteUserAccount(admin.id);
+    });
+  }
 
   return (
     <>
@@ -33,22 +46,54 @@ export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId:
           {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(admin.createdAt)}
         </td>
         <td className="px-4 py-3">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => setShowReset((v) => !v)}>
               {showReset ? "Cancel" : "Reset password"}
             </Button>
+            <Button variant="secondary" onClick={() => setShowEmail((v) => !v)}>
+              {showEmail ? "Cancel" : "Change email"}
+            </Button>
             {admin.role !== "SUPERADMIN" && !isSelf && (
-              <Button
-                variant={admin.isActive ? "danger" : "secondary"}
-                disabled={isPending}
-                onClick={() => startTransition(() => setUserActive(admin.id, !admin.isActive))}
-              >
-                {admin.isActive ? "Disable" : "Enable"}
-              </Button>
+              <>
+                <Button
+                  variant={admin.isActive ? "danger" : "secondary"}
+                  disabled={isPending}
+                  onClick={() => startTransition(() => setUserActive(admin.id, !admin.isActive))}
+                >
+                  {admin.isActive ? "Disable" : "Enable"}
+                </Button>
+                <Button variant="danger" disabled={isPending} onClick={handleDelete}>
+                  Delete
+                </Button>
+              </>
             )}
           </div>
         </td>
       </tr>
+      {showEmail && (
+        <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
+          <td colSpan={7} className="bg-black/[0.02] px-4 py-3 dark:bg-white/[0.02]">
+            <form action={emailFormAction} className="flex flex-wrap items-end gap-3">
+              <div className="w-64">
+                <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+                  New email for {admin.name}
+                </label>
+                <Input name="email" type="email" required defaultValue={admin.email} />
+              </div>
+              <Button type="submit" variant="secondary" disabled={emailPending}>
+                {emailPending ? "Saving…" : "Save email"}
+              </Button>
+              {emailState?.message && (
+                <p
+                  className={`text-sm ${emailState.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}
+                >
+                  {emailState.message}
+                </p>
+              )}
+            </form>
+          </td>
+        </tr>
+      )}
       {showReset && (
         <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
           <td colSpan={7} className="bg-black/[0.02] px-4 py-3 dark:bg-white/[0.02]">
