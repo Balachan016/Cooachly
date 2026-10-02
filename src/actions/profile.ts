@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole, requireSession } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
+import { OptionalPhoneSchema } from "@/lib/phone";
 
 const ProfessorProfileSchema = z.object({
   headline: z.string().trim().max(120).default(""),
@@ -61,7 +62,7 @@ export async function updateProfessorProfile(_state: unknown, formData: FormData
 
 const ContactInfoSchema = z.object({
   timezone: z.string().min(1),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
 });
 
 export async function updateContactInfo(_state: unknown, formData: FormData) {

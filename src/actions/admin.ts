@@ -12,6 +12,7 @@ import { logAudit } from "@/lib/audit";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
 import { sitePath, SITE_CONFIG, DEFAULT_SITE } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
+import { OptionalPhoneSchema } from "@/lib/phone";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role, Site } from "@prisma/client";
 
@@ -102,9 +103,9 @@ export async function deleteUserAccount(userId: string): Promise<DeleteUserState
 const UserDetailsSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters."),
   email: z.string().trim().email("Please enter a valid email."),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
   parentName: z.string().trim().optional(),
-  parentPhone: z.string().trim().optional(),
+  parentPhone: OptionalPhoneSchema,
   timezone: z.string().min(1),
   headline: z.string().trim().max(120).optional(),
   bio: z.string().trim().max(2000).optional(),
@@ -197,7 +198,7 @@ export async function updateUserDetailsAsAdmin(userId: string, _state: unknown, 
 const CreateAdminAccountSchema = z.object({
   name: z.string().trim().min(2, "Please enter a name."),
   email: z.string().trim().email("Please enter a valid email."),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
   site: z.enum(["COOACHLY", "ARTS"]),
 });
 

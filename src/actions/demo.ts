@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
 import { DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
+import { OptionalPhoneSchema } from "@/lib/phone";
 import type { Site } from "@prisma/client";
 
 export type DemoRequestFormState = { message?: string; success?: true } | undefined;
@@ -12,7 +13,7 @@ export type DemoRequestFormState = { message?: string; success?: true } | undefi
 const DemoRequestSchema = z.object({
   name: z.string().trim().min(2, "Please enter your name."),
   email: z.string().trim().email("Please enter a valid email."),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
   timezone: z.string().min(1),
   subject: z.string().trim().min(2, "Please tell us what you'd like a demo for."),
   grade: z.string().trim().optional(),

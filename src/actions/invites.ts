@@ -14,6 +14,7 @@ import { getAppUrl } from "@/lib/url";
 import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
 import { logAudit } from "@/lib/audit";
+import { OptionalPhoneSchema } from "@/lib/phone";
 import type { Site } from "@prisma/client";
 
 const INVITE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -28,7 +29,7 @@ const SendInviteSchema = z.object({
   name: z.string().trim().min(2, "Please enter a name."),
   email: z.string().trim().email("Please enter a valid email."),
   role: z.enum(["STUDENT", "PROFESSOR"]),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
   message: z.string().trim().max(1000).optional(),
 });
 
@@ -132,7 +133,7 @@ export type RedeemInviteState = { message?: string } | undefined;
 
 const RedeemInviteSchema = z
   .object({
-    phone: z.string().trim().optional(),
+    phone: OptionalPhoneSchema,
     timezone: z.string().min(1, "Please select your timezone."),
     password: z.string().min(8, "Password must be at least 8 characters."),
     confirmPassword: z.string().min(1, "Please confirm your password."),

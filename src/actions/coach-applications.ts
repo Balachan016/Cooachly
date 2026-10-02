@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { logAudit } from "@/lib/audit";
+import { OptionalPhoneSchema } from "@/lib/phone";
 import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import type { CoachApplicationStatus, Site } from "@prisma/client";
 
@@ -14,7 +15,7 @@ export type CoachApplicationFormState = { message?: string; success?: true } | u
 const CoachApplicationSchema = z.object({
   name: z.string().trim().min(2, "Please enter your name."),
   email: z.string().trim().email("Please enter a valid email."),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
   subject: z.string().trim().min(2, "Please enter the subject(s) you teach."),
   curricula: z.array(z.string().trim().min(1)).default([]),
   yearsExperience: z.union([z.coerce.number().int().min(0).max(80), z.nan()]).optional(),
