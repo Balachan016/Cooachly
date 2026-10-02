@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { NotificationAddresses } from "@/components/notification-addresses";
+import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 import { Badge, Card, Select } from "@/components/ui";
 
 export default async function SuperadminRemindersPage(props: PageProps<"/superadmin/reminders">) {
@@ -55,6 +55,7 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
               <span className="font-medium">{log.kind}</span>
               <span className="text-black/50 dark:text-white/50">{log.channel}</span>
               <NotificationAddresses log={log} />
+              <DeliveryStatusBadge log={log} />
               <span className="text-black/60 dark:text-white/60">
                 {log.user ? `${log.user.name} (${log.user.email})` : "—"}
               </span>
