@@ -8,6 +8,7 @@ import { logNotification } from "./log";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
 
 const BOOKINGS_PATH: Record<User["role"], string> = {
+  SUPERADMIN: "/superadmin/bookings",
   ADMIN: "/admin/bookings",
   PROFESSOR: "/professor/bookings",
   STUDENT: "/student/bookings",
@@ -79,7 +80,7 @@ async function notifyPerson(
   // Push goes to every device the person enabled notifications on (installed
   // app or browser). Right before the session, tapping it opens the call.
   const pushResult = await sendPushToUser(person.id, {
-    title: kind === "manual" ? `Upcoming ${brandName} session` : `Session starts ${RELATIVE_LABEL[kind]}`,
+    title: kind === "manual" ? `Upcoming ${brandName} session` : `Session starts ${LABEL[kind]}`,
     body: `With ${info.peerName} — ${info.when}`,
     url: kind === "5m" && info.joinLink ? info.joinLink : sitePath(person.site, BOOKINGS_PATH[person.role]),
     tag: `booking-${bookingId}`,

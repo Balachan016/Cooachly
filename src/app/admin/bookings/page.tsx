@@ -52,10 +52,20 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Bookings</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        {hasFilters ? "Sessions matching your filters." : "The most recent 100 sessions booked across the platform."}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Bookings</h1>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            {hasFilters ? "Sessions matching your filters." : "The most recent 100 sessions booked across the platform."}
+          </p>
+        </div>
+        <a
+          href={sitePath(session.site, "/admin/bookings/import")}
+          className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          Import schedule
+        </a>
+      </div>
 
       <Card className="mt-6">
         <h2 className="font-semibold">Start an instant call</h2>
