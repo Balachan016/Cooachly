@@ -40,10 +40,20 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Bookings</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        {hasFilters ? "Classes matching your filters." : "The most recent 100 classes booked across the platform."} Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Bookings</h1>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            {hasFilters ? "Classes matching your filters." : "The most recent 100 classes booked across the platform."} Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
+          </p>
+        </div>
+        <a
+          href={sitePath(session.site, "/admin/bookings/import")}
+          className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          Import schedule
+        </a>
+      </div>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <div className="w-56">
