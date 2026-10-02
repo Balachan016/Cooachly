@@ -1,8 +1,8 @@
 import "server-only";
 import type { Booking, User } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "./email";
 import { logNotification } from "./log";
+import { getAdminCcEmails } from "./admin-recipients";
 import { SITE_CONFIG } from "@/lib/site";
 
 type BookingWithParties = Booking & { student: User; professor: User };
@@ -20,21 +20,12 @@ function sessionListHtml(bookings: BookingWithParties[]) {
     .join("")}</ul>`;
 }
 
-async function getAdminEmails(site: BookingWithParties["professor"]["site"]) {
-  const admins = await prisma.user.findMany({
-    where: { role: "ADMIN", isActive: true, site },
-    select: { email: true },
-  });
-  return admins.map((a) => a.email);
-}
-
 /**
  * Sent once one or more bookings for the same student/professor pair are
  * actually confirmed (immediately for free/subscription/no-Stripe bookings,
  * or from the Stripe webhook once payment clears). Both the student and
  * professor get one email covering every session confirmed in that pass,
- * each CC'd to every active admin on that site so admins see every booking
- * as it happens.
+ * each CC'd via getAdminCcEmails() so admins see every booking as it happens.
  */
 export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   if (!isEmailConfigured || bookings.length === 0) return;
@@ -46,7 +37,7 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   const verb = sorted.length === 1 ? "is" : "are";
   const listHtml = sessionListHtml(sorted);
 
-  const adminEmails = await getAdminEmails(first.professor.site);
+  const adminEmails = getAdminCcEmails();
 
   const studentResult = await sendEmail({
     to: first.student.email,
@@ -93,8 +84,8 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 
 /**
  * Sent when a student reschedules a booking to a new time. Both the student
- * and professor get an email showing the old and new time, each CC'd to
- * every active admin on that site, same as a fresh booking confirmation.
+ * and professor get an email showing the old and new time, each CC'd via
+ * getAdminCcEmails(), same as a fresh booking confirmation.
  */
 export async function sendBookingRescheduledEmail(booking: BookingWithParties, previousStartAt: Date) {
   if (!isEmailConfigured) return;
@@ -102,7 +93,7 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const joinLink = booking.dailyRoomUrl || booking.meetingLink;
   const joinLine = joinLink ? `<p><a href="${joinLink}">Join the session</a></p>` : "";
-  const adminEmails = await getAdminEmails(booking.professor.site);
+  const adminEmails = getAdminCcEmails();
 
   const studentResult = await sendEmail({
     to: booking.student.email,
@@ -155,7 +146,7 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
 
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const when = formatWhen(booking.startAt);
-  const adminEmails = await getAdminEmails(booking.professor.site);
+  const adminEmails = getAdminCcEmails();
 
   const studentResult = await sendEmail({
     to: booking.student.email,

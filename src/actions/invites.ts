@@ -13,6 +13,7 @@ import { sitePath, SITE_CONFIG } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
 import { sendEmail } from "@/lib/notifications/email";
 import { sendWhatsAppInvite } from "@/lib/notifications/sms";
+import { getAdminCcEmails } from "@/lib/notifications/admin-recipients";
 import { logAudit } from "@/lib/audit";
 import { OptionalPhoneSchema } from "@/lib/phone";
 import type { Site } from "@prisma/client";
@@ -85,11 +86,7 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
   const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
   const brandName = SITE_CONFIG[site].brandName;
 
-  const admins = await prisma.user.findMany({
-    where: { role: "ADMIN", isActive: true, site },
-    select: { email: true },
-  });
-  const adminEmails = admins.map((a) => a.email);
+  const adminEmails = getAdminCcEmails();
 
   const result = await sendEmail({
     to: email,

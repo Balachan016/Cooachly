@@ -49,41 +49,47 @@ export async function setUserActive(userId: string, isActive: boolean) {
   if (session.userId === userId) return;
 
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target || target.site !== session.site) return;
+  if (!target) return;
+  // A superadmin oversees both sites; a plain admin is confined to their own.
+  if (session.role !== "SUPERADMIN" && target.site !== session.site) return;
   if (ELEVATED_ROLES.includes(target.role) && session.role !== "SUPERADMIN") return;
 
   await prisma.user.update({ where: { id: userId }, data: { isActive } });
   await logAudit({
-    site: session.site,
+    site: target.site,
     action: isActive ? "USER_ACTIVATED" : "USER_DEACTIVATED",
     actorId: session.userId,
     targetType: "User",
     targetId: userId,
     detail: `${target.name} (${target.email})`,
   });
-  revalidatePath(sitePath(session.site, "/admin/users"));
+  revalidatePath(sitePath(target.site, "/admin/users"));
+  revalidatePath("/superadmin/admins");
 }
 
 export type DeleteUserState = { message?: string; success?: true } | undefined;
 
 /**
- * Permanently deletes a STUDENT or PROFESSOR account. Superadmin-only and
- * deliberately narrower than setUserActive (which an ADMIN can also use) —
- * this is irreversible and, per the schema's cascade rules, also deletes
- * every booking, message, review, and subscription the account is party to
- * (including the other side of any conversation/review with someone else).
- * Deactivating an account is almost always the better first move; this is
- * for when the data genuinely needs to be gone (e.g. a fraudulent signup,
- * or a deletion request).
+ * Permanently deletes a STUDENT, PROFESSOR, or ADMIN account. Superadmin-only
+ * and deliberately narrower than setUserActive (which an ADMIN can also use
+ * for students/professors) — this is irreversible and, per the schema's
+ * cascade rules, also deletes every booking, message, review, and
+ * subscription the account is party to (including the other side of any
+ * conversation/review with someone else). A superadmin can never delete
+ * another superadmin account this way, or their own. Deactivating an account
+ * is almost always the better first move; this is for when the data
+ * genuinely needs to be gone (e.g. a fraudulent signup, or a deletion
+ * request).
  */
 export async function deleteUserAccount(userId: string): Promise<DeleteUserState> {
   const session = await requireRole("SUPERADMIN");
+  if (session.userId === userId) return { message: "You can't delete your own account." };
 
   // A superadmin oversees both sites, so this isn't confined to session.site.
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target) return { message: "User not found." };
-  if (target.role !== "STUDENT" && target.role !== "PROFESSOR") {
-    return { message: "Only student or professor accounts can be deleted this way." };
+  if (target.role === "SUPERADMIN") {
+    return { message: "Superadmin accounts can't be deleted this way." };
   }
 
   await prisma.user.delete({ where: { id: userId } });
@@ -98,6 +104,7 @@ export async function deleteUserAccount(userId: string): Promise<DeleteUserState
   });
 
   revalidatePath(sitePath(target.site, "/admin/users"));
+  revalidatePath("/superadmin/admins");
   return { message: "Account deleted.", success: true };
 }
 
@@ -294,7 +301,9 @@ export async function adminResetPassword(
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || user.site !== session.site) return { message: "User not found." };
+  if (!user) return { message: "User not found." };
+  // A superadmin oversees both sites; a plain admin is confined to their own.
+  if (session.role !== "SUPERADMIN" && user.site !== session.site) return { message: "User not found." };
   if (ELEVATED_ROLES.includes(user.role) && session.role !== "SUPERADMIN") {
     return { message: "Only a superadmin can reset an admin's password." };
   }
@@ -303,7 +312,7 @@ export async function adminResetPassword(
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
 
   await logAudit({
-    site: session.site,
+    site: user.site,
     action: "PASSWORD_RESET_BY_ADMIN",
     actorId: session.userId,
     targetType: "User",
@@ -312,6 +321,55 @@ export async function adminResetPassword(
   });
 
   return { message: "Password reset.", success: true };
+}
+
+const ChangeAdminEmailSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email."),
+});
+
+/**
+ * Lets a superadmin change the login email of an admin or another
+ * superadmin's account — cross-site, since the superadmin dashboard oversees
+ * both. A plain admin can already change a student/professor's email via
+ * updateUserDetailsAsAdmin; this covers the elevated-account case that page
+ * deliberately excludes.
+ */
+export async function changeAdminEmail(
+  userId: string,
+  _state: SimpleFormState,
+  formData: FormData
+): Promise<SimpleFormState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const parsed = ChangeAdminEmailSchema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) {
+    return { message: parsed.error.issues[0]?.message ?? "Please enter a valid email." };
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) return { message: "User not found." };
+  if (!ELEVATED_ROLES.includes(target.role)) {
+    return { message: "This only changes an admin or superadmin's email." };
+  }
+
+  const emailTaken = await prisma.user.findFirst({
+    where: { site: target.site, email: parsed.data.email, NOT: { id: userId } },
+  });
+  if (emailTaken) return { message: "Another account on this site already uses that email." };
+
+  await prisma.user.update({ where: { id: userId }, data: { email: parsed.data.email } });
+
+  await logAudit({
+    site: target.site,
+    action: "USER_PROFILE_UPDATED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `${target.email} → ${parsed.data.email}`,
+  });
+
+  revalidatePath("/superadmin/admins");
+  return { message: "Email updated.", success: true };
 }
 
 export async function sendTestNotification(): Promise<{ message: string }> {
