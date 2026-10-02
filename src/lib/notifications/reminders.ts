@@ -7,11 +7,20 @@ import { sendPushToUser } from "./push";
 import { logNotification } from "./log";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
 
-const BOOKINGS_PATH: Record<User["role"], string> = {
-  ADMIN: "/admin/bookings",
-  PROFESSOR: "/professor/bookings",
-  STUDENT: "/student/bookings",
-};
+// Where tapping a reminder push takes each role. Superadmin's dashboard is
+// cross-site, so its path is never site-prefixed.
+function bookingsPath(person: User): string {
+  switch (person.role) {
+    case "SUPERADMIN":
+      return "/superadmin/bookings";
+    case "ADMIN":
+      return sitePath(person.site, "/admin/bookings");
+    case "PROFESSOR":
+      return sitePath(person.site, "/professor/bookings");
+    case "STUDENT":
+      return sitePath(person.site, "/student/bookings");
+  }
+}
 
 export type ReminderKind = "24h" | "1h" | "5m" | "manual" | "instant";
 
@@ -77,11 +86,12 @@ async function notifyPerson(
   await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
 
   // Push goes to every device the person enabled notifications on (installed
-  // app or browser). Right before the session, tapping it opens the call.
+  // app or browser). Right before (or at) the session, tapping it opens the call.
+  const opensCall = (kind === "5m" || kind === "instant") && info.joinLink;
   const pushResult = await sendPushToUser(person.id, {
-    title: kind === "manual" ? `Upcoming ${brandName} session` : `Session starts ${RELATIVE_LABEL[kind]}`,
+    title: `Your ${brandName} session ${SUBJECT_PHRASE[kind]}`,
     body: `With ${info.peerName} — ${info.when}`,
-    url: kind === "5m" && info.joinLink ? info.joinLink : sitePath(person.site, BOOKINGS_PATH[person.role]),
+    url: opensCall ? info.joinLink! : bookingsPath(person),
     tag: `booking-${bookingId}`,
   });
   if (!pushResult.skipped) {

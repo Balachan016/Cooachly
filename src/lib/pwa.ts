@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { SITE_CONFIG, sitePath, type Site } from "@/lib/site";
+import { SITE_CONFIG, siteBasePath, sitePath, type Site } from "@/lib/site";
 
 /** Status-bar / splash colours for the installed app, matching each site's brand-900. */
 export const PWA_THEME: Record<Site, { themeColor: string; backgroundColor: string; shortName: string; icon: string }> = {
@@ -20,6 +20,9 @@ export function buildManifest(site: Site): MetadataRoute.Manifest {
   const config = SITE_CONFIG[site];
   const theme = PWA_THEME[site];
   const base = sitePath(site, "/");
+  // "/arts" (no trailing slash) so the Arts home page itself is inside the
+  // installed app; "/arts/" would kick the logo/Home link out to a browser bar.
+  const scope = siteBasePath(site) || "/";
   const icons = `/icons/${theme.icon}`;
 
   return {
@@ -30,7 +33,7 @@ export function buildManifest(site: Site): MetadataRoute.Manifest {
     // /dashboard sends signed-in users to their role's home, and everyone
     // else to the login page, which is what an app launch should do.
     start_url: sitePath(site, "/dashboard?source=pwa"),
-    scope: base,
+    scope,
     display: "standalone",
     orientation: "portrait",
     theme_color: theme.themeColor,

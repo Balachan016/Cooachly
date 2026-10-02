@@ -2,6 +2,7 @@
 
 import * as z from "zod";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
@@ -33,18 +34,22 @@ export async function sendMessage(_state: unknown, formData: FormData) {
   revalidatePath(sitePath(session.site, "/professor/messages"));
   revalidatePath(sitePath(session.site, "/student/messages"));
 
-  const sender = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
-  const threadPath =
-    receiver.role === "PROFESSOR"
-      ? `/professor/messages/${session.userId}`
-      : receiver.role === "STUDENT"
-        ? `/student/messages/${session.userId}`
-        : "/dashboard";
-  await sendPushToUser(receiverId, {
-    title: `New message from ${sender?.name ?? "someone"}`,
-    body: body.length > 140 ? `${body.slice(0, 137)}…` : body,
-    url: sitePath(session.site, threadPath),
-    tag: `messages-${session.userId}`,
+  // Notify the recipient's devices after replying, so a slow push service
+  // never holds up the sender.
+  after(async () => {
+    const sender = await prisma.user.findUnique({ where: { id: session.userId }, select: { name: true } });
+    const threadPath =
+      receiver.role === "PROFESSOR"
+        ? `/professor/messages/${session.userId}`
+        : receiver.role === "STUDENT"
+          ? `/student/messages/${session.userId}`
+          : "/dashboard";
+    await sendPushToUser(receiverId, {
+      title: `New message from ${sender?.name ?? "someone"}`,
+      body: body.length > 140 ? `${body.slice(0, 137)}…` : body,
+      url: sitePath(session.site, threadPath),
+      tag: `messages-${session.userId}`,
+    });
   });
 
   return { message: null };
