@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { Badge, Card, Select } from "@/components/ui";
+import { Card, Select } from "@/components/ui";
+import { SuperadminBookingRow } from "./booking-row";
 import type { BookingStatus } from "@prisma/client";
 
 const BOOKING_STATUSES: BookingStatus[] = ["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"];
@@ -70,35 +71,16 @@ export default async function SuperadminBookingsPage(props: PageProps<"/superadm
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3 text-right">Price</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {bookings.map((b) => (
-              <tr key={b.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                <td className="px-4 py-3">
-                  <Badge>{b.professor.site}</Badge>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(b.startAt)}
-                </td>
-                <td className="px-4 py-3">{b.student.name}</td>
-                <td className="px-4 py-3">{b.professor.name}</td>
-                <td className="px-4 py-3">
-                  <Badge tone={b.status === "CANCELLED" ? "danger" : b.status === "COMPLETED" ? "success" : "default"}>
-                    {b.status}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge tone={b.paymentStatus === "UNPAID" ? "warning" : "success"}>{b.paymentStatus}</Badge>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right font-medium">
-                  ${(b.priceCents / 100).toFixed(2)}
-                </td>
-              </tr>
+              <SuperadminBookingRow key={b.id} booking={b} />
             ))}
             {bookings.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
+                <td colSpan={8} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
                   No sessions match your filters.
                 </td>
               </tr>
