@@ -7,7 +7,7 @@ import { sendManualReminder } from "@/actions/reminders";
 import { isPastDate } from "@/lib/time";
 import { Badge, Button } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
-import { NotificationAddresses } from "@/components/notification-addresses";
+import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 
 const KIND_LABEL: Record<string, string> = {
   "24h": "24h reminder",
@@ -197,6 +197,7 @@ export function AdminBookingRow({
                       <span className="font-medium">{KIND_LABEL[log.kind] ?? log.kind}</span>
                       <span className="text-black/50 dark:text-white/50">{log.channel}</span>
                       <NotificationAddresses log={log} />
+                      <DeliveryStatusBadge log={log} />
                       <span className="text-black/40 dark:text-white/40">
                         {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(log.createdAt)}
                       </span>

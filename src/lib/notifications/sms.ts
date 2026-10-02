@@ -1,5 +1,6 @@
 import "server-only";
 import twilioLib from "twilio";
+import { getAppUrl } from "@/lib/url";
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -12,7 +13,7 @@ export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappF
 
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
 
-export type WhatsAppSendResult = { skipped: boolean; error?: string; from?: string; to: string };
+export type WhatsAppSendResult = { skipped: boolean; error?: string; from?: string; to: string; sid?: string };
 
 async function createMessage(
   to: string,
@@ -28,8 +29,18 @@ async function createMessage(
   }
 
   try {
-    await client.messages.create({ from: whatsappFrom, to: `whatsapp:${to}`, ...payload });
-    return { skipped: false as const, ...addresses };
+    // Twilio only confirms it *accepted* the message here — actual delivery
+    // (or Meta/WhatsApp-side rejection) is reported asynchronously to this
+    // statusCallback URL, which /api/twilio/status matches back to the
+    // NotificationLog row via the returned message SID.
+    const appUrl = await getAppUrl();
+    const message = await client.messages.create({
+      from: whatsappFrom,
+      to: `whatsapp:${to}`,
+      statusCallback: `${appUrl}/api/twilio/status`,
+      ...payload,
+    });
+    return { skipped: false as const, sid: message.sid, ...addresses };
   } catch (err) {
     const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
     const message = err instanceof Error ? err.message : String(err);
