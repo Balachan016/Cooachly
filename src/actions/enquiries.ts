@@ -4,6 +4,7 @@ import * as z from "zod";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
+import { OptionalPhoneSchema } from "@/lib/phone";
 import type { Site } from "@prisma/client";
 
 export type EnquiryFormState = { message?: string; success?: true } | undefined;
@@ -11,7 +12,7 @@ export type EnquiryFormState = { message?: string; success?: true } | undefined;
 const EnquirySchema = z.object({
   name: z.string().trim().min(2, "Please enter your name."),
   email: z.string().trim().email("Please enter a valid email."),
-  phone: z.string().trim().optional(),
+  phone: OptionalPhoneSchema,
   country: z.string().trim().optional(),
   message: z.string().trim().min(5, "Please enter a short message."),
 });
