@@ -149,22 +149,31 @@ Open [http://localhost:3000](http://localhost:3000).
    at a fraction of the cost, and plain SMS to Indian numbers additionally requires separate DLT
    template pre-registration with Indian telecom regulators before Twilio will even deliver it.
 
-   **Before going live**, submit your reminder message as a WhatsApp message template for Meta's
+   **Before going live**, submit each WhatsApp message type below as its own template for Meta's
    approval in the Twilio console (Messaging → Content Editor). Meta requires an approved template
    for any business-initiated message sent outside a 24-hour customer-service window — which
-   reminders always are — so free-form messages are rejected once you're off the sandbox, with
-   Twilio error **21654 "ContentSid Required"**.
+   reminders, invites, and demo confirmations always are — so free-form messages are rejected once
+   you're off the sandbox, with Twilio error **21654 "ContentSid Required"**.
 
-   Submit a template that looks like this (Category: **Utility**, so it doesn't need marketing
-   opt-in):
+   Submit templates that look like this (Category: **Utility**, so none need marketing opt-in):
 
-   ```
-   Hi {{1}}, this is a reminder that your Cooachly session with {{2}} starts {{3}} ({{4}}).
-   Join here: {{5}}
-   ```
+   - **Reminders** — `TWILIO_REMINDER_CONTENT_SID`:
+     ```
+     Hi {{1}}, this is a reminder that your Cooachly session with {{2}} starts {{3}} ({{4}}).
+     Join here: {{5}}
+     ```
+   - **Account invites** — `TWILIO_INVITE_CONTENT_SID`:
+     ```
+     Hi {{1}}, you've been invited to create your {{2}} account. Create your login here: {{3}}
+     ```
+   - **Demo request confirmations** — `TWILIO_DEMO_CONTENT_SID`:
+     ```
+     Thanks for requesting a free {{2}} demo for {{3}}, {{1}}! We'll reach out shortly to
+     schedule a time.
+     ```
 
-   Once Meta approves it, copy its **Content SID** (starts with `HX...`) into
-   `TWILIO_REMINDER_CONTENT_SID`. Until that's set, reminders send free-form text, which only
+   Once Meta approves each one, copy its **Content SID** (starts with `HX...`) into the matching
+   env var above. Until an env var is set, that message type sends free-form text, which only
    works on the sandbox and will keep failing with 21654 on a real WhatsApp sender.
 3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then use a free
    external scheduler like [cron-job.org](https://cron-job.org) to call

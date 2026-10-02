@@ -5,6 +5,8 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886"
 const reminderContentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
+const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
+const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
 
@@ -38,6 +40,51 @@ async function createMessage(
 
 export async function sendWhatsApp(opts: { to: string; body: string }) {
   return createMessage(opts.to, { body: opts.body });
+}
+
+/**
+ * Account invites are "business-initiated" WhatsApp messages too, so the same
+ * 24h-window template requirement applies (see sendWhatsAppReminder below).
+ * Set TWILIO_INVITE_CONTENT_SID once a template is approved; until then this
+ * falls back to a free-form body, which only works on the sandbox.
+ */
+export async function sendWhatsAppInvite(opts: {
+  to: string;
+  body: string;
+  variables: { name: string; brandName: string; inviteUrl: string };
+}) {
+  if (!inviteContentSid) return createMessage(opts.to, { body: opts.body });
+
+  return createMessage(opts.to, {
+    contentSid: inviteContentSid,
+    contentVariables: JSON.stringify({
+      "1": opts.variables.name,
+      "2": opts.variables.brandName,
+      "3": opts.variables.inviteUrl,
+    }),
+  });
+}
+
+/**
+ * Same 24h-window template requirement as sendWhatsAppReminder. Set
+ * TWILIO_DEMO_CONTENT_SID once a template is approved; until then this falls
+ * back to a free-form body, which only works on the sandbox.
+ */
+export async function sendWhatsAppDemoConfirmation(opts: {
+  to: string;
+  body: string;
+  variables: { name: string; brandName: string; subject: string };
+}) {
+  if (!demoContentSid) return createMessage(opts.to, { body: opts.body });
+
+  return createMessage(opts.to, {
+    contentSid: demoContentSid,
+    contentVariables: JSON.stringify({
+      "1": opts.variables.name,
+      "2": opts.variables.brandName,
+      "3": opts.variables.subject,
+    }),
+  });
 }
 
 /**

@@ -12,7 +12,7 @@ import { roleHomePath } from "@/lib/roles";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
 import { sendEmail } from "@/lib/notifications/email";
-import { sendWhatsApp } from "@/lib/notifications/sms";
+import { sendWhatsAppInvite } from "@/lib/notifications/sms";
 import { logAudit } from "@/lib/audit";
 import { OptionalPhoneSchema } from "@/lib/phone";
 import type { Site } from "@prisma/client";
@@ -106,9 +106,10 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
   });
 
   if (phone) {
-    await sendWhatsApp({
+    await sendWhatsAppInvite({
       to: phone,
       body: `Hi ${name}, you've been invited to create your ${brandName} account. Create your login here: ${inviteUrl} (link expires in 7 days).`,
+      variables: { name, brandName, inviteUrl },
     });
   }
 

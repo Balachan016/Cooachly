@@ -3,7 +3,7 @@
 import * as z from "zod";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
-import { sendWhatsApp } from "@/lib/notifications/sms";
+import { sendWhatsAppDemoConfirmation } from "@/lib/notifications/sms";
 import { DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { OptionalPhoneSchema } from "@/lib/phone";
 import type { Site } from "@prisma/client";
@@ -76,9 +76,10 @@ export async function submitDemoRequest(
   }
 
   if (phone) {
-    await sendWhatsApp({
+    await sendWhatsAppDemoConfirmation({
       to: phone,
       body: `Thanks for requesting a free ${brandName} demo for ${subject}! We'll reach out shortly to schedule a time.`,
+      variables: { name, brandName, subject },
     });
   }
 
