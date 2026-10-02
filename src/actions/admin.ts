@@ -77,8 +77,9 @@ export type DeleteUserState = { message?: string; success?: true } | undefined;
 export async function deleteUserAccount(userId: string): Promise<DeleteUserState> {
   const session = await requireRole("SUPERADMIN");
 
+  // A superadmin oversees both sites, so this isn't confined to session.site.
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target || target.site !== session.site) return { message: "User not found." };
+  if (!target) return { message: "User not found." };
   if (target.role !== "STUDENT" && target.role !== "PROFESSOR") {
     return { message: "Only student or professor accounts can be deleted this way." };
   }
@@ -86,7 +87,7 @@ export async function deleteUserAccount(userId: string): Promise<DeleteUserState
   await prisma.user.delete({ where: { id: userId } });
 
   await logAudit({
-    site: session.site,
+    site: target.site,
     action: "USER_DELETED",
     actorId: session.userId,
     targetType: "User",
@@ -94,7 +95,7 @@ export async function deleteUserAccount(userId: string): Promise<DeleteUserState
     detail: `${target.role} ${target.name} (${target.email})`,
   });
 
-  revalidatePath(sitePath(session.site, "/admin/users"));
+  revalidatePath(sitePath(target.site, "/admin/users"));
   return { message: "Account deleted.", success: true };
 }
 

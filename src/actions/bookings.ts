@@ -238,19 +238,25 @@ export async function cancelBooking(bookingId: string) {
 export async function deleteBooking(bookingId: string) {
   const session = await requireRole("SUPERADMIN");
 
+  // A superadmin oversees both sites (unlike a plain ADMIN, who's confined
+  // to their own), so this deliberately doesn't check booking.professor.site
+  // against session.site — they can delete a confirmed booking on either
+  // platform.
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: { student: true, professor: true },
   });
-  if (!booking || booking.professor.site !== session.site) return;
+  if (!booking) return;
   if (booking.status !== "CONFIRMED") return;
+
+  const bookingSite = booking.professor.site;
 
   await prisma.booking.delete({ where: { id: bookingId } });
 
   await sendBookingDeletedEmail(booking);
 
   await logAudit({
-    site: session.site,
+    site: bookingSite,
     action: "BOOKING_DELETED",
     actorId: session.userId,
     targetType: "Booking",
@@ -258,9 +264,9 @@ export async function deleteBooking(bookingId: string) {
     detail: `${booking.student.name} with ${booking.professor.name} at ${booking.startAt.toISOString()}`,
   });
 
-  revalidatePath(sitePath(session.site, "/admin/bookings"));
-  revalidatePath(sitePath(session.site, "/student/bookings"));
-  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/bookings"));
+  revalidatePath(sitePath(bookingSite, "/student/bookings"));
+  revalidatePath(sitePath(bookingSite, "/professor/bookings"));
   revalidatePath("/superadmin/bookings");
 }
 
@@ -427,9 +433,17 @@ export async function markBookingCompleted(bookingId: string) {
     include: { student: true, professor: true },
   });
   if (!booking) return;
-  const allowed = session.role === "PROFESSOR" ? booking.professorId === session.userId : booking.professor.site === session.site;
+  // A superadmin oversees both sites, so (unlike ADMIN) isn't confined to
+  // session.site here either.
+  const allowed =
+    session.role === "PROFESSOR"
+      ? booking.professorId === session.userId
+      : session.role === "SUPERADMIN"
+        ? true
+        : booking.professor.site === session.site;
   if (!allowed) return;
 
+  const bookingSite = booking.professor.site;
   const wasAlreadyCompleted = booking.status === "COMPLETED";
 
   await prisma.booking.update({
@@ -441,8 +455,8 @@ export async function markBookingCompleted(bookingId: string) {
     await sendDemoFollowUpEmail(booking);
   }
 
-  revalidatePath(sitePath(session.site, "/professor/bookings"));
-  revalidatePath(sitePath(session.site, "/student/bookings"));
-  revalidatePath(sitePath(session.site, "/admin/bookings"));
-  revalidatePath(sitePath(session.site, "/admin/class-logs"));
+  revalidatePath(sitePath(bookingSite, "/professor/bookings"));
+  revalidatePath(sitePath(bookingSite, "/student/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/class-logs"));
 }
