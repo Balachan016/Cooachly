@@ -11,6 +11,7 @@ import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { getAppUrl } from "@/lib/url";
 import { logAudit } from "@/lib/audit";
+import { removeThisDevicesPushSubscription } from "@/lib/notifications/push-device";
 import type { Site } from "@prisma/client";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -92,6 +93,7 @@ export async function logout() {
       targetId: session.userId,
       detail: `${session.role} logout`,
     });
+    await removeThisDevicesPushSubscription(session.site, session.userId);
   }
   await deleteSession();
   redirect(sitePath(site, "/login"));

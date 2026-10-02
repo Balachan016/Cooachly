@@ -36,15 +36,15 @@ self.addEventListener("push", (event) => {
     data = { body: event.data ? event.data.text() : "" };
   }
 
-  const isArts = typeof data.url === "string" && data.url.startsWith("/arts");
+  const isArts = new URL(self.registration.scope).pathname.startsWith("/arts");
   event.waitUntil(
-    self.registration.showNotification(data.title || "Cooachly", {
+    self.registration.showNotification(data.title || (isArts ? "Cooachly Arts" : "Cooachly"), {
       body: data.body || "",
       icon: isArts ? "/icons/arts-192.png" : "/icons/cooachly-192.png",
       badge: "/icons/badge-96.png",
       tag: data.tag,
       renotify: Boolean(data.tag),
-      data: { url: data.url || "/dashboard" },
+      data: { url: data.url || (isArts ? "/arts/dashboard" : "/dashboard") },
     })
   );
 });
@@ -59,12 +59,18 @@ self.addEventListener("notificationclick", (event) => {
       if (target.origin !== self.location.origin) {
         return self.clients.openWindow(target.href);
       }
-      // Otherwise reuse an open app window if there is one.
-      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // Otherwise reuse an open window of this app if there is one. Only
+      // windows this worker controls can be navigated; anything else (or a
+      // browser without navigate support) falls back to opening a new one.
+      const windows = await self.clients.matchAll({ type: "window" });
       const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
-      if (existing) {
-        await existing.focus();
-        return existing.navigate(target.href);
+      if (existing && "navigate" in existing) {
+        try {
+          const navigated = await existing.navigate(target.href);
+          return (navigated || existing).focus();
+        } catch {
+          // fall through
+        }
       }
       return self.clients.openWindow(target.href);
     })()
