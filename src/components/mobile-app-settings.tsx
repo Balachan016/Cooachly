@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
-import { removePushSubscription, savePushSubscription } from "@/actions/push";
+import { isPushSubscriptionMine, removePushSubscription, savePushSubscription } from "@/actions/push";
 import { Button } from "@/components/ui";
-import { INSTALL_PROMPT_READY } from "@/components/pwa-register";
+import { getServiceWorkerRegistration, INSTALL_PROMPT_READY } from "@/components/pwa-register";
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+// Tolerate stray quotes/whitespace pasted into the hosting dashboard.
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim().replace(/^["']|["']$/g, "") || undefined;
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -52,9 +53,12 @@ export function MobileAppSettings({ brandName }: { brandName: string }) {
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
-    navigator.serviceWorker.ready
+    getServiceWorkerRegistration()
       .then((registration) => registration.pushManager.getSubscription())
-      .then((sub) => setSubscribed(Boolean(sub)))
+      // The browser may still hold a subscription from someone who has since
+      // logged out on this device; only show "on" if it's this user's.
+      .then((sub) => (sub ? isPushSubscriptionMine(sub.endpoint) : false))
+      .then(setSubscribed)
       .catch(() => setSubscribed(false));
   }, []);
 
@@ -79,7 +83,7 @@ export function MobileAppSettings({ brandName }: { brandName: string }) {
           setMessage("Notifications are blocked. Allow them for this app in your phone's settings, then try again.");
           return;
         }
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await getServiceWorkerRegistration();
         const sub =
           (await registration.pushManager.getSubscription()) ??
           (await registration.pushManager.subscribe({
@@ -103,7 +107,7 @@ export function MobileAppSettings({ brandName }: { brandName: string }) {
   function disableNotifications() {
     setMessage(null);
     startTransition(async () => {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await getServiceWorkerRegistration();
       const sub = await registration.pushManager.getSubscription();
       if (sub) {
         await removePushSubscription(sub.endpoint);
