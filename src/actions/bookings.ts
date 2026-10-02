@@ -13,6 +13,7 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
 import { sendBookingConfirmation, sendBookingRescheduledEmail, sendBookingDeletedEmail } from "@/lib/notifications/booking-confirmation";
+import { formatWhenFor } from "@/lib/notifications/format";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
@@ -174,7 +175,7 @@ export async function bookSlots(_state: unknown, formData: FormData) {
           currency: "usd",
           unit_amount: booking.priceCents,
           product_data: {
-            name: `${confirmedMatches[i].sessionLengthMinutes}-minute session with ${professor.name} — ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(confirmedMatches[i].startAt)}`,
+            name: `${confirmedMatches[i].sessionLengthMinutes}-minute session with ${professor.name} — ${formatWhenFor(confirmedMatches[i].startAt, student?.timezone ?? "UTC")}`,
           },
         },
         quantity: 1,

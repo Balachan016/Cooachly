@@ -5,6 +5,7 @@ import { startTranscription, getTranscriptDownloadLink, parseVttTranscript } fro
 import { summarizeTranscript } from "@/lib/ai-summary";
 import { sendEmail } from "@/lib/notifications/email";
 import { getAdminCcEmails } from "@/lib/notifications/admin-recipients";
+import { formatWhenFor } from "@/lib/notifications/format";
 import { SITE_CONFIG } from "@/lib/site";
 
 // Configure this URL as a webhook in your Daily.co dashboard, subscribed to
@@ -103,7 +104,6 @@ export async function POST(request: Request) {
 
     if (summary) {
       const brandName = SITE_CONFIG[booking.professor.site].brandName;
-      const when = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(booking.startAt);
       const summaryHtml = `<pre style="white-space:pre-wrap;font-family:inherit">${summary}</pre>`;
 
       const adminEmails = getAdminCcEmails();
@@ -113,13 +113,13 @@ export async function POST(request: Request) {
           to: booking.student.email,
           cc: adminEmails,
           subject: `Your ${brandName} session summary`,
-          html: `<p>Here's the AI-generated summary of your session with <strong>${booking.professor.name}</strong> on <strong>${when}</strong>:</p>${summaryHtml}`,
+          html: `<p>Here's the AI-generated summary of your session with <strong>${booking.professor.name}</strong> on <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>:</p>${summaryHtml}`,
         }),
         sendEmail({
           to: booking.professor.email,
           cc: adminEmails,
           subject: `Your ${brandName} session summary`,
-          html: `<p>Here's the AI-generated summary of your session with <strong>${booking.student.name}</strong> on <strong>${when}</strong>:</p>${summaryHtml}`,
+          html: `<p>Here's the AI-generated summary of your session with <strong>${booking.student.name}</strong> on <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>:</p>${summaryHtml}`,
         }),
       ]);
     }

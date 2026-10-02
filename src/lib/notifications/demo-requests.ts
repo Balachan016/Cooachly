@@ -2,6 +2,7 @@ import "server-only";
 import type { DemoRequest, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "./email";
+import { formatWhenFor } from "./format";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
 
@@ -12,9 +13,9 @@ export async function sendDemoRequestScheduledEmail(
   if (!isEmailConfigured || !demoRequest.professor || !demoRequest.scheduledAt) return;
 
   const brandName = SITE_CONFIG[demoRequest.site].brandName;
-  const when = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
-    demoRequest.scheduledAt
-  );
+  const scheduledAt = demoRequest.scheduledAt;
+  const whenForRequester = formatWhenFor(scheduledAt, demoRequest.timezone ?? "UTC");
+  const whenForProfessor = formatWhenFor(scheduledAt, demoRequest.professor.timezone);
   const linkLine = demoRequest.meetingLink
     ? `<p><a href="${demoRequest.meetingLink}">Join the call here</a></p>`
     : "";
@@ -36,7 +37,7 @@ export async function sendDemoRequestScheduledEmail(
     html: `
       <p>Hi ${demoRequest.name},</p>
       <p>Your demo call with <strong>${demoRequest.professor.name}</strong> is scheduled for
-      <strong>${when}</strong>.</p>
+      <strong>${whenForRequester}</strong>.</p>
       ${linkLine}
       ${loginLine}
       <p>— ${brandName}</p>
@@ -52,7 +53,7 @@ export async function sendDemoRequestScheduledEmail(
         demoRequest.phone ? `, ${demoRequest.phone}` : ""
       }) about <strong>${demoRequest.subject}</strong>${
         demoRequest.grade ? ` (Grade: ${demoRequest.grade})` : ""
-      } is scheduled for <strong>${when}</strong>.</p>
+      } is scheduled for <strong>${whenForProfessor}</strong>.</p>
       ${linkLine}
       <p>— ${brandName}</p>
     `,
@@ -65,7 +66,7 @@ export async function sendDemoRequestReminder(demoRequest: DemoRequest) {
   const brandName = SITE_CONFIG[demoRequest.site].brandName;
   const statusPhrase =
     demoRequest.status === "SCHEDULED" && demoRequest.scheduledAt
-      ? `scheduled for ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(demoRequest.scheduledAt)}`
+      ? `scheduled for ${formatWhenFor(demoRequest.scheduledAt, demoRequest.timezone ?? "UTC")}`
       : "still awaiting scheduling";
 
   await sendEmail({
