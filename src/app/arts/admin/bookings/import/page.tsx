@@ -10,11 +10,14 @@ export default async function ScheduleImportPage() {
     <div>
       <h1 className="text-2xl font-semibold">Import schedule</h1>
       <p className="mt-1 max-w-3xl text-sm text-black/60 dark:text-white/60">
-        Paste rows of <code>Student,Professor,Subject,Date,Time,Timezone</code> (Date as DD-MM-YYYY, Time as 24-hour
-        HH:mm, Timezone as an IANA name like <code>Asia/Kolkata</code> or <code>America/New_York</code>) to bulk-create
-        confirmed classes. Student and guru are matched by name within your site — a name that&apos;s missing,
-        ambiguous, or would double-book someone is skipped and listed below instead of guessed at. Everyone created
-        gets the normal booking confirmation email/WhatsApp, CC&apos;d to admins, plus a video room if Daily is configured.
+        Upload a <code>.csv</code> or <code>.xlsx</code> file with columns
+        <code> Student,Professor,Subject,Date,Time,Timezone</code> (Date as DD-MM-YYYY, Time as 24-hour HH:mm,
+        Timezone as an IANA name like <code>Asia/Kolkata</code> or <code>America/New_York</code>) to bulk-create
+        confirmed classes. Enter Date and Time as plain text, not Excel&apos;s date/time cell type, to avoid any
+        timezone-conversion ambiguity. Student and guru are matched by name within your site — a name that&apos;s
+        missing, ambiguous, or would double-book someone is skipped and listed below instead of guessed at.
+        Everyone created gets the normal booking confirmation email/WhatsApp, CC&apos;d to admins, plus a video room
+        if Daily is configured.
       </p>
 
       <Card className="mt-6">

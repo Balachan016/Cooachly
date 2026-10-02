@@ -1,5 +1,7 @@
 "use server";
 
+import { Readable } from "stream";
+import ExcelJS from "exceljs";
 import { revalidatePath } from "next/cache";
 import { addMinutes } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
@@ -35,6 +37,62 @@ function stripTitle(name: string) {
   return name.replace(/^(Ms|Mrs|Mr|Dr)\.?\s+/i, "").trim();
 }
 
+/**
+ * A plain CSV cell always arrives as a string, but a genuine .xlsx cell
+ * typed/formatted as a date or time in Excel arrives as a JS Date instead —
+ * reformat those back to the "DD-MM-YYYY" / "HH:mm" text our parser expects.
+ * Everything else (text, numbers) is just stringified as-is.
+ */
+function cellToString(value: ExcelJS.CellValue): string {
+  if (value == null) return "";
+  if (value instanceof Date) {
+    const d = String(value.getDate()).padStart(2, "0");
+    const mo = String(value.getMonth() + 1).padStart(2, "0");
+    const y = value.getFullYear();
+    const h = value.getHours();
+    const mi = value.getMinutes();
+    // A date-only cell parses to local midnight; a time-only cell parses to
+    // 1899-12-30 (Excel's day-zero) plus the time of day. Tell them apart by
+    // which part is non-zero rather than guessing from context.
+    if (h === 0 && mi === 0) return `${d}-${mo}-${y}`;
+    return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+  }
+  if (typeof value === "object" && "text" in value) return String(value.text ?? "");
+  if (typeof value === "object" && "richText" in value) return value.richText.map((r) => r.text).join("");
+  return String(value).trim();
+}
+
+/** Reads the first sheet of an uploaded .csv/.xlsx/.xls file into rows of string cells. */
+async function readRowsFromFile(file: File): Promise<string[][]> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const workbook = new ExcelJS.Workbook();
+
+  if (file.name.toLowerCase().endsWith(".csv")) {
+    // exceljs's default CSV reader auto-detects numbers and dates per cell —
+    // including "MM-DD-YYYY", which silently swaps day and month for our
+    // DD-MM-YYYY format (03-10-2026 → March 10, not 3 Oct). Disable all of
+    // that and keep every cell as the literal text it was written as.
+    await workbook.csv.read(Readable.from(buffer), { map: (value: string) => value });
+  } else {
+    // exceljs's bundled types predate current @types/node's Buffer generic;
+    // this is a real Node Buffer at runtime, just a structural type mismatch.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await workbook.xlsx.load(buffer as any);
+  }
+
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) return [];
+
+  const rows: string[][] = [];
+  worksheet.eachRow((row) => {
+    const values = row.values as ExcelJS.CellValue[]; // 1-indexed; values[0] is unused
+    const cells: string[] = [];
+    for (let i = 1; i < values.length; i++) cells.push(cellToString(values[i]));
+    if (cells.some((c) => c !== "")) rows.push(cells);
+  });
+  return rows;
+}
+
 type BookingWithParties = Booking & { student: User; professor: User };
 
 /**
@@ -50,13 +108,23 @@ type BookingWithParties = Booking & { student: User; professor: User };
 export async function importBookingSchedule(_state: ImportScheduleState, formData: FormData): Promise<ImportScheduleState> {
   const session = await requireRole("ADMIN", "SUPERADMIN");
 
-  const csv = String(formData.get("csv") ?? "").trim();
-  if (!csv) return { message: "Paste a schedule to import." };
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { message: "Choose a schedule file (.csv or .xlsx) to import." };
+  }
 
-  const lines = csv.split("\n").map((l) => l.trim()).filter(Boolean);
-  const startIndex = /^student\s*,/i.test(lines[0] ?? "") ? 1 : 0;
-  const rows = lines.slice(startIndex);
-  if (rows.length === 0) return { message: "Paste a schedule to import." };
+  let parsedRows: string[][];
+  try {
+    parsedRows = await readRowsFromFile(file);
+  } catch (err) {
+    console.error("Failed to parse uploaded schedule file", err);
+    return { message: "Couldn't read that file — make sure it's a valid .csv or .xlsx export." };
+  }
+  if (parsedRows.length === 0) return { message: "That file has no rows to import." };
+
+  const startIndex = /^student$/i.test(parsedRows[0]?.[0]?.trim() ?? "") ? 1 : 0;
+  const rows = parsedRows.slice(startIndex);
+  if (rows.length === 0) return { message: "That file has no rows to import." };
 
   const studentCache = new Map<string, { user: User | null; count: number }>();
   const professorCache = new Map<string, { user: (User & { professorProfile: { hourlyRateCents: number } | null }) | null; count: number }>();
@@ -96,7 +164,7 @@ export async function importBookingSchedule(_state: ImportScheduleState, formDat
 
   for (let i = 0; i < rows.length; i++) {
     const lineNo = startIndex + i + 1;
-    const cols = rows[i].split(",").map((c) => c.trim());
+    const cols = rows[i].map((c) => c.trim());
     const [studentName = "", professorName = "", subject = "", dateRaw = "", timeRaw = "", timezone = ""] = cols;
 
     if (cols.length < 6) {
