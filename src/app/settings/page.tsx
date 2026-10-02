@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/dal";
 import { roleHomePath } from "@/lib/roles";
-import { siteBasePath } from "@/lib/site";
+import { SITE_CONFIG, siteBasePath } from "@/lib/site";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
+import { MobileAppSettings } from "@/components/mobile-app-settings";
 import { ChangePasswordForm } from "./change-password-form";
 import { StudentProfileForm } from "./student-profile-form";
 
@@ -36,6 +37,11 @@ export default async function SettingsPage() {
       <Card className="mt-6">
         <h2 className="font-semibold">Change password</h2>
         <ChangePasswordForm />
+      </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Mobile app & notifications</h2>
+        <MobileAppSettings brandName={SITE_CONFIG[session.site].brandName} />
       </Card>
 
       {session.role === "STUDENT" && (
