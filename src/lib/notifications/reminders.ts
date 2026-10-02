@@ -5,6 +5,7 @@ import { sendEmail } from "./email";
 import { sendWhatsAppReminder } from "./sms";
 import { sendPushToUser } from "./push";
 import { logNotification } from "./log";
+import { formatWhenFor } from "./format";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
 
 // Where tapping a reminder push takes each role. Superadmin's dashboard is
@@ -44,9 +45,6 @@ type BookingWithParties = Booking & { student: User; professor: User };
 
 export async function sendBookingReminder(booking: BookingWithParties, kind: ReminderKind) {
   const joinLink = booking.dailyRoomUrl || booking.meetingLink;
-  const when = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
-    booking.startAt
-  );
 
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", isActive: true, site: booking.professor.site },
@@ -54,20 +52,24 @@ export async function sendBookingReminder(booking: BookingWithParties, kind: Rem
   const pairName = `${booking.student.name} & ${booking.professor.name}`;
 
   await Promise.all([
-    notifyPerson(booking.student, { peerName: booking.professor.name, when, joinLink }, booking.id, kind),
-    notifyPerson(booking.professor, { peerName: booking.student.name, when, joinLink }, booking.id, kind),
-    ...admins.map((admin) => notifyPerson(admin, { peerName: pairName, when, joinLink }, booking.id, kind)),
+    notifyPerson(booking.student, { peerName: booking.professor.name, startAt: booking.startAt, joinLink }, booking.id, kind),
+    notifyPerson(booking.professor, { peerName: booking.student.name, startAt: booking.startAt, joinLink }, booking.id, kind),
+    ...admins.map((admin) => notifyPerson(admin, { peerName: pairName, startAt: booking.startAt, joinLink }, booking.id, kind)),
   ]);
 }
 
 async function notifyPerson(
   person: User,
-  info: { peerName: string; when: string; joinLink: string | null },
+  info: { peerName: string; startAt: Date; joinLink: string | null },
   bookingId: string,
   kind: ReminderKind
 ) {
+  // Formatted in this specific person's own timezone — not the peer's, and
+  // not the server's runtime default, which have no relation to what time
+  // this person's clock actually shows.
+  const when = formatWhenFor(info.startAt, person.timezone);
   const brandName = SITE_CONFIG[person.site].brandName;
-  const sentence = `your ${brandName} session with ${info.peerName} starts ${LABEL[kind]} (${info.when})`;
+  const sentence = `your ${brandName} session with ${info.peerName} starts ${LABEL[kind]} (${when})`;
   const linkLine = info.joinLink ? `\n\nJoin here: ${info.joinLink}` : "";
   const textBody = `Reminder: ${sentence}.${linkLine}`;
 
@@ -90,7 +92,7 @@ async function notifyPerson(
   const opensCall = (kind === "5m" || kind === "instant") && info.joinLink;
   const pushResult = await sendPushToUser(person.id, {
     title: `Your ${brandName} session ${SUBJECT_PHRASE[kind]}`,
-    body: `With ${info.peerName} — ${info.when}`,
+    body: `With ${info.peerName} — ${when}`,
     url: opensCall ? info.joinLink! : bookingsPath(person),
     tag: `booking-${bookingId}`,
   });
@@ -102,7 +104,7 @@ async function notifyPerson(
     recipientName: person.name,
     peerName: info.peerName,
     label: LABEL[kind],
-    when: info.when,
+    when,
     joinLink: info.joinLink ?? "",
   };
 

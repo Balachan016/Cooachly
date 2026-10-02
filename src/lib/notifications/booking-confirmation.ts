@@ -1,31 +1,20 @@
 import "server-only";
 import type { Booking, User } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { sendEmail, isEmailConfigured } from "./email";
 import { logNotification } from "./log";
+import { getAdminCcEmails } from "./admin-recipients";
+import { formatWhenFor } from "./format";
 import { SITE_CONFIG } from "@/lib/site";
 
 type BookingWithParties = Booking & { student: User; professor: User };
 
-function formatWhen(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
-function sessionListHtml(bookings: BookingWithParties[]) {
+function sessionListHtml(bookings: BookingWithParties[], timezone: string) {
   return `<ul>${bookings
     .map((b) => {
       const joinLink = b.dailyRoomUrl || b.meetingLink;
-      return `<li>${formatWhen(b.startAt)}${joinLink ? ` — <a href="${joinLink}">Join the session</a>` : ""}</li>`;
+      return `<li>${formatWhenFor(b.startAt, timezone)}${joinLink ? ` — <a href="${joinLink}">Join the session</a>` : ""}</li>`;
     })
     .join("")}</ul>`;
-}
-
-async function getAdminEmails(site: BookingWithParties["professor"]["site"]) {
-  const admins = await prisma.user.findMany({
-    where: { role: "ADMIN", isActive: true, site },
-    select: { email: true },
-  });
-  return admins.map((a) => a.email);
 }
 
 /**
@@ -33,8 +22,7 @@ async function getAdminEmails(site: BookingWithParties["professor"]["site"]) {
  * actually confirmed (immediately for free/subscription/no-Stripe bookings,
  * or from the Stripe webhook once payment clears). Both the student and
  * professor get one email covering every session confirmed in that pass,
- * each CC'd to every active admin on that site so admins see every booking
- * as it happens.
+ * each CC'd via getAdminCcEmails() so admins see every booking as it happens.
  */
 export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   if (!isEmailConfigured || bookings.length === 0) return;
@@ -44,9 +32,8 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   const brandName = SITE_CONFIG[first.student.site].brandName;
   const countWord = sorted.length === 1 ? "session" : `${sorted.length} sessions`;
   const verb = sorted.length === 1 ? "is" : "are";
-  const listHtml = sessionListHtml(sorted);
 
-  const adminEmails = await getAdminEmails(first.professor.site);
+  const adminEmails = getAdminCcEmails();
 
   const studentResult = await sendEmail({
     to: first.student.email,
@@ -55,7 +42,7 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
     html: `
       <p>Hi ${first.student.name},</p>
       <p>Your ${countWord} with <strong>${first.professor.name}</strong> ${verb} confirmed:</p>
-      ${listHtml}
+      ${sessionListHtml(sorted, first.student.timezone)}
       <p>— ${brandName}</p>
     `,
   });
@@ -76,7 +63,7 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
     html: `
       <p>Hi ${first.professor.name},</p>
       <p>Your ${countWord} with <strong>${first.student.name}</strong> ${verb} confirmed:</p>
-      ${listHtml}
+      ${sessionListHtml(sorted, first.professor.timezone)}
       <p>— ${brandName}</p>
     `,
   });
@@ -93,8 +80,8 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 
 /**
  * Sent when a student reschedules a booking to a new time. Both the student
- * and professor get an email showing the old and new time, each CC'd to
- * every active admin on that site, same as a fresh booking confirmation.
+ * and professor get an email showing the old and new time, each CC'd via
+ * getAdminCcEmails(), same as a fresh booking confirmation.
  */
 export async function sendBookingRescheduledEmail(booking: BookingWithParties, previousStartAt: Date) {
   if (!isEmailConfigured) return;
@@ -102,7 +89,7 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const joinLink = booking.dailyRoomUrl || booking.meetingLink;
   const joinLine = joinLink ? `<p><a href="${joinLink}">Join the session</a></p>` : "";
-  const adminEmails = await getAdminEmails(booking.professor.site);
+  const adminEmails = getAdminCcEmails();
 
   const studentResult = await sendEmail({
     to: booking.student.email,
@@ -111,7 +98,8 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
     html: `
       <p>Hi ${booking.student.name},</p>
       <p>Your session with <strong>${booking.professor.name}</strong> was moved from
-      <strong>${formatWhen(previousStartAt)}</strong> to <strong>${formatWhen(booking.startAt)}</strong>.</p>
+      <strong>${formatWhenFor(previousStartAt, booking.student.timezone)}</strong> to
+      <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>.</p>
       ${joinLine}
       <p>— ${brandName}</p>
     `,
@@ -131,7 +119,8 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
     html: `
       <p>Hi ${booking.professor.name},</p>
       <p>Your session with <strong>${booking.student.name}</strong> was moved from
-      <strong>${formatWhen(previousStartAt)}</strong> to <strong>${formatWhen(booking.startAt)}</strong>.</p>
+      <strong>${formatWhenFor(previousStartAt, booking.professor.timezone)}</strong> to
+      <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>.</p>
       ${joinLine}
       <p>— ${brandName}</p>
     `,
@@ -154,16 +143,16 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
   if (!isEmailConfigured) return;
 
   const brandName = SITE_CONFIG[booking.student.site].brandName;
-  const when = formatWhen(booking.startAt);
-  const adminEmails = await getAdminEmails(booking.professor.site);
+  const adminEmails = getAdminCcEmails();
 
+  const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
   const studentResult = await sendEmail({
     to: booking.student.email,
     cc: adminEmails,
-    subject: `Your session with ${booking.professor.name} on ${when} was removed`,
+    subject: `Your session with ${booking.professor.name} on ${whenForStudent} was removed`,
     html: `
       <p>Hi ${booking.student.name},</p>
-      <p>Your session with <strong>${booking.professor.name}</strong> scheduled for <strong>${when}</strong>
+      <p>Your session with <strong>${booking.professor.name}</strong> scheduled for <strong>${whenForStudent}</strong>
       has been removed by the ${brandName} team.</p>
       <p>If you have questions about this, please get in touch with us.</p>
       <p>— ${brandName}</p>
@@ -176,13 +165,14 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
     result: studentResult,
   });
 
+  const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
   const professorResult = await sendEmail({
     to: booking.professor.email,
     cc: adminEmails,
-    subject: `Session with ${booking.student.name} on ${when} was removed`,
+    subject: `Session with ${booking.student.name} on ${whenForProfessor} was removed`,
     html: `
       <p>Hi ${booking.professor.name},</p>
-      <p>The session with <strong>${booking.student.name}</strong> scheduled for <strong>${when}</strong>
+      <p>The session with <strong>${booking.student.name}</strong> scheduled for <strong>${whenForProfessor}</strong>
       has been removed by the ${brandName} team.</p>
       <p>If you have questions about this, please get in touch with us.</p>
       <p>— ${brandName}</p>

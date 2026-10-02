@@ -179,6 +179,14 @@ Open [http://localhost:3000](http://localhost:3000).
    Once Meta approves each one, copy its **Content SID** (starts with `HX...`) into the matching
    env var above. Until an env var is set, that message type sends free-form text, which only
    works on the sandbox and will keep failing with 21654 on a real WhatsApp sender.
+
+   **Delivery status**: Twilio's API only confirms it *accepted* a message, not that WhatsApp
+   actually delivered it — a "SENT" row in the reminder log can still silently fail to arrive.
+   Every WhatsApp send now registers a per-message `statusCallback` to `/api/twilio/status`
+   (nothing to configure in the Twilio console — it's passed automatically), which records the
+   real outcome (queued/sent/delivered/read/undelivered/failed, plus Twilio's error code if any)
+   back onto that row. Check Admin → Bookings' expanded "Reminder log" or Superadmin → Reminders
+   for the delivery badge next to the usual status one.
 3. **Scheduling the reminder job**: set `CRON_SECRET` to a random string, then use a free
    external scheduler like [cron-job.org](https://cron-job.org) to call
    `https://your-domain.com/api/cron/reminders?secret=<CRON_SECRET>` every 5 minutes.

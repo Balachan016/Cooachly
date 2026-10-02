@@ -92,6 +92,7 @@ enum AuditAction {
   DEMO_REQUEST_SCHEDULED
   DEMO_REQUEST_STATUS_CHANGED
   ADMIN_ACCOUNT_CREATED
+  SCHEDULE_IMPORTED
 }
 
 model User {
@@ -366,9 +367,20 @@ model NotificationLog {
   sender    String?
   recipient String?
   cc        String? // comma-separated CC'd email addresses, if any
+  // `status` above only reflects that Twilio/Resend *accepted* the message —
+  // it says nothing about whether it was actually delivered. For WhatsApp,
+  // providerMessageSid is the Twilio Message SID so the /api/twilio/status
+  // webhook can match its async delivery callback back to this row and fill
+  // in deliveryStatus (queued/sent/delivered/read/undelivered/failed) and
+  // deliveryError once Twilio reports it.
+  providerMessageSid String?
+  deliveryStatus      String?
+  deliveryError       String?
+  deliveryUpdatedAt   DateTime?
   createdAt DateTime            @default(now())
 
   @@index([bookingId])
+  @@index([providerMessageSid])
 }
 
 // A browser/device the user has allowed to receive Web Push notifications
