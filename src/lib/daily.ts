@@ -163,8 +163,11 @@ export async function getTranscriptDownloadLink(transcriptId: string): Promise<s
       return null;
     }
 
-    const data = (await res.json()) as { download_link: string };
-    return data.download_link;
+    // Daily's actual response field is "link", not "download_link" — confirmed
+    // by calling this endpoint directly; the mismatch silently returned
+    // undefined here, which the webhook route then treated as "no link".
+    const data = (await res.json()) as { link: string };
+    return data.link;
   } catch (err) {
     console.error("Failed to reach Daily API to fetch transcript link", err);
     return null;
