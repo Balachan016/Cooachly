@@ -2,20 +2,36 @@
 
 import { useActionState } from "react";
 import { importBookingSchedule } from "@/actions/schedule-import";
-import { Button, Textarea } from "@/components/ui";
+import { Button } from "@/components/ui";
 
-export function ScheduleImportForm({ defaultCsv = "" }: { defaultCsv?: string }) {
+export function ScheduleImportForm({ exampleCsv }: { exampleCsv?: string }) {
   const [state, formAction, pending] = useActionState(importBookingSchedule, undefined);
 
   return (
     <form action={formAction}>
-      <Textarea name="csv" rows={14} defaultValue={defaultCsv} className="font-mono text-xs" />
+      <input
+        type="file"
+        name="file"
+        accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        required
+        className="block w-full text-sm text-black/70 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-700 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 dark:text-white/70"
+      />
+
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>
           {pending ? "Importing…" : "Import schedule"}
         </Button>
+        {exampleCsv && (
+          <a
+            href={`data:text/csv;charset=utf-8,${encodeURIComponent(exampleCsv)}`}
+            download="schedule-example.csv"
+            className="text-sm font-medium text-black/50 hover:underline dark:text-white/50"
+          >
+            Download an example file
+          </a>
+        )}
         {state?.message && (
-          <p className={`text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
+          <p className={`w-full text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
             {state.message}
           </p>
         )}
