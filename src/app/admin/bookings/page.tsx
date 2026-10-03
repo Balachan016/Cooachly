@@ -22,7 +22,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
   const [bookings, filterStudents, allStudents, allProfessors] = await Promise.all([
     prisma.booking.findMany({
       where,
-      orderBy: { startAt: "desc" },
+      orderBy: { startAt: "asc" },
       take: 100,
       include: {
         student: true,
@@ -56,7 +56,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
         <div>
           <h1 className="text-2xl font-semibold">Bookings</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            {hasFilters ? "Sessions matching your filters." : "The most recent 100 sessions booked across the platform."}
+            {hasFilters ? "Sessions matching your filters." : "Up to 100 sessions, soonest first."}
           </p>
         </div>
         <a
