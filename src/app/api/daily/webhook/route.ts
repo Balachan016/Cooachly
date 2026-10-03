@@ -44,12 +44,18 @@ export async function POST(request: Request) {
 
   const event = JSON.parse(body) as {
     type: string;
-    payload?: { room_name?: string; transcript_id?: string };
+    // Daily's actual field names, confirmed against their webhook docs:
+    // meeting.started carries the room under "room"; transcript.ready-to-
+    // download carries it under "room_name" and the transcript's own ID
+    // under "id" — neither event uses "room_name"+"transcript_id" together,
+    // which is what this used to (incorrectly) assume, causing every single
+    // webhook delivery to 400 since the pipeline was first set up.
+    payload?: { room?: string; room_name?: string; id?: string };
   };
 
   if (event.type === "meeting.started") {
-    const roomName = event.payload?.room_name;
-    if (!roomName) return NextResponse.json({ ok: false, error: "Missing room_name" }, { status: 400 });
+    const roomName = event.payload?.room;
+    if (!roomName) return NextResponse.json({ ok: false, error: "Missing room" }, { status: 400 });
 
     const started = await startTranscription(roomName);
     return NextResponse.json({ ok: true, transcriptionStarted: started });
@@ -57,9 +63,9 @@ export async function POST(request: Request) {
 
   if (event.type === "transcript.ready-to-download") {
     const roomName = event.payload?.room_name;
-    const transcriptId = event.payload?.transcript_id;
+    const transcriptId = event.payload?.id;
     if (!roomName || !transcriptId) {
-      return NextResponse.json({ ok: false, error: "Missing room_name or transcript_id" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Missing room_name or id" }, { status: 400 });
     }
 
     const booking = await findBookingByRoomName(roomName);
