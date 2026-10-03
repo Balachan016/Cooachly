@@ -16,7 +16,7 @@ export default async function SuperadminBookingsPage(props: PageProps<"/superadm
       ...(site === "COOACHLY" || site === "ARTS" ? { professor: { site } } : {}),
       ...(status ? { status } : {}),
     },
-    orderBy: { startAt: "desc" },
+    orderBy: { startAt: "asc" },
     take: 300,
     include: { student: true, professor: true },
   });
