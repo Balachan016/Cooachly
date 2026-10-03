@@ -180,17 +180,27 @@ export async function getTranscriptDownloadLink(transcriptId: string): Promise<s
  * summarize and for the admin class-log viewer to display.
  */
 export function parseVttTranscript(vtt: string): string {
-  return vtt
-    .split("\n")
-    .filter((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return false;
-      if (trimmed.startsWith("WEBVTT")) return false;
-      if (/^\d+$/.test(trimmed)) return false;
-      if (trimmed.includes("-->")) return false;
-      return true;
-    })
+  const lines = vtt.split("\n");
+  const textLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("WEBVTT")) continue;
+    if (trimmed.includes("-->")) continue;
+    // A cue identifier line (e.g. "1", or Daily's "transcript:0") always sits
+    // directly above its timing line — checking the next line for "-->" is
+    // what actually catches it, since Daily's identifiers aren't purely
+    // numeric and a plain digit-only regex misses them.
+    if (lines[i + 1]?.trim().includes("-->")) continue;
+    textLines.push(trimmed);
+  }
+
+  return textLines
     .join(" ")
+    // Strips VTT voice markup (e.g. "<v Sam>" / "</v>") while keeping any
+    // speaker-name text a tag wraps, e.g. "<v>Sam:</v>Hello?" -> "Sam: Hello?"
+    .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
