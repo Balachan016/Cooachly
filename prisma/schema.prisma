@@ -5,8 +5,19 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations (prisma migrate deploy) use this instead of the pooled
+  // DATABASE_URL. Postgres advisory locks (which migrations take to avoid
+  // concurrent runs) are session-scoped, but Neon's pooled connection can
+  // hand a session's statements to different underlying connections
+  // mid-transaction — causing exactly the recurring
+  // "Timed out trying to acquire a postgres advisory lock" (P1002) failures
+  // this project keeps hitting on deploy. A direct, unpooled connection
+  // avoids that. DIRECT_URL must be set wherever this builds (see README) —
+  // Prisma errors at build time if it's missing, so add it before deploying
+  // this change.
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
