@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
+import { createAccountInvite } from "@/actions/invites";
 import { logAudit } from "@/lib/audit";
 import { OptionalPhoneSchema } from "@/lib/phone";
 import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
@@ -16,6 +17,8 @@ const CoachApplicationSchema = z.object({
   name: z.string().trim().min(2, "Please enter your name."),
   email: z.string().trim().email("Please enter a valid email."),
   phone: OptionalPhoneSchema,
+  age: z.union([z.coerce.number().int().min(16).max(100), z.nan()]).optional(),
+  gender: z.string().trim().optional(),
   subject: z.string().trim().min(2, "Please enter the subject(s) you teach."),
   curricula: z.array(z.string().trim().min(1)).default([]),
   yearsExperience: z.union([z.coerce.number().int().min(0).max(80), z.nan()]).optional(),
@@ -29,10 +32,13 @@ export async function submitCoachApplication(
   formData: FormData
 ): Promise<CoachApplicationFormState> {
   const rawYears = formData.get("yearsExperience");
+  const rawAge = formData.get("age");
   const parsed = CoachApplicationSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
     phone: formData.get("phone") || undefined,
+    age: rawAge ? rawAge : NaN,
+    gender: formData.get("gender") || undefined,
     subject: formData.get("subject"),
     curricula: formData.getAll("curricula"),
     yearsExperience: rawYears ? rawYears : NaN,
@@ -45,11 +51,16 @@ export async function submitCoachApplication(
     return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
   }
 
-  const { yearsExperience, ...rest } = parsed.data;
+  const { yearsExperience, age, ...rest } = parsed.data;
   const site: Site = formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
 
   const application = await prisma.coachApplication.create({
-    data: { ...rest, site, yearsExperience: Number.isNaN(yearsExperience) ? null : yearsExperience },
+    data: {
+      ...rest,
+      site,
+      yearsExperience: Number.isNaN(yearsExperience) ? null : yearsExperience,
+      age: age == null || Number.isNaN(age) ? null : age,
+    },
   });
 
   if (isEmailConfigured) {
@@ -62,6 +73,7 @@ export async function submitCoachApplication(
         admins.map((admin) =>
           sendEmail({
             to: admin.email,
+            site,
             subject: `New ${SITE_CONFIG[site].brandName} coach application`,
             html: `
               <p>New coach application from <strong>${application.name}</strong> (${application.email}${application.phone ? `, ${application.phone}` : ""}):</p>
@@ -95,4 +107,40 @@ export async function updateCoachApplicationStatus(id: string, status: CoachAppl
     detail: `${application.email}: ${application.status} → ${status}`,
   });
   revalidatePath(sitePath(session.site, "/admin/coach-applications"));
+}
+
+export type SendCoachInviteState = { message?: string; success?: true } | undefined;
+
+/**
+ * Lets an admin invite an approved applicant to create their professor
+ * login — reuses the same AccountInviteToken flow as "Invite a user" on the
+ * Users page, pre-filled from the application instead of a blank form.
+ */
+export async function sendCoachInvite(id: string): Promise<SendCoachInviteState> {
+  const session = await requireRole("ADMIN");
+  const application = await prisma.coachApplication.findUnique({ where: { id } });
+  if (!application || application.site !== session.site) return { message: "Application not found." };
+  if (application.status !== "APPROVED") {
+    return { message: "Approve this application before sending a login invite." };
+  }
+
+  const invite = await createAccountInvite({
+    site: application.site,
+    name: application.name,
+    email: application.email,
+    role: "PROFESSOR",
+    phone: application.phone,
+    actorId: session.userId,
+  });
+  if (!invite.ok) return { message: invite.message };
+
+  revalidatePath(sitePath(session.site, "/admin/coach-applications"));
+
+  if (invite.result.skipped) {
+    return { message: `Email isn't configured — share this link with them directly: ${invite.inviteUrl}`, success: true };
+  }
+  if (invite.result.error) {
+    return { message: `Invite created, but the email failed to send: ${invite.result.error}.`, success: true };
+  }
+  return { message: `Invite sent to ${application.email}.`, success: true };
 }

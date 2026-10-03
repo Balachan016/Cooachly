@@ -260,6 +260,7 @@ export async function createAdminAccount(
   if (isEmailConfigured) {
     const result = await sendEmail({
       to: email,
+      site,
       subject: `Your ${brandName} admin login`,
       html: `
         <p>Hi ${name},</p>
@@ -395,7 +396,7 @@ export async function sendTestNotification(): Promise<{ message: string }> {
     <p>— Cooachly</p>
   `;
 
-  const emailResult = await sendEmail({ to: admin.email, subject: "Cooachly test notification", html: emailHtml });
+  const emailResult = await sendEmail({ to: admin.email, site: admin.site, subject: "Cooachly test notification", html: emailHtml });
   await logNotification({ userId: admin.id, channel: "EMAIL", kind: "test", result: emailResult });
   const emailStatus = emailResult.skipped ? "not configured" : emailResult.error ? `failed — ${emailResult.error}` : "sent";
 

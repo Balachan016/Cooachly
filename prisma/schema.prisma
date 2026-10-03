@@ -230,6 +230,8 @@ model CoachApplication {
   name            String
   email           String
   phone           String?
+  age             Int?
+  gender          String?
   subject         String
   curricula       String[]               @default([])
   yearsExperience Int?
@@ -338,6 +340,7 @@ model Booking {
   reminder24hSentAt      DateTime?
   reminder1hSentAt       DateTime?
   reminder5mSentAt       DateTime?
+  feedbackRequestSentAt  DateTime?
 
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
@@ -466,16 +469,21 @@ model Subscription {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  bookingId String
-  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  raterId   String
-  rater     User     @relation("ReviewsGiven", fields: [raterId], references: [id], onDelete: Cascade)
-  rateeId   String
-  ratee     User     @relation("ReviewsReceived", fields: [rateeId], references: [id], onDelete: Cascade)
-  rating    Int
-  comment   String?
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  raterId         String
+  rater           User     @relation("ReviewsGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  rateeId         String
+  ratee           User     @relation("ReviewsReceived", fields: [rateeId], references: [id], onDelete: Cascade)
+  // Structured post-call feedback questions, asked of both the student and
+  // the professor about each other after a session completes.
+  joinedOnTime    Boolean?
+  explainedClearly Boolean?
+  stayedOnTopic   Boolean?
+  rating          Int
+  comment         String?
+  createdAt       DateTime @default(now())
 
   @@unique([bookingId, raterId])
   @@index([rateeId])

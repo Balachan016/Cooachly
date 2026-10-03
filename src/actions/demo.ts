@@ -47,6 +47,7 @@ export async function submitDemoRequest(
   if (isEmailConfigured) {
     await sendEmail({
       to: email,
+      site,
       subject: `We've got your ${brandName} demo request`,
       html: `
         <p>Hi ${name},</p>
@@ -64,6 +65,7 @@ export async function submitDemoRequest(
       admins.map((admin) =>
         sendEmail({
           to: admin.email,
+          site,
           subject: `New ${brandName} demo request`,
           html: `
             <p>New demo request from <strong>${demoRequest.name}</strong> (${demoRequest.email}${demoRequest.phone ? `, ${demoRequest.phone}` : ""}).</p>

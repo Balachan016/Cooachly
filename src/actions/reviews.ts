@@ -6,9 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 
+const YesNoSchema = z.enum(["yes", "no"]).transform((v) => v === "yes");
+
 const ReviewSchema = z.object({
   bookingId: z.string().min(1),
   rating: z.coerce.number().int().min(1).max(5),
+  joinedOnTime: YesNoSchema,
+  explainedClearly: YesNoSchema,
+  stayedOnTopic: YesNoSchema,
   comment: z.string().trim().max(1000).optional(),
 });
 
@@ -20,11 +25,14 @@ export async function submitReview(_state: ReviewFormState, formData: FormData):
   const parsed = ReviewSchema.safeParse({
     bookingId: formData.get("bookingId"),
     rating: formData.get("rating"),
+    joinedOnTime: formData.get("joinedOnTime"),
+    explainedClearly: formData.get("explainedClearly"),
+    stayedOnTopic: formData.get("stayedOnTopic"),
     comment: formData.get("comment") || undefined,
   });
-  if (!parsed.success) return { message: "Please pick a rating from 1 to 5." };
+  if (!parsed.success) return { message: "Please answer every question and pick a rating from 1 to 5." };
 
-  const { bookingId, rating, comment } = parsed.data;
+  const { bookingId, rating, joinedOnTime, explainedClearly, stayedOnTopic, comment } = parsed.data;
 
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) return { message: "Booking not found." };
@@ -37,12 +45,21 @@ export async function submitReview(_state: ReviewFormState, formData: FormData):
 
   await prisma.review.upsert({
     where: { bookingId_raterId: { bookingId, raterId: session.userId } },
-    create: { bookingId, raterId: session.userId, rateeId, rating, comment: comment || null },
-    update: { rating, comment: comment || null },
+    create: {
+      bookingId,
+      raterId: session.userId,
+      rateeId,
+      rating,
+      joinedOnTime,
+      explainedClearly,
+      stayedOnTopic,
+      comment: comment || null,
+    },
+    update: { rating, joinedOnTime, explainedClearly, stayedOnTopic, comment: comment || null },
   });
 
   revalidatePath(sitePath(session.site, "/student/bookings"));
   revalidatePath(sitePath(session.site, "/professor/bookings"));
   revalidatePath(sitePath(session.site, "/student/professors"));
-  return { message: "Thanks for your review!", success: true };
+  return { message: "Thanks for your feedback!", success: true };
 }

@@ -134,6 +134,7 @@ export async function requestPasswordReset(_state: SimpleFormState, formData: Fo
     if (isEmailConfigured) {
       await sendEmail({
         to: user.email,
+        site,
         subject: `Reset your ${brandName} password`,
         html: `
           <p>Hi ${user.name},</p>

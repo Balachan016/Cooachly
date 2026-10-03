@@ -5,15 +5,20 @@ import { SITE_CONFIG, siteBasePath } from "@/lib/site";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui";
 import { MobileAppSettings } from "@/components/mobile-app-settings";
+import { ContactInfoForm } from "@/components/contact-info-form";
 import { ChangePasswordForm } from "./change-password-form";
 import { StudentProfileForm } from "./student-profile-form";
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const studentProfile =
+  const [studentProfile, user] = await Promise.all([
     session.role === "STUDENT"
-      ? await prisma.studentProfile.findUnique({ where: { userId: session.userId } })
-      : null;
+      ? prisma.studentProfile.findUnique({ where: { userId: session.userId } })
+      : null,
+    session.role === "ADMIN" || session.role === "SUPERADMIN"
+      ? prisma.user.findUnique({ where: { id: session.userId } })
+      : null,
+  ]);
 
   return (
     <div className="mx-auto max-w-xl px-6 py-10">
@@ -43,6 +48,18 @@ export default async function SettingsPage() {
         <h2 className="font-semibold">Mobile app & notifications</h2>
         <MobileAppSettings brandName={SITE_CONFIG[session.site].brandName} />
       </Card>
+
+      {(session.role === "ADMIN" || session.role === "SUPERADMIN") && user && (
+        <Card className="mt-6">
+          <h2 className="font-semibold">Timezone & contact info</h2>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            Used to show you times in your own timezone and for reminder notifications.
+          </p>
+          <div className="mt-4">
+            <ContactInfoForm timezone={user.timezone} phone={user.phone} />
+          </div>
+        </Card>
+      )}
 
       {session.role === "STUDENT" && (
         <Card className="mt-6">

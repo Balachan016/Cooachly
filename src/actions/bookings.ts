@@ -12,6 +12,7 @@ import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING, MAX_RESCHEDULES_PER_MONTH
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
+import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
 import { sendBookingConfirmation, sendBookingRescheduledEmail, sendBookingDeletedEmail } from "@/lib/notifications/booking-confirmation";
 import { formatWhenFor } from "@/lib/notifications/format";
 import { logAudit } from "@/lib/audit";
@@ -452,8 +453,12 @@ export async function markBookingCompleted(bookingId: string) {
     data: { status: "COMPLETED" },
   });
 
-  if (booking.isDemo && !wasAlreadyCompleted) {
-    await sendDemoFollowUpEmail(booking);
+  if (!wasAlreadyCompleted) {
+    if (booking.isDemo) {
+      await sendDemoFollowUpEmail(booking);
+    } else {
+      await sendFeedbackRequestEmails(booking);
+    }
   }
 
   revalidatePath(sitePath(bookingSite, "/professor/bookings"));

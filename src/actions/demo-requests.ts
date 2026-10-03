@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { generateTempPassword, hashPassword } from "@/lib/password";
 import { DEMO_SESSION_LENGTH_MINUTES } from "@/lib/booking-rules";
-import { sendDemoRequestScheduledEmail } from "@/lib/notifications/demo-requests";
+import { sendDemoRequestScheduledEmail, sendDemoJoinedWelcomeEmail } from "@/lib/notifications/demo-requests";
 import { sitePath } from "@/lib/site";
 import type { DemoRequestStatus } from "@prisma/client";
 
@@ -134,8 +134,9 @@ export async function updateDemoRequestStatus(id: string, status: DemoRequestSta
   if (!demoRequest || demoRequest.site !== session.site) return;
 
   const resolved = status === "JOINED" || status === "DROPPED";
+  const justJoined = status === "JOINED" && demoRequest.status !== "JOINED";
 
-  await prisma.demoRequest.update({
+  const updated = await prisma.demoRequest.update({
     where: { id },
     data: { status, resolvedAt: resolved ? new Date() : null },
   });
@@ -148,6 +149,13 @@ export async function updateDemoRequestStatus(id: string, status: DemoRequestSta
     targetId: id,
     detail: `${demoRequest.email}: ${demoRequest.status} → ${status}`,
   });
+
+  // Marking a demo JOINED means the lead actually showed up and converted —
+  // send them a proper welcome-aboard email with a secure link to set their
+  // own login, closing out the request.
+  if (justJoined) {
+    await sendDemoJoinedWelcomeEmail(updated);
+  }
 
   revalidatePath(sitePath(session.site, "/admin/demo-requests"));
 }

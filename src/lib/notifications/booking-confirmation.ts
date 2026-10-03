@@ -38,6 +38,7 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   const studentResult = await sendEmail({
     to: first.student.email,
     cc: adminEmails,
+    site: first.student.site,
     subject: `Your ${countWord} with ${first.professor.name} ${verb} confirmed`,
     html: `
       <p>Hi ${first.student.name},</p>
@@ -59,6 +60,7 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   const professorResult = await sendEmail({
     to: first.professor.email,
     cc: adminEmails,
+    site: first.professor.site,
     subject: `${countWord === "session" ? "New session" : `${sorted.length} new sessions`} booked with ${first.student.name}`,
     html: `
       <p>Hi ${first.professor.name},</p>
@@ -94,6 +96,7 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
   const studentResult = await sendEmail({
     to: booking.student.email,
     cc: adminEmails,
+    site: booking.student.site,
     subject: `Your session with ${booking.professor.name} was rescheduled`,
     html: `
       <p>Hi ${booking.student.name},</p>
@@ -115,6 +118,7 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
   const professorResult = await sendEmail({
     to: booking.professor.email,
     cc: adminEmails,
+    site: booking.professor.site,
     subject: `${booking.student.name} rescheduled their session with you`,
     html: `
       <p>Hi ${booking.professor.name},</p>
@@ -149,6 +153,7 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
   const studentResult = await sendEmail({
     to: booking.student.email,
     cc: adminEmails,
+    site: booking.student.site,
     subject: `Your session with ${booking.professor.name} on ${whenForStudent} was removed`,
     html: `
       <p>Hi ${booking.student.name},</p>
@@ -169,6 +174,7 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
   const professorResult = await sendEmail({
     to: booking.professor.email,
     cc: adminEmails,
+    site: booking.professor.site,
     subject: `Session with ${booking.student.name} on ${whenForProfessor} was removed`,
     html: `
       <p>Hi ${booking.professor.name},</p>
