@@ -43,6 +43,7 @@ export async function submitEnquiry(_state: EnquiryFormState, formData: FormData
         admins.map((admin) =>
           sendEmail({
             to: admin.email,
+            site,
             subject: `New ${SITE_CONFIG[site].brandName} enquiry`,
             html: `
               <p>New enquiry from <strong>${enquiry.name}</strong> (${enquiry.email}${enquiry.phone ? `, ${enquiry.phone}` : ""}${enquiry.country ? `, ${enquiry.country}` : ""}):</p>

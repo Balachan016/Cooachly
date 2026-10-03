@@ -19,6 +19,8 @@ export const SITE_CONFIG: Record<Site, {
   tagline: string;
   description: string;
   supportPhone: string;
+  supportEmail: string;
+  logoPath: string;
   category: string;
   homeHref: string;
 }> = {
@@ -28,6 +30,8 @@ export const SITE_CONFIG: Record<Site, {
     description:
       "Cooachly connects students with professors for scheduled 1:1 coaching sessions, messaging, and payments — across any timezone.",
     supportPhone: "+91 80151 51896",
+    supportEmail: "support@cooachly.com",
+    logoPath: "/icons/cooachly-192.png",
     category: "academic coaching",
     homeHref: "/",
   },
@@ -37,6 +41,8 @@ export const SITE_CONFIG: Record<Site, {
     description:
       "Cooachly Arts connects students with Carnatic vocal gurus for scheduled 1:1 music classes, messaging, and payments — across any timezone.",
     supportPhone: "+91 80151 51896",
+    supportEmail: "support@cooachly.com",
+    logoPath: "/icons/arts-192.png",
     category: "Carnatic vocal music",
     homeHref: "/arts",
   },

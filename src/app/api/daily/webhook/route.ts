@@ -6,6 +6,7 @@ import { summarizeTranscript } from "@/lib/ai-summary";
 import { sendEmail } from "@/lib/notifications/email";
 import { getAdminCcEmails } from "@/lib/notifications/admin-recipients";
 import { formatWhenFor } from "@/lib/notifications/format";
+import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
 import { SITE_CONFIG } from "@/lib/site";
 
 // Configure this URL as a webhook in your Daily.co dashboard, subscribed to
@@ -98,6 +99,8 @@ export async function POST(request: Request) {
       professorName: booking.professor.name,
     });
 
+    const wasAlreadyCompleted = booking.status === "COMPLETED";
+
     await prisma.booking.update({
       where: { id: booking.id },
       data: {
@@ -107,6 +110,10 @@ export async function POST(request: Request) {
         status: booking.status === "CONFIRMED" ? "COMPLETED" : booking.status,
       },
     });
+
+    if (!wasAlreadyCompleted && !booking.isDemo) {
+      await sendFeedbackRequestEmails(booking);
+    }
 
     if (summary) {
       const brandName = SITE_CONFIG[booking.professor.site].brandName;
@@ -118,12 +125,14 @@ export async function POST(request: Request) {
         sendEmail({
           to: booking.student.email,
           cc: adminEmails,
+          site: booking.student.site,
           subject: `Your ${brandName} session summary`,
           html: `<p>Here's the AI-generated summary of your session with <strong>${booking.professor.name}</strong> on <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>:</p>${summaryHtml}`,
         }),
         sendEmail({
           to: booking.professor.email,
           cc: adminEmails,
+          site: booking.professor.site,
           subject: `Your ${brandName} session summary`,
           html: `<p>Here's the AI-generated summary of your session with <strong>${booking.student.name}</strong> on <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>:</p>${summaryHtml}`,
         }),

@@ -34,6 +34,84 @@ const SendInviteSchema = z.object({
   message: z.string().trim().max(1000).optional(),
 });
 
+type CreateInviteOpts = {
+  site: Site;
+  name: string;
+  email: string;
+  role: "STUDENT" | "PROFESSOR";
+  phone?: string | null;
+  message?: string | null;
+  actorId: string;
+};
+
+/**
+ * Core of the invite flow, shared by the admin-facing "invite a user" form
+ * and any other place that needs to offer someone a login (an approved
+ * coach application, a demo that converted) without re-deriving the token/
+ * email/audit-log plumbing each time.
+ */
+export async function createAccountInvite(opts: CreateInviteOpts) {
+  const { site, name, email, role, phone, message, actorId } = opts;
+
+  const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
+  if (existing) {
+    return { ok: false as const, message: "This email already has an account on this platform." };
+  }
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  await prisma.accountInviteToken.create({
+    data: {
+      site,
+      name,
+      email,
+      role,
+      phone: phone || null,
+      message: message || null,
+      tokenHash: hashToken(rawToken),
+      expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
+    },
+  });
+
+  await logAudit({
+    site,
+    action: "ACCOUNT_INVITE_SENT",
+    actorId,
+    targetType: "AccountInviteToken",
+    detail: `${email} invited as ${role}`,
+  });
+
+  const appUrl = await getAppUrl();
+  const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
+  const brandName = SITE_CONFIG[site].brandName;
+
+  const adminEmails = getAdminCcEmails();
+
+  const result = await sendEmail({
+    to: email,
+    cc: adminEmails,
+    site,
+    subject: `Welcome to ${brandName} — create your login`,
+    html: `
+      <p>Hi ${name},</p>
+      ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
+      <p>You've been invited to create your ${brandName} account. Click below to set your password and get started:</p>
+      <p><a href="${inviteUrl}">Create your login</a></p>
+      <p>This link expires in 7 days.</p>
+      <p>— ${brandName}</p>
+    `,
+  });
+
+  if (phone) {
+    await sendWhatsAppInvite({
+      to: phone,
+      body: `Hi ${name}, you've been invited to create your ${brandName} account. Create your login here: ${inviteUrl} (link expires in 7 days).`,
+      variables: { name, brandName, inviteUrl },
+    });
+  }
+
+  return { ok: true as const, inviteUrl, result };
+}
+
 export async function sendAccountInvite(_state: InviteFormState, formData: FormData): Promise<InviteFormState> {
   const session = await requireRole("ADMIN", "SUPERADMIN");
 
@@ -55,63 +133,12 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
   // through this invite-and-redeem flow, so there's no ADMIN branch here.
   const site: Site = session.site;
 
-  const existing = await prisma.user.findUnique({ where: { site_email: { site, email } } });
-  if (existing) {
-    return { message: "This email already has an account on this platform." };
-  }
-
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  await prisma.accountInviteToken.create({
-    data: {
-      site,
-      name,
-      email,
-      role,
-      phone: phone || null,
-      message: message || null,
-      tokenHash: hashToken(rawToken),
-      expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
-    },
-  });
-
-  await logAudit({
-    site,
-    action: "ACCOUNT_INVITE_SENT",
-    actorId: session.userId,
-    targetType: "AccountInviteToken",
-    detail: `${email} invited as ${role}`,
-  });
-
-  const appUrl = await getAppUrl();
-  const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
-  const brandName = SITE_CONFIG[site].brandName;
-
-  const adminEmails = getAdminCcEmails();
-
-  const result = await sendEmail({
-    to: email,
-    cc: adminEmails,
-    subject: `Welcome to ${brandName} — create your login`,
-    html: `
-      <p>Hi ${name},</p>
-      ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
-      <p>You've been invited to create your ${brandName} account. Click below to set your password and get started:</p>
-      <p><a href="${inviteUrl}">Create your login</a></p>
-      <p>This link expires in 7 days.</p>
-      <p>— ${brandName}</p>
-    `,
-  });
-
-  if (phone) {
-    await sendWhatsAppInvite({
-      to: phone,
-      body: `Hi ${name}, you've been invited to create your ${brandName} account. Create your login here: ${inviteUrl} (link expires in 7 days).`,
-      variables: { name, brandName, inviteUrl },
-    });
-  }
+  const invite = await createAccountInvite({ site, name, email, role, phone, message, actorId: session.userId });
+  if (!invite.ok) return { message: invite.message };
 
   revalidatePath(sitePath(site, "/admin/users"));
 
+  const { inviteUrl, result } = invite;
   if (result.skipped) {
     return { message: `Email isn't configured — share this link with them directly: ${inviteUrl}`, success: true };
   }

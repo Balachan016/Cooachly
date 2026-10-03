@@ -82,6 +82,7 @@ async function notifyPerson(
 
   const emailResult = await sendEmail({
     to: person.email,
+    site: person.site,
     subject: `Your ${brandName} session ${SUBJECT_PHRASE[kind]}`,
     html: emailHtml,
   });

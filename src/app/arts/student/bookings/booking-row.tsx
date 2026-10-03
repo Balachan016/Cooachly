@@ -68,6 +68,9 @@ export function StudentBookingRow({
               revieweeLabel={booking.professor.name}
               existingRating={myReview?.rating}
               existingComment={myReview?.comment}
+              existingJoinedOnTime={myReview?.joinedOnTime}
+              existingExplainedClearly={myReview?.explainedClearly}
+              existingStayedOnTopic={myReview?.stayedOnTopic}
             />
           )}
         </div>

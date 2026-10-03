@@ -14,6 +14,7 @@ export async function sendDemoFollowUpEmail(booking: BookingWithParties) {
 
   const result = await sendEmail({
     to: booking.student.email,
+    site: booking.student.site,
     subject: `How was your ${brandName} demo?`,
     html: `
       <p>Hi ${booking.student.name},</p>

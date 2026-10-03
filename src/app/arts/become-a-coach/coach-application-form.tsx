@@ -27,6 +27,26 @@ export function CoachApplicationForm() {
         <Label htmlFor="phone">Phone (optional)</Label>
         <Input id="phone" name="phone" type="tel" placeholder="+1 555 123 4567" />
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="age">Age (optional)</Label>
+          <Input id="age" name="age" type="number" min={16} max={100} step={1} />
+        </div>
+        <div>
+          <Label htmlFor="gender">Gender (optional)</Label>
+          <select
+            id="gender"
+            name="gender"
+            defaultValue=""
+            className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 dark:border-white/15 dark:bg-neutral-800"
+          >
+            <option value="">Prefer not to say</option>
+            <option value="Female">Female</option>
+            <option value="Male">Male</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
       <div>
         <Label htmlFor="subject">What do you teach?</Label>
         <Input id="subject" name="subject" placeholder="e.g. Carnatic vocals, Geethams & Varnams" required />
@@ -66,7 +86,7 @@ export function CoachApplicationForm() {
         <Input id="availability" name="availability" placeholder="e.g. Weekday evenings, weekends" />
       </div>
       <div>
-        <Label htmlFor="message">Anything else? (optional)</Label>
+        <Label htmlFor="message">Additional Information (optional)</Label>
         <Textarea id="message" name="message" rows={3} />
       </div>
 

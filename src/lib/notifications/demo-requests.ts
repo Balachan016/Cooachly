@@ -5,6 +5,7 @@ import { sendEmail, isEmailConfigured } from "./email";
 import { formatWhenFor } from "./format";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
+import { createPasswordSetupLink } from "@/lib/tokens";
 
 export async function sendDemoRequestScheduledEmail(
   demoRequest: DemoRequest & { professor: User | null },
@@ -33,6 +34,7 @@ export async function sendDemoRequestScheduledEmail(
 
   await sendEmail({
     to: demoRequest.email,
+    site: demoRequest.site,
     subject: `Your ${brandName} demo call is scheduled`,
     html: `
       <p>Hi ${demoRequest.name},</p>
@@ -46,6 +48,7 @@ export async function sendDemoRequestScheduledEmail(
 
   await sendEmail({
     to: demoRequest.professor.email,
+    site: demoRequest.site,
     subject: `Demo call scheduled with ${demoRequest.name}`,
     html: `
       <p>Hi ${demoRequest.professor.name},</p>
@@ -56,6 +59,39 @@ export async function sendDemoRequestScheduledEmail(
       } is scheduled for <strong>${whenForProfessor}</strong>.</p>
       ${linkLine}
       <p>— ${brandName}</p>
+    `,
+  });
+}
+
+/**
+ * Sent once a demo call is marked JOINED — the lead is now a real student.
+ * The account created when the call was scheduled only had a temp password
+ * emailed in plaintext, so this hands them a proper, secure "set your own
+ * password" link instead, in a warmer welcome-aboard email.
+ */
+export async function sendDemoJoinedWelcomeEmail(demoRequest: DemoRequest) {
+  if (!isEmailConfigured) return;
+
+  const student = await prisma.user.findUnique({
+    where: { site_email: { site: demoRequest.site, email: demoRequest.email } },
+  });
+  if (!student) return;
+
+  const brandName = SITE_CONFIG[demoRequest.site].brandName;
+  const setupUrl = await createPasswordSetupLink(demoRequest.site, student.id);
+
+  await sendEmail({
+    to: demoRequest.email,
+    site: demoRequest.site,
+    subject: `Welcome to ${brandName}!`,
+    html: `
+      <p>Hi ${demoRequest.name},</p>
+      <p>It was great having you at your demo session — welcome aboard! Your ${brandName} account is ready
+      so you can book sessions, message your coach, and keep track of everything in one place.</p>
+      <p><a href="${setupUrl}">Set your password and sign in</a></p>
+      <p>This link expires in 1 hour — if it does, just use &quot;Forgot password&quot; on the login page to get a new one.</p>
+      <p>We're looking forward to being part of your learning journey!</p>
+      <p>— The ${brandName} team</p>
     `,
   });
 }
@@ -71,6 +107,7 @@ export async function sendDemoRequestReminder(demoRequest: DemoRequest) {
 
   await sendEmail({
     to: demoRequest.email,
+    site: demoRequest.site,
     subject: `Following up on your ${brandName} demo request`,
     html: `
       <p>Hi ${demoRequest.name},</p>
@@ -88,6 +125,7 @@ export async function sendDemoRequestReminder(demoRequest: DemoRequest) {
     admins.map((admin) =>
       sendEmail({
         to: admin.email,
+        site: demoRequest.site,
         subject: `Reminder: ${demoRequest.name}'s demo request is unresolved`,
         html: `
           <p>The demo request from <strong>${demoRequest.name}</strong> (${demoRequest.email}) for

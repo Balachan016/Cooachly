@@ -80,5 +80,6 @@ export async function updateContactInfo(_state: unknown, formData: FormData) {
 
   revalidatePath(sitePath(session.site, "/professor/profile"));
   revalidatePath(sitePath(session.site, "/student"));
+  revalidatePath(sitePath(session.site, "/settings"));
   return { message: "Contact info updated." };
 }

@@ -41,6 +41,8 @@ export default async function AdminCoachApplicationsPage() {
               <div className="text-sm text-black/60 dark:text-white/60">
                 {a.email}
                 {a.phone ? ` · ${a.phone}` : ""}
+                {a.age != null ? ` · Age ${a.age}` : ""}
+                {a.gender ? ` · ${a.gender}` : ""}
               </div>
               <div className="mt-1 text-sm text-black/70 dark:text-white/70">
                 {a.subject}
