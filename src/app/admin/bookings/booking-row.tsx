@@ -35,6 +35,11 @@ export function AdminBookingRow({
   const [showDetails, setShowDetails] = useState(false);
   const isPast = isPastDate(booking.endAt);
   const canExtend = booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
+  // Separate from canExtend: a cancelled booking can still be marked complete
+  // (e.g. undoing an accidental cancellation after the call actually
+  // happened), even though extending/reminding a cancelled session doesn't
+  // make sense.
+  const canMarkComplete = booking.status !== "COMPLETED";
   const canRemind = booking.status !== "CANCELLED";
   const canDelete = viewerRole === "SUPERADMIN" && booking.status === "CONFIRMED";
   const canSuperadminCancel =
@@ -174,14 +179,14 @@ export function AdminBookingRow({
 
               <div>
                 <div className="text-xs font-semibold uppercase text-black/40 dark:text-white/40">Completion</div>
-                {canExtend ? (
+                {canMarkComplete ? (
                   <Button
                     variant="secondary"
                     className="mt-1"
                     disabled={isPending}
                     onClick={() => startTransition(() => markBookingCompleted(booking.id))}
                   >
-                    Mark complete
+                    {booking.status === "CANCELLED" ? "Mark complete (undo cancel)" : "Mark complete"}
                   </Button>
                 ) : (
                   <p className="mt-1 text-sm text-black/40 dark:text-white/40">—</p>

@@ -128,6 +128,14 @@ export function ProfessorBookingRow({
           )}
         </div>
       )}
+
+      {booking.status === "CANCELLED" && (
+        <div className="sm:self-start">
+          <Button disabled={isPending} onClick={() => startTransition(() => markBookingCompleted(booking.id))}>
+            Mark complete (undo cancel)
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
