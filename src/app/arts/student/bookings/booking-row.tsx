@@ -1,12 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
 import type { Attachment, Booking, Review, User } from "@prisma/client";
-import { cancelBooking } from "@/actions/bookings";
-import { Badge, Button } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
 import { ReviewForm } from "@/components/review-form";
 import { RescheduleControl } from "@/components/reschedule-control";
+import { CancelBookingControl } from "@/components/cancel-booking-control";
 
 export function StudentBookingRow({
   booking,
@@ -17,7 +16,6 @@ export function StudentBookingRow({
   isPast: boolean;
   canJoin: boolean;
 }) {
-  const [isPending, startTransition] = useTransition();
   const myReview = booking.reviews.find((r) => r.raterId === booking.studentId);
 
   const canModify = !isPast && booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
@@ -77,9 +75,7 @@ export function StudentBookingRow({
 
         {canModify && (
           <div className="flex flex-wrap items-start gap-2">
-            <Button variant="danger" disabled={isPending} onClick={() => startTransition(() => cancelBooking(booking.id))}>
-              Cancel
-            </Button>
+            <CancelBookingControl bookingId={booking.id} />
             <RescheduleControl bookingId={booking.id} />
           </div>
         )}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { getRescheduleOptions, rescheduleBooking, type RescheduleOptions, type RescheduleFormState } from "@/actions/bookings";
-import { Button, FormMessage } from "@/components/ui";
+import { Button, FormMessage, Textarea } from "@/components/ui";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -11,6 +11,7 @@ export function RescheduleControl({ bookingId }: { bookingId: string }) {
   const [options, setOptions] = useState<RescheduleOptions | null>(null);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
   const [result, setResult] = useState<RescheduleFormState>(undefined);
 
   function handleOpen() {
@@ -24,11 +25,12 @@ export function RescheduleControl({ bookingId }: { bookingId: string }) {
   }
 
   function handleConfirm() {
-    if (!selected) return;
+    if (!selected || !reason.trim()) return;
     startTransition(async () => {
       const formData = new FormData();
       formData.set("bookingId", bookingId);
       formData.set("newStartAt", selected);
+      formData.set("reason", reason.trim());
       const res = await rescheduleBooking(undefined, formData);
       setResult(res);
       if (res?.success) setOpen(false);
@@ -126,10 +128,23 @@ export function RescheduleControl({ bookingId }: { bookingId: string }) {
         </div>
       )}
 
+      {selected && (
+        <div className="mt-3">
+          <p className="text-sm font-medium">Why are you rescheduling?</p>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            placeholder="Let us know what happened…"
+            required
+          />
+        </div>
+      )}
+
       {result?.message && <FormMessage>{result.message}</FormMessage>}
 
       <div className="mt-3 flex gap-2">
-        <Button disabled={!selected || isPending} onClick={handleConfirm}>
+        <Button disabled={!selected || !reason.trim() || isPending} onClick={handleConfirm}>
           {isPending ? "Rescheduling…" : "Confirm reschedule"}
         </Button>
         <Button variant="secondary" disabled={isPending} onClick={() => setOpen(false)}>

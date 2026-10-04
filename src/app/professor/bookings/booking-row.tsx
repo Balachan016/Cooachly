@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from "react";
 import type { Attachment, Booking, Review, StudentProfile, User } from "@prisma/client";
-import { cancelBooking, markBookingCompleted, setMeetingLink } from "@/actions/bookings";
+import { markBookingCompleted, setMeetingLink } from "@/actions/bookings";
 import { Badge, Button, Input } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
 import { ReviewForm } from "@/components/review-form";
+import { RescheduleControl } from "@/components/reschedule-control";
+import { CancelBookingControl } from "@/components/cancel-booking-control";
 
 export function ProfessorBookingRow({
   booking,
@@ -114,13 +116,10 @@ export function ProfessorBookingRow({
             Save link
           </Button>
           {!isPast && booking.status !== "COMPLETED" && (
-            <Button
-              variant="danger"
-              disabled={isPending}
-              onClick={() => startTransition(() => cancelBooking(booking.id))}
-            >
-              Cancel
-            </Button>
+            <>
+              <CancelBookingControl bookingId={booking.id} />
+              <RescheduleControl bookingId={booking.id} />
+            </>
           )}
           {isPast && booking.status !== "COMPLETED" && (
             <Button disabled={isPending} onClick={() => startTransition(() => markBookingCompleted(booking.id))}>

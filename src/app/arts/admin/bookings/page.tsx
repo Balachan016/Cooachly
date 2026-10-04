@@ -10,9 +10,11 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const searchParams = await props.searchParams;
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
+  const view = searchParams.view === "completed" ? "completed" : "upcoming";
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
+    status: view === "completed" ? "COMPLETED" : { not: "COMPLETED" },
     ...(studentId ? { studentId } : {}),
     ...(date ? { startAt: { gte: new Date(`${date}T00:00:00.000Z`), lt: new Date(`${date}T23:59:59.999Z`) } } : {}),
   };
@@ -20,7 +22,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const [bookings, students] = await Promise.all([
     prisma.booking.findMany({
       where,
-      orderBy: { startAt: "asc" },
+      orderBy: { startAt: view === "completed" ? "desc" : "asc" },
       take: 100,
       include: {
         student: true,
@@ -37,6 +39,14 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   ]);
 
   const hasFilters = Boolean(studentId || date);
+  const tabQuery = (tabView: "upcoming" | "completed") => {
+    const params = new URLSearchParams();
+    if (studentId) params.set("student", studentId);
+    if (date) params.set("date", date);
+    if (tabView === "completed") params.set("view", "completed");
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  };
 
   return (
     <div>
@@ -44,7 +54,12 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
         <div>
           <h1 className="text-2xl font-semibold">Bookings</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            {hasFilters ? "Classes matching your filters." : "Up to 100 classes, soonest first."} Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
+            {hasFilters
+              ? "Classes matching your filters."
+              : view === "completed"
+                ? "Up to 100 completed classes, most recent first."
+                : "Up to 100 upcoming classes, soonest first."}{" "}
+            Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
           </p>
         </div>
         <a
@@ -55,7 +70,24 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
         </a>
       </div>
 
+      <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
+        {(["upcoming", "completed"] as const).map((tabView) => (
+          <a
+            key={tabView}
+            href={`${sitePath(session.site, "/admin/bookings")}${tabQuery(tabView)}`}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium capitalize ${
+              view === tabView
+                ? "border-brand-700 text-brand-700 dark:border-brand-400 dark:text-brand-400"
+                : "border-transparent text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"
+            }`}
+          >
+            {tabView}
+          </a>
+        ))}
+      </div>
+
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
+        {view === "completed" && <input type="hidden" name="view" value="completed" />}
         <div className="w-56">
           <label htmlFor="student" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
             Student
@@ -89,7 +121,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
         </button>
         {hasFilters && (
           <a
-            href={sitePath(session.site, "/admin/bookings")}
+            href={`${sitePath(session.site, "/admin/bookings")}${tabQuery(view)}`}
             className="text-sm font-medium text-black/50 hover:underline dark:text-white/50"
           >
             Clear filters
@@ -115,7 +147,11 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
             {bookings.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-black/50 dark:text-white/50">
-                  {hasFilters ? "No classes match your filters." : "No bookings yet."}
+                  {hasFilters
+                    ? "No classes match your filters."
+                    : view === "completed"
+                      ? "No completed classes yet."
+                      : "No upcoming bookings."}
                 </td>
               </tr>
             )}
