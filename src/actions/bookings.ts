@@ -242,7 +242,8 @@ export async function cancelBooking(_state: CancelBookingState, formData: FormDa
     data: { status: "CANCELLED" },
   });
 
-  await sendBookingCancelledEmail(booking, { cancelledBy: session.role as "STUDENT" | "PROFESSOR", reason });
+  const cancelledByName = session.role === "STUDENT" ? booking.student.name : booking.professor.name;
+  await sendBookingCancelledEmail(booking, { cancelledByName, reason });
 
   await logAudit({
     site: session.site,
@@ -258,6 +259,60 @@ export async function cancelBooking(_state: CancelBookingState, formData: FormDa
   revalidatePath(sitePath(session.site, "/admin/bookings"));
 
   return { message: "Session cancelled.", success: true };
+}
+
+/**
+ * Superadmin-only: cancels any scheduled (PENDING/CONFIRMED) booking on
+ * either site, with a required reason — unlike deleteBooking, this keeps
+ * the row (just flips status) and, since getAvailableSlots only counts
+ * PENDING/CONFIRMED bookings as occupying a slot, immediately frees that
+ * time for someone else to book. Emails the student, professor, and admins,
+ * same as a self-service cancellation.
+ */
+export async function superadminCancelBooking(
+  _state: CancelBookingState,
+  formData: FormData
+): Promise<CancelBookingState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!bookingId) return { message: "Invalid cancellation request." };
+  if (!reason) return { message: "Please enter a reason for cancelling this booking." };
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { student: true, professor: true },
+  });
+  if (!booking) return { message: "Booking not found." };
+  if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
+    return { message: "Only scheduled (pending or confirmed) bookings can be cancelled this way." };
+  }
+
+  const bookingSite = booking.professor.site;
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { status: "CANCELLED" },
+  });
+
+  await sendBookingCancelledEmail(booking, { cancelledByName: `${session.name} (admin)`, reason });
+
+  await logAudit({
+    site: bookingSite,
+    action: "BOOKING_CANCELLED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: bookingId,
+    detail: `Cancelled by superadmin ${session.name}: ${reason}`,
+  });
+
+  revalidatePath(sitePath(bookingSite, "/student/bookings"));
+  revalidatePath(sitePath(bookingSite, "/professor/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/bookings"));
+  revalidatePath("/superadmin/bookings");
+
+  return { message: "Session cancelled — the slot is now open for others to book.", success: true };
 }
 
 /**

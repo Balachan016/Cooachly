@@ -1,11 +1,19 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { cancelBooking } from "@/actions/bookings";
+import { cancelBooking, type CancelBookingState } from "@/actions/bookings";
 import { Button, FormMessage, Textarea } from "@/components/ui";
 
-export function CancelBookingControl({ bookingId }: { bookingId: string }) {
-  const [state, action, pending] = useActionState(cancelBooking, undefined);
+export function CancelBookingControl({
+  bookingId,
+  action: actionProp,
+  label = "Cancel",
+}: {
+  bookingId: string;
+  action?: (state: CancelBookingState, formData: FormData) => Promise<CancelBookingState>;
+  label?: string;
+}) {
+  const [state, action, pending] = useActionState(actionProp ?? cancelBooking, undefined);
   const [open, setOpen] = useState(false);
 
   if (state?.success) return null;
@@ -13,7 +21,7 @@ export function CancelBookingControl({ bookingId }: { bookingId: string }) {
   if (!open) {
     return (
       <Button variant="danger" onClick={() => setOpen(true)}>
-        Cancel
+        {label}
       </Button>
     );
   }

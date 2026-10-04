@@ -156,13 +156,13 @@ export async function sendBookingRescheduledEmail(
  */
 export async function sendBookingCancelledEmail(
   booking: BookingWithParties,
-  opts: { cancelledBy: "STUDENT" | "PROFESSOR"; reason?: string }
+  opts: { cancelledByName: string; reason?: string }
 ) {
   if (!isEmailConfigured) return;
 
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const adminEmails = getAdminCcEmails();
-  const cancelledByName = opts.cancelledBy === "STUDENT" ? booking.student.name : booking.professor.name;
+  const cancelledByName = opts.cancelledByName;
   const reasonLine = opts.reason ? `<p><strong>Reason given:</strong> ${opts.reason}</p>` : "";
 
   const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
