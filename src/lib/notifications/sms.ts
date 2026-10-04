@@ -12,6 +12,19 @@ const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
 
+// Read-only snapshot for the superadmin reminders page, so "is the template
+// SID actually deployed?" can be checked by loading a page instead of
+// guessing from Twilio error codes. Content template SIDs aren't secrets
+// (they just identify a pre-approved message template), so it's safe to
+// show them in full.
+export const whatsAppConfigStatus = {
+  configured: isWhatsAppConfigured,
+  from: whatsappFrom?.replace(/^whatsapp:/, "") ?? null,
+  reminderTemplateSid: reminderContentSid ?? null,
+  inviteTemplateSid: inviteContentSid ?? null,
+  demoTemplateSid: demoContentSid ?? null,
+};
+
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
 
 // TEMPORARY: WhatsApp delivery is unreliable for regular students/professors
