@@ -2,12 +2,14 @@
 
 import { useTransition } from "react";
 import type { Booking, User } from "@prisma/client";
-import { deleteBooking } from "@/actions/bookings";
+import { deleteBooking, superadminCancelBooking } from "@/actions/bookings";
 import { Badge, Button } from "@/components/ui";
+import { CancelBookingControl } from "@/components/cancel-booking-control";
 
 export function SuperadminBookingRow({ booking }: { booking: Booking & { student: User; professor: User } }) {
   const [isPending, startTransition] = useTransition();
   const canDelete = booking.status === "CONFIRMED";
+  const canCancel = booking.status === "PENDING" || booking.status === "CONFIRMED";
 
   function handleDelete() {
     const confirmed = window.confirm(
@@ -39,13 +41,17 @@ export function SuperadminBookingRow({ booking }: { booking: Booking & { student
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
       <td className="px-4 py-3">
-        {canDelete ? (
-          <Button variant="danger" disabled={isPending} onClick={handleDelete}>
-            Delete
-          </Button>
-        ) : (
-          <span className="text-xs text-black/40 dark:text-white/40">—</span>
-        )}
+        <div className="flex flex-wrap items-start gap-2">
+          {canCancel && (
+            <CancelBookingControl bookingId={booking.id} action={superadminCancelBooking} label="Cancel" />
+          )}
+          {canDelete && (
+            <Button variant="danger" disabled={isPending} onClick={handleDelete}>
+              Delete
+            </Button>
+          )}
+          {!canCancel && !canDelete && <span className="text-xs text-black/40 dark:text-white/40">—</span>}
+        </div>
       </td>
     </tr>
   );

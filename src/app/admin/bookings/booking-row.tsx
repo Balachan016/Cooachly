@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react";
 import type { Attachment, Booking, NotificationLog, Role, User } from "@prisma/client";
-import { extendBooking, deleteBooking, markBookingCompleted } from "@/actions/bookings";
+import { extendBooking, deleteBooking, markBookingCompleted, superadminCancelBooking } from "@/actions/bookings";
 import { sendManualReminder } from "@/actions/reminders";
 import { isPastDate } from "@/lib/time";
 import { Badge, Button } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
+import { CancelBookingControl } from "@/components/cancel-booking-control";
 
 const KIND_LABEL: Record<string, string> = {
   "24h": "24h reminder",
@@ -36,6 +37,8 @@ export function AdminBookingRow({
   const canExtend = booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
   const canRemind = booking.status !== "CANCELLED";
   const canDelete = viewerRole === "SUPERADMIN" && booking.status === "CONFIRMED";
+  const canSuperadminCancel =
+    viewerRole === "SUPERADMIN" && (booking.status === "PENDING" || booking.status === "CONFIRMED");
 
   const failedCount = booking.notificationLogs.filter((l) => l.status === "FAILED").length;
 
@@ -86,6 +89,9 @@ export function AdminBookingRow({
                 </span>
               )}
             </button>
+            {canSuperadminCancel && (
+              <CancelBookingControl bookingId={booking.id} action={superadminCancelBooking} label="Cancel" />
+            )}
             {canDelete && (
               <Button variant="danger" disabled={isPending} onClick={handleDelete}>
                 Delete
