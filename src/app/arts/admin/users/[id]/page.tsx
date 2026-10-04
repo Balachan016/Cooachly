@@ -33,8 +33,7 @@ export default async function AdminEditUserPage(props: PageProps<"/arts/admin/us
       <Card className="mt-6 max-w-xl">
         <h2 className="font-semibold">Reset password</h2>
         <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-          Set a new password for this account directly — useful when the person can&apos;t use the
-          self-service &quot;Forgot password&quot; email link.
+          Email {user.name} a secure link to set their own new password, or set one directly yourself.
         </p>
         <ResetPasswordForm userId={user.id} />
       </Card>
