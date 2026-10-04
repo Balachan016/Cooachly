@@ -13,6 +13,7 @@ import { logAudit } from "@/lib/audit";
 import { createDailyRoomForBooking, isDailyConfigured } from "@/lib/daily";
 import { sitePath, SITE_CONFIG, DEFAULT_SITE } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
+import { createPasswordSetupLink } from "@/lib/tokens";
 import { OptionalPhoneSchema } from "@/lib/phone";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role, Site } from "@prisma/client";
@@ -322,6 +323,52 @@ export async function adminResetPassword(
   });
 
   return { message: "Password reset.", success: true };
+}
+
+/**
+ * Sends the account owner a self-service "reset your password" email —
+ * same secure link as the public "Forgot password" flow, just triggered by
+ * an admin instead of the user requesting it themselves. The user sets
+ * their own new password; nobody (including the admin) ever sees or needs
+ * their old one.
+ */
+export async function sendPasswordResetEmail(userId: string): Promise<SimpleFormState> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { message: "User not found." };
+  if (session.role !== "SUPERADMIN" && user.site !== session.site) return { message: "User not found." };
+  if (ELEVATED_ROLES.includes(user.role) && session.role !== "SUPERADMIN") {
+    return { message: "Only a superadmin can email an admin a password reset link." };
+  }
+  if (!isEmailConfigured) return { message: "Email isn't configured — use \"Reset password\" to set one directly instead." };
+
+  const brandName = SITE_CONFIG[user.site].brandName;
+  const resetUrl = await createPasswordSetupLink(user.site, user.id);
+
+  const result = await sendEmail({
+    to: user.email,
+    site: user.site,
+    subject: `Reset your ${brandName} password`,
+    html: `
+      <p>Hi ${user.name},</p>
+      <p>An admin requested a password reset for your ${brandName} account. This link expires in 1 hour.</p>
+      <p><a href="${resetUrl}">Reset your password</a></p>
+      <p>If you weren't expecting this, you can safely ignore this email — your password won't change unless you click the link above and set a new one.</p>
+    `,
+  });
+
+  await logAudit({
+    site: user.site,
+    action: "PASSWORD_RESET_BY_ADMIN",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: userId,
+    detail: `Reset email sent to ${user.name} (${user.email})`,
+  });
+
+  if (result.error) return { message: `Couldn't send the email: ${result.error}` };
+  return { message: `Password reset link emailed to ${user.email}.`, success: true };
 }
 
 const ChangeAdminEmailSchema = z.object({
