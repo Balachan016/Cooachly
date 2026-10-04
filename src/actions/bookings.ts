@@ -13,7 +13,12 @@ import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
 import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
-import { sendBookingConfirmation, sendBookingRescheduledEmail, sendBookingDeletedEmail } from "@/lib/notifications/booking-confirmation";
+import {
+  sendBookingConfirmation,
+  sendBookingRescheduledEmail,
+  sendBookingDeletedEmail,
+  sendBookingCancelledEmail,
+} from "@/lib/notifications/booking-confirmation";
 import { formatWhenFor } from "@/lib/notifications/format";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
@@ -204,17 +209,40 @@ export async function bookSlots(_state: unknown, formData: FormData) {
   redirect(checkoutUrl);
 }
 
-export async function cancelBooking(bookingId: string) {
+export type CancelBookingState = { message?: string; success?: true } | undefined;
+
+/**
+ * Cancels a booking at the student's or professor's request. Requires a
+ * reason, which (along with who cancelled) is logged to the audit trail and
+ * emailed to the student, professor, and admins — nobody should find out a
+ * session vanished without knowing why.
+ */
+export async function cancelBooking(_state: CancelBookingState, formData: FormData): Promise<CancelBookingState> {
   const session = await requireRole("STUDENT", "PROFESSOR");
 
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
-  if (!booking) return;
-  if (booking.studentId !== session.userId && booking.professorId !== session.userId) return;
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!bookingId) return { message: "Invalid cancellation request." };
+  if (!reason) return { message: "Please let us know why you're cancelling." };
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { student: true, professor: true },
+  });
+  if (!booking) return { message: "Booking not found." };
+  if (booking.studentId !== session.userId && booking.professorId !== session.userId) {
+    return { message: "You weren't part of this session." };
+  }
+  if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
+    return { message: "This booking can no longer be cancelled." };
+  }
 
   await prisma.booking.update({
     where: { id: bookingId },
     data: { status: "CANCELLED" },
   });
+
+  await sendBookingCancelledEmail(booking, { cancelledBy: session.role as "STUDENT" | "PROFESSOR", reason });
 
   await logAudit({
     site: session.site,
@@ -222,11 +250,14 @@ export async function cancelBooking(bookingId: string) {
     actorId: session.userId,
     targetType: "Booking",
     targetId: bookingId,
-    detail: `Cancelled by ${session.role.toLowerCase()}`,
+    detail: `Cancelled by ${session.role.toLowerCase()}: ${reason}`,
   });
 
   revalidatePath(sitePath(session.site, "/student/bookings"));
   revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+
+  return { message: "Session cancelled.", success: true };
 }
 
 /**
@@ -289,10 +320,12 @@ export type RescheduleOptions =
  * a new time from.
  */
 export async function getRescheduleOptions(bookingId: string): Promise<RescheduleOptions> {
-  const session = await requireRole("STUDENT");
+  const session = await requireRole("STUDENT", "PROFESSOR");
 
-  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { student: true } });
-  if (!booking || booking.studentId !== session.userId) return { eligible: false, message: "Booking not found." };
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { student: true, professor: true } });
+  const isOwner =
+    session.role === "STUDENT" ? booking?.studentId === session.userId : booking?.professorId === session.userId;
+  if (!booking || !isOwner) return { eligible: false, message: "Booking not found." };
   if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
     return { eligible: false, message: "This booking can no longer be rescheduled." };
   }
@@ -300,18 +333,25 @@ export async function getRescheduleOptions(bookingId: string): Promise<Reschedul
     return { eligible: false, message: "This session has already started." };
   }
 
-  const used = await monthlyReschedulesUsed(session.userId, new Date());
-  const remaining = Math.max(0, MAX_RESCHEDULES_PER_MONTH - used);
-  if (remaining <= 0) {
-    return {
-      eligible: false,
-      message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
-    };
+  // The reschedule quota exists to bound how often a student can shuffle
+  // their own sessions — it doesn't apply when the professor is the one
+  // moving a session they're managing.
+  let remaining = MAX_RESCHEDULES_PER_MONTH;
+  if (session.role === "STUDENT") {
+    const used = await monthlyReschedulesUsed(session.userId, new Date());
+    remaining = Math.max(0, MAX_RESCHEDULES_PER_MONTH - used);
+    if (remaining <= 0) {
+      return {
+        eligible: false,
+        message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
+      };
+    }
   }
 
+  const viewerTimezone = session.role === "STUDENT" ? booking.student.timezone : booking.professor.timezone;
   const slots = await getAvailableSlots(booking.professorId);
-  const weeks = buildCalendarWeeks(slots, booking.student.timezone, BOOKING_WINDOW_DAYS);
-  return { eligible: true, weeks, timezone: booking.student.timezone, remaining, limit: MAX_RESCHEDULES_PER_MONTH };
+  const weeks = buildCalendarWeeks(slots, viewerTimezone, BOOKING_WINDOW_DAYS);
+  return { eligible: true, weeks, timezone: viewerTimezone, remaining, limit: MAX_RESCHEDULES_PER_MONTH };
 }
 
 export type RescheduleFormState = { message?: string; success?: true } | undefined;
@@ -324,11 +364,13 @@ export type RescheduleFormState = { message?: string; success?: true } | undefin
  * month.
  */
 export async function rescheduleBooking(_state: RescheduleFormState, formData: FormData): Promise<RescheduleFormState> {
-  const session = await requireRole("STUDENT");
+  const session = await requireRole("STUDENT", "PROFESSOR");
 
   const bookingId = String(formData.get("bookingId") ?? "");
   const newStartAt = String(formData.get("newStartAt") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
   if (!bookingId || !newStartAt) return { message: "Invalid reschedule request." };
+  if (!reason) return { message: "Please let us know why you're rescheduling." };
 
   const newStartDate = new Date(newStartAt);
   if (Number.isNaN(newStartDate.getTime())) return { message: "Invalid time selected." };
@@ -337,7 +379,9 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
     where: { id: bookingId },
     include: { student: true, professor: true },
   });
-  if (!booking || booking.studentId !== session.userId) return { message: "Booking not found." };
+  const isOwner =
+    session.role === "STUDENT" ? booking?.studentId === session.userId : booking?.professorId === session.userId;
+  if (!booking || !isOwner) return { message: "Booking not found." };
   if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
     return { message: "This booking can no longer be rescheduled." };
   }
@@ -345,11 +389,13 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
     return { message: "This session has already started." };
   }
 
-  const used = await monthlyReschedulesUsed(session.userId, new Date());
-  if (used >= MAX_RESCHEDULES_PER_MONTH) {
-    return {
-      message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
-    };
+  if (session.role === "STUDENT") {
+    const used = await monthlyReschedulesUsed(session.userId, new Date());
+    if (used >= MAX_RESCHEDULES_PER_MONTH) {
+      return {
+        message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
+      };
+    }
   }
 
   const slots = await getAvailableSlots(booking.professorId);
@@ -368,7 +414,10 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
     await updateDailyRoomExpiry(updated.dailyRoomName, newExp);
   }
 
-  await sendBookingRescheduledEmail(updated, previousStartAt);
+  await sendBookingRescheduledEmail(updated, previousStartAt, {
+    requestedBy: session.role as "STUDENT" | "PROFESSOR",
+    reason,
+  });
 
   await logAudit({
     site: session.site,
@@ -376,7 +425,7 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
     actorId: session.userId,
     targetType: "Booking",
     targetId: booking.id,
-    detail: `${previousStartAt.toISOString()} → ${match.startAt.toISOString()}`,
+    detail: `${previousStartAt.toISOString()} → ${match.startAt.toISOString()} (by ${session.role.toLowerCase()}: ${reason})`,
   });
 
   revalidatePath(sitePath(session.site, "/student/bookings"));
