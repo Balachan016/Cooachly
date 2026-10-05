@@ -73,14 +73,6 @@ export default function PricingPage() {
                 availability, much like private music tuition.
               </li>
               <li>
-                <strong>Booking is free either way:</strong> classes auto-confirm the moment you
-                pick a slot — there&apos;s no payment step in Cooachly Arts itself.
-              </li>
-              <li>
-                <strong>How you pay your guru:</strong> that&apos;s arranged between the two of you —
-                Cooachly Arts doesn&apos;t process or track payment.
-              </li>
-              <li>
                 Questions about a specific guru&apos;s rate? Message them directly from their
                 profile, or{" "}
                 <Link href="/arts/contact" className="font-medium text-brand-700 hover:underline dark:text-brand-400">
