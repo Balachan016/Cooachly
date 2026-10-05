@@ -69,7 +69,8 @@ export default function PricingPage() {
               <li>
                 <strong>How rates work:</strong> every guru sets their own rate and shares it with
                 you directly — usually on their profile bio or the first time you message them.
-                It varies guru to guru and can vary student to student.
+                Rates vary by guru, and can also depend on a student&apos;s experience level and
+                availability, much like private music tuition.
               </li>
               <li>
                 <strong>Booking is free either way:</strong> classes auto-confirm the moment you
