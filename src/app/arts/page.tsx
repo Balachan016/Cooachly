@@ -1,7 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Button, Card } from "@/components/ui";
 import { ArtsLogo } from "@/components/arts/logo";
-import { CarnaticHeroIllustration, RagaIcon, LayaIcon, SahityaIcon, TempleBannerIllustration } from "@/components/arts/illustrations";
+import { RagaIcon, LayaIcon, SahityaIcon, TempleBannerIllustration } from "@/components/arts/illustrations";
 
 export default function ArtsHome() {
   return (
@@ -63,7 +64,14 @@ export default function ArtsHome() {
                 No payment through the platform, ever — you and your guru arrange your rate directly.
               </p>
             </div>
-            <CarnaticHeroIllustration className="w-full max-w-lg justify-self-center" />
+            <Image
+              src="/images/arts/hero.jpg"
+              alt="Musicians performing Carnatic music at a temple, with a vocalist playing the tanpura"
+              width={1536}
+              height={1024}
+              priority
+              className="w-full max-w-lg justify-self-center rounded-2xl object-cover shadow-lg"
+            />
           </div>
         </section>
 
