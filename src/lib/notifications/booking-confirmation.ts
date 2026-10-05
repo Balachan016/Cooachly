@@ -81,17 +81,26 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 }
 
 /**
- * Sent when a student reschedules a booking to a new time. Both the student
- * and professor get an email showing the old and new time, each CC'd via
+ * Sent when a student or professor reschedules a booking to a new time. Both
+ * the student and professor get an email showing who requested it, the old
+ * and new time, and their stated reason (if any) — each CC'd via
  * getAdminCcEmails(), same as a fresh booking confirmation.
  */
-export async function sendBookingRescheduledEmail(booking: BookingWithParties, previousStartAt: Date) {
+export async function sendBookingRescheduledEmail(
+  booking: BookingWithParties,
+  previousStartAt: Date,
+  opts: { requestedBy: "STUDENT" | "PROFESSOR"; reason?: string } = { requestedBy: "STUDENT" }
+) {
   if (!isEmailConfigured) return;
 
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const joinLink = booking.dailyRoomUrl || booking.meetingLink;
   const joinLine = joinLink ? `<p><a href="${joinLink}">Join the session</a></p>` : "";
   const adminEmails = getAdminCcEmails();
+  const requestedByName = opts.requestedBy === "STUDENT" ? booking.student.name : booking.professor.name;
+  const reasonLine = opts.reason
+    ? `<p><strong>Reason given:</strong> ${opts.reason}</p>`
+    : "";
 
   const studentResult = await sendEmail({
     to: booking.student.email,
@@ -102,7 +111,8 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
       <p>Hi ${booking.student.name},</p>
       <p>Your session with <strong>${booking.professor.name}</strong> was moved from
       <strong>${formatWhenFor(previousStartAt, booking.student.timezone)}</strong> to
-      <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>.</p>
+      <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>, requested by ${requestedByName}.</p>
+      ${reasonLine}
       ${joinLine}
       <p>— ${brandName}</p>
     `,
@@ -119,12 +129,13 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
     to: booking.professor.email,
     cc: adminEmails,
     site: booking.professor.site,
-    subject: `${booking.student.name} rescheduled their session with you`,
+    subject: `Session with ${booking.student.name} was rescheduled`,
     html: `
       <p>Hi ${booking.professor.name},</p>
       <p>Your session with <strong>${booking.student.name}</strong> was moved from
       <strong>${formatWhenFor(previousStartAt, booking.professor.timezone)}</strong> to
-      <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>.</p>
+      <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>, requested by ${requestedByName}.</p>
+      ${reasonLine}
       ${joinLine}
       <p>— ${brandName}</p>
     `,
@@ -134,6 +145,69 @@ export async function sendBookingRescheduledEmail(booking: BookingWithParties, p
     userId: booking.professor.id,
     channel: "EMAIL",
     kind: "booking_rescheduled",
+    result: professorResult,
+  });
+}
+
+/**
+ * Sent when a student or professor cancels a booking, with their stated
+ * reason. Both parties get an email, CC'd via getAdminCcEmails(), same as
+ * every other booking lifecycle notification.
+ */
+export async function sendBookingCancelledEmail(
+  booking: BookingWithParties,
+  opts: { cancelledByName: string; reason?: string }
+) {
+  if (!isEmailConfigured) return;
+
+  const brandName = SITE_CONFIG[booking.student.site].brandName;
+  const adminEmails = getAdminCcEmails();
+  const cancelledByName = opts.cancelledByName;
+  const reasonLine = opts.reason ? `<p><strong>Reason given:</strong> ${opts.reason}</p>` : "";
+
+  const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
+  const studentResult = await sendEmail({
+    to: booking.student.email,
+    cc: adminEmails,
+    site: booking.student.site,
+    subject: `Your session with ${booking.professor.name} on ${whenForStudent} was cancelled`,
+    html: `
+      <p>Hi ${booking.student.name},</p>
+      <p>Your session with <strong>${booking.professor.name}</strong> on <strong>${whenForStudent}</strong>
+      has been cancelled by ${cancelledByName}.</p>
+      ${reasonLine}
+      <p>If you have questions about this, please get in touch with us.</p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({
+    bookingId: booking.id,
+    userId: booking.student.id,
+    channel: "EMAIL",
+    kind: "booking_cancelled",
+    result: studentResult,
+  });
+
+  const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
+  const professorResult = await sendEmail({
+    to: booking.professor.email,
+    cc: adminEmails,
+    site: booking.professor.site,
+    subject: `Session with ${booking.student.name} on ${whenForProfessor} was cancelled`,
+    html: `
+      <p>Hi ${booking.professor.name},</p>
+      <p>The session with <strong>${booking.student.name}</strong> on <strong>${whenForProfessor}</strong>
+      has been cancelled by ${cancelledByName}.</p>
+      ${reasonLine}
+      <p>If you have questions about this, please get in touch with us.</p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({
+    bookingId: booking.id,
+    userId: booking.professor.id,
+    channel: "EMAIL",
+    kind: "booking_cancelled",
     result: professorResult,
   });
 }

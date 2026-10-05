@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import type { User } from "@prisma/client";
-import { setUserActive, adminResetPassword, changeAdminEmail, deleteUserAccount } from "@/actions/admin";
+import { setUserActive, adminResetPassword, sendPasswordResetEmail, changeAdminEmail, deleteUserAccount } from "@/actions/admin";
 import { Badge, Button, Input } from "@/components/ui";
 
 export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId: string }) {
@@ -14,6 +14,16 @@ export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId:
   const emailAction = changeAdminEmail.bind(null, admin.id);
   const [emailState, emailFormAction, emailPending] = useActionState(emailAction, undefined);
   const isSelf = admin.id === currentUserId;
+
+  const [isSendingReset, startResetEmail] = useTransition();
+  const [resetEmailMessage, setResetEmailMessage] = useState<string | null>(null);
+  function handleSendResetEmail() {
+    setResetEmailMessage(null);
+    startResetEmail(async () => {
+      const result = await sendPasswordResetEmail(admin.id);
+      setResetEmailMessage(result?.message ?? null);
+    });
+  }
 
   function handleDelete() {
     const confirmed = window.confirm(
@@ -47,6 +57,9 @@ export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId:
         </td>
         <td className="px-4 py-3">
           <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" disabled={isSendingReset} onClick={handleSendResetEmail}>
+              {isSendingReset ? "Sending…" : "Email reset link"}
+            </Button>
             <Button variant="secondary" onClick={() => setShowReset((v) => !v)}>
               {showReset ? "Cancel" : "Reset password"}
             </Button>
@@ -68,6 +81,9 @@ export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId:
               </>
             )}
           </div>
+          {resetEmailMessage && (
+            <p className="mt-1 text-xs text-black/60 dark:text-white/60">{resetEmailMessage}</p>
+          )}
         </td>
       </tr>
       {showEmail && (

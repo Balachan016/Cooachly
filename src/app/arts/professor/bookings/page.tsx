@@ -4,13 +4,16 @@ import { isPastDate, isWithinJoinWindow } from "@/lib/time";
 import { Card } from "@/components/ui";
 import { ProfessorBookingRow } from "./booking-row";
 
-export default async function ProfessorBookingsPage() {
+export default async function ProfessorBookingsPage(props: PageProps<"/arts/professor/bookings">) {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  const searchParams = await props.searchParams;
+  const view = searchParams.view === "completed" ? "completed" : "upcoming";
+
   const bookings = await prisma.booking.findMany({
-    where: { professorId: user.id },
-    orderBy: { startAt: "asc" },
+    where: { professorId: user.id, status: view === "completed" ? "COMPLETED" : { not: "COMPLETED" } },
+    orderBy: { startAt: view === "completed" ? "desc" : "asc" },
     include: { student: { include: { studentProfile: true } }, attachments: true, reviews: true },
   });
 
@@ -21,7 +24,23 @@ export default async function ProfessorBookingsPage() {
         Add a video call link for each session and mark sessions complete once they&apos;re done.
       </p>
 
-      <Card className="mt-6 p-0">
+      <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
+        {(["upcoming", "completed"] as const).map((tabView) => (
+          <a
+            key={tabView}
+            href={tabView === "upcoming" ? "?" : `?view=${tabView}`}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium capitalize ${
+              view === tabView
+                ? "border-brand-700 text-brand-700 dark:border-brand-400 dark:text-brand-400"
+                : "border-transparent text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"
+            }`}
+          >
+            {tabView}
+          </a>
+        ))}
+      </div>
+
+      <Card className="mt-4 p-0">
         <div className="divide-y divide-black/5 dark:divide-white/5">
           {bookings.map((b) => (
             <ProfessorBookingRow
@@ -32,7 +51,9 @@ export default async function ProfessorBookingsPage() {
             />
           ))}
           {bookings.length === 0 && (
-            <p className="p-6 text-sm text-black/50 dark:text-white/50">No bookings yet.</p>
+            <p className="p-6 text-sm text-black/50 dark:text-white/50">
+              {view === "completed" ? "No completed sessions yet." : "No upcoming bookings."}
+            </p>
           )}
         </div>
       </Card>

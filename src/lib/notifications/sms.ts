@@ -1,6 +1,7 @@
 import "server-only";
 import twilioLib from "twilio";
 import { getAppUrl } from "@/lib/url";
+import { prisma } from "@/lib/prisma";
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -11,7 +12,30 @@ const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
 
+// Read-only snapshot for the superadmin reminders page, so "is the template
+// SID actually deployed?" can be checked by loading a page instead of
+// guessing from Twilio error codes. Content template SIDs aren't secrets
+// (they just identify a pre-approved message template), so it's safe to
+// show them in full.
+export const whatsAppConfigStatus = {
+  configured: isWhatsAppConfigured,
+  from: whatsappFrom?.replace(/^whatsapp:/, "") ?? null,
+  reminderTemplateSid: reminderContentSid ?? null,
+  inviteTemplateSid: inviteContentSid ?? null,
+  demoTemplateSid: demoContentSid ?? null,
+};
+
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
+
+// TEMPORARY: WhatsApp delivery is unreliable for regular students/professors
+// right now (see the ongoing Twilio/WhatsApp-sender troubleshooting). Until
+// that's confirmed fixed, every outgoing WhatsApp message — reminders,
+// invites, demo confirmations, everything — is restricted to admins and
+// superadmins, so the team can keep verifying delivery without spamming
+// everyone else with messages that might not arrive. Email still goes out to
+// everyone as normal; this only gates the WhatsApp channel. Flip this back
+// to false once WhatsApp is working for everyone again.
+const RESTRICT_WHATSAPP_TO_ADMINS_ONLY = true;
 
 export type WhatsAppSendResult = { skipped: boolean; error?: string; from?: string; to: string; sid?: string };
 
@@ -26,6 +50,17 @@ async function createMessage(
   if (!client || !whatsappFrom) {
     console.log(`[whatsapp:skipped, not configured] to=${to}`);
     return { skipped: true as const, ...addresses };
+  }
+
+  if (RESTRICT_WHATSAPP_TO_ADMINS_ONLY) {
+    const recipientIsAdmin = await prisma.user.findFirst({
+      where: { phone: to, role: { in: ["ADMIN", "SUPERADMIN"] } },
+      select: { id: true },
+    });
+    if (!recipientIsAdmin) {
+      console.log(`[whatsapp:skipped, restricted to admins] to=${to}`);
+      return { skipped: true as const, ...addresses };
+    }
   }
 
   try {

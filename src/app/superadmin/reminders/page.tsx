@@ -1,6 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 import { Badge, Card, Select } from "@/components/ui";
+import { whatsAppConfigStatus } from "@/lib/notifications/sms";
+
+function ConfigRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+      <span className="text-black/60 dark:text-white/60">{label}</span>
+      {value ? (
+        <span className="font-mono text-xs text-black/80 dark:text-white/80">{value}</span>
+      ) : (
+        <Badge tone="danger">Not set</Badge>
+      )}
+    </div>
+  );
+}
 
 export default async function SuperadminRemindersPage(props: PageProps<"/superadmin/reminders">) {
   const searchParams = await props.searchParams;
@@ -20,6 +34,26 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
         Every email/WhatsApp reminder, manual send, instant call, and test notification across
         both sites. Most recent 300 shown.
       </p>
+
+      <Card className="mt-4 p-0">
+        <h2 className="flex items-center gap-2 p-4 pb-0 font-semibold">
+          WhatsApp configuration
+          <Badge tone={whatsAppConfigStatus.configured ? "success" : "danger"}>
+            {whatsAppConfigStatus.configured ? "Configured" : "Not configured"}
+          </Badge>
+        </h2>
+        <p className="px-4 pt-1 text-xs text-black/50 dark:text-white/50">
+          Reminders, invites, and demo confirmations each need their own approved template SID —
+          without one, that message type falls back to a free-form send, which Twilio/WhatsApp
+          rejects outside a 24-hour customer-initiated window (error 63016).
+        </p>
+        <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+          <ConfigRow label="Sender number" value={whatsAppConfigStatus.from} />
+          <ConfigRow label="Reminder template SID" value={whatsAppConfigStatus.reminderTemplateSid} />
+          <ConfigRow label="Invite template SID" value={whatsAppConfigStatus.inviteTemplateSid} />
+          <ConfigRow label="Demo confirmation template SID" value={whatsAppConfigStatus.demoTemplateSid} />
+        </div>
+      </Card>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <div className="w-48">
