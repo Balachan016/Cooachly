@@ -6,6 +6,7 @@ import { getMyStudents, ASSIGNMENT_STATUS_LABEL, ASSIGNMENT_STATUS_TONE, QUESTIO
 import { sitePath } from "@/lib/site";
 import { Badge, Card } from "@/components/ui";
 import { AddQuestionForm } from "@/components/tests/add-question-form";
+import { ImportQuestionsForm } from "@/components/tests/import-questions-form";
 import { DeleteQuestionButton } from "@/components/tests/delete-question-button";
 import { AssignTestForm } from "@/components/tests/assign-test-form";
 import { ExtendDueDateForm } from "@/components/tests/extend-due-date-form";
@@ -85,8 +86,9 @@ export default async function ProfessorTestDetailPage(props: PageProps<"/profess
         </div>
 
         {!test.assignedAt && (
-          <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
+          <div className="mt-4 space-y-4 border-t border-black/10 pt-4 dark:border-white/10">
             <AddQuestionForm testId={test.id} />
+            <ImportQuestionsForm testId={test.id} />
           </div>
         )}
       </Card>

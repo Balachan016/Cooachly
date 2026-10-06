@@ -81,6 +81,18 @@ export function AddQuestionForm({ testId }: { testId: string }) {
         </div>
       )}
 
+      {type !== "MULTIPLE_CHOICE" && (
+        <div>
+          <Label htmlFor="modelAnswer">Model answer (optional)</Label>
+          <Textarea
+            id="modelAnswer"
+            name="modelAnswer"
+            rows={2}
+            placeholder="Shown to the student alongside their own answer once you share their score, so they can see what a correct answer looks like."
+          />
+        </div>
+      )}
+
       {state?.message && (
         <p className={`text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
           {state.message}

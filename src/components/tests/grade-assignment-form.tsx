@@ -9,6 +9,7 @@ type QuestionWithAnswer = {
   type: string;
   prompt: string;
   maxMarks: number;
+  modelAnswer: string | null;
   options: { id: string; text: string; isCorrect: boolean }[];
   answer: {
     selectedOptionId: string | null;
@@ -57,6 +58,11 @@ export function GradeAssignmentForm({ assignmentId, questions }: { assignmentId:
                 <p className="text-black/40 dark:text-white/40">No answer given.</p>
               )}
             </div>
+            {q.modelAnswer && (
+              <p className="mt-2 text-xs text-black/60 dark:text-white/60">
+                <strong>Model answer:</strong> {q.modelAnswer}
+              </p>
+            )}
 
             <div className="mt-3 grid gap-3 sm:grid-cols-[8rem_1fr]">
               <div>
