@@ -47,7 +47,8 @@ export default async function ProfessorTestDetailPage(props: PageProps<"/profess
           <div>
             <p className="text-sm font-medium">Due date</p>
             <p className="text-sm text-black/60 dark:text-white/60">
-              {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(test.dueAt)}
+              {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(test.dueAt)} · {test.durationMinutes}{" "}
+              min time limit
             </p>
           </div>
           <ExtendDueDateForm testId={test.id} currentDueAt={test.dueAt.toISOString()} />

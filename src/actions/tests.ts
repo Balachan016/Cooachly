@@ -11,10 +11,21 @@ import { uploadFile, isBlobConfigured } from "@/lib/blob";
 import { autoGradeMultipleChoice, sumAwardedMarks } from "@/lib/tests";
 import { parseQuestionTemplateDocx } from "@/lib/test-template";
 import { sendTestAssignedEmail, sendTestScoreSharedEmail } from "@/lib/notifications/tests";
+import type { Site } from "@prisma/client";
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
 
 export type TestFormState = { message?: string; success?: true } | undefined;
+
+// A test's manage/build page lives at /professor/tests/[id] when owned by a
+// professor, or /admin/tests/[id] when owned by an admin (see "Allow admin
+// to initiate test for any student"). Revalidating both is harmless (the
+// one that isn't the real route is just a no-op) and keeps every mutating
+// action correct regardless of who owns the test.
+function revalidateTestPaths(site: Site, testId: string) {
+  revalidatePath(sitePath(site, `/professor/tests/${testId}`));
+  revalidatePath(sitePath(site, `/admin/tests/${testId}`));
+}
 
 // ---------- Professor: build a test ----------
 
@@ -22,15 +33,17 @@ const CreateTestSchema = z.object({
   title: z.string().trim().min(1, "Please enter a title.").max(200),
   description: z.string().trim().max(2000).optional(),
   dueAt: z.string().min(1, "Please choose a due date."),
+  durationMinutes: z.coerce.number().int().min(1, "Duration must be at least 1 minute.").max(600),
 });
 
 export async function createTest(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
 
   const parsed = CreateTestSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description") || undefined,
     dueAt: formData.get("dueAt"),
+    durationMinutes: formData.get("durationMinutes"),
   });
   if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please fill in all fields." };
 
@@ -55,10 +68,12 @@ export async function createTest(_state: TestFormState, formData: FormData): Pro
       title: parsed.data.title,
       description: parsed.data.description || null,
       dueAt,
+      durationMinutes: parsed.data.durationMinutes,
     },
   });
 
-  redirect(sitePath(session.site, `/professor/tests/${test.id}`));
+  const basePath = session.role === "PROFESSOR" ? "/professor/tests" : "/admin/tests";
+  redirect(sitePath(session.site, `${basePath}/${test.id}`));
 }
 
 const AddQuestionSchema = z.object({
@@ -70,7 +85,7 @@ const AddQuestionSchema = z.object({
 });
 
 export async function addQuestion(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
 
   const parsed = AddQuestionSchema.safeParse({
     testId: formData.get("testId"),
@@ -113,14 +128,14 @@ export async function addQuestion(_state: TestFormState, formData: FormData): Pr
     },
   });
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${test.id}`));
+  revalidateTestPaths(session.site, test.id);
   return { message: "Question added.", success: true };
 }
 
 const MAX_TEMPLATE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export async function importQuestionsFromTemplate(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
   const testId = String(formData.get("testId") || "");
 
   const test = await prisma.test.findUnique({ where: { id: testId } });
@@ -163,12 +178,12 @@ export async function importQuestionsFromTemplate(_state: TestFormState, formDat
     )
   );
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${test.id}`));
+  revalidateTestPaths(session.site, test.id);
   return { message: `Added ${questions.length} question${questions.length === 1 ? "" : "s"} from the file.`, success: true };
 }
 
 export async function deleteQuestion(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
   const questionId = String(formData.get("questionId") || "");
 
   const question = await prisma.testQuestion.findUnique({ where: { id: questionId }, include: { test: true } });
@@ -177,12 +192,12 @@ export async function deleteQuestion(_state: TestFormState, formData: FormData):
 
   await prisma.testQuestion.delete({ where: { id: questionId } });
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${question.testId}`));
+  revalidateTestPaths(session.site, question.testId);
   return { success: true };
 }
 
 export async function assignTest(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
   const testId = String(formData.get("testId") || "");
   const studentIds = formData.getAll("studentIds").map(String).filter(Boolean);
   if (studentIds.length === 0) return { message: "Pick at least one student to assign this test to." };
@@ -217,14 +232,14 @@ export async function assignTest(_state: TestFormState, formData: FormData): Pro
     if (student) await sendTestAssignedEmail(test, assignment, student, professor);
   }
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${testId}`));
+  revalidateTestPaths(session.site, testId);
   return { message: `Assigned to ${assignments.length} student${assignments.length === 1 ? "" : "s"}.`, success: true };
 }
 
 const ExtendDueDateSchema = z.object({ testId: z.string().min(1), dueAt: z.string().min(1) });
 
 export async function extendTestDueDate(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
   const parsed = ExtendDueDateSchema.safeParse({ testId: formData.get("testId"), dueAt: formData.get("dueAt") });
   if (!parsed.success) return { message: "Please choose a date." };
 
@@ -244,7 +259,7 @@ export async function extendTestDueDate(_state: TestFormState, formData: FormDat
 
   await prisma.test.update({ where: { id: test.id }, data: { dueAt } });
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${test.id}`));
+  revalidateTestPaths(session.site, test.id);
   return { message: "Due date updated.", success: true };
 }
 
@@ -253,6 +268,56 @@ const LOCKED_STATUSES = ["SUBMITTED", "GRADED", "SCORE_SHARED"] as const;
 // ---------- Student: take a test ----------
 
 export type SaveAnswerResult = { success: boolean; message?: string };
+
+export type TickTimerResult = { remainingSeconds: number; expired: boolean; locked: boolean };
+
+/**
+ * Called on an interval by the test-taking page, only while it's open and
+ * visible — never on a fixed wall clock. That's the whole pause/resume
+ * mechanism: time only ever accrues while this is actively being called, so
+ * closing the tab or losing connection naturally pauses the clock, and
+ * reopening the test resumes counting from timeSpentSeconds exactly where
+ * it left off. Reaching the limit here auto-submits, which is also what
+ * blocks any further answers from being saved (they all check status).
+ */
+export async function tickTestTimer(assignmentId: string, deltaSeconds: number): Promise<TickTimerResult> {
+  const session = await requireRole("STUDENT");
+
+  const assignment = await prisma.testAssignment.findUnique({ where: { id: assignmentId }, include: { test: true } });
+  if (!assignment || assignment.studentId !== session.userId) return { remainingSeconds: 0, expired: true, locked: true };
+
+  const totalAllowedSeconds = assignment.test.durationMinutes * 60;
+
+  if ((LOCKED_STATUSES as readonly string[]).includes(assignment.status)) {
+    const remaining = Math.max(0, totalAllowedSeconds - assignment.timeSpentSeconds);
+    return { remainingSeconds: remaining, expired: remaining <= 0, locked: true };
+  }
+
+  // Clamp defensively against a bogus/huge delta (e.g. the tab was
+  // backgrounded and the interval fired late) — never credit more than the
+  // heartbeat interval is meant to cover.
+  const clampedDelta = Math.max(0, Math.min(deltaSeconds, 30));
+  const newTimeSpent = Math.min(assignment.timeSpentSeconds + clampedDelta, totalAllowedSeconds);
+  const remaining = totalAllowedSeconds - newTimeSpent;
+  const expired = remaining <= 0;
+
+  await prisma.testAssignment.update({
+    where: { id: assignmentId },
+    data: {
+      timeSpentSeconds: newTimeSpent,
+      status: expired ? "SUBMITTED" : assignment.status === "ASSIGNED" ? "IN_PROGRESS" : assignment.status,
+      startedAt: assignment.startedAt ?? new Date(),
+      submittedAt: expired ? new Date() : assignment.submittedAt,
+    },
+  });
+
+  if (expired) {
+    revalidatePath(sitePath(session.site, `/student/tests/${assignmentId}`));
+    revalidatePath(sitePath(session.site, "/student/tests"));
+  }
+
+  return { remainingSeconds: remaining, expired, locked: expired };
+}
 
 /** Autosaves one question's answer as the student fills it in. Callable directly from a client component. */
 export async function saveAnswer(
@@ -359,7 +424,7 @@ export async function submitTest(_state: TestFormState, formData: FormData): Pro
 // ---------- Professor: grade + share ----------
 
 export async function saveGrades(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
   const assignmentId = String(formData.get("assignmentId") || "");
 
   const assignment = await prisma.testAssignment.findUnique({
@@ -404,12 +469,12 @@ export async function saveGrades(_state: TestFormState, formData: FormData): Pro
     },
   });
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${assignment.testId}`));
+  revalidateTestPaths(session.site, assignment.testId);
   return { message: "Grades saved.", success: true };
 }
 
 export async function shareTestScore(_state: TestFormState, formData: FormData): Promise<TestFormState> {
-  const session = await requireRole("PROFESSOR");
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
   const assignmentId = String(formData.get("assignmentId") || "");
 
   const assignment = await prisma.testAssignment.findUnique({
@@ -432,7 +497,7 @@ export async function shareTestScore(_state: TestFormState, formData: FormData):
 
   await sendTestScoreSharedEmail(assignment.test, updated, assignment.student, professor);
 
-  revalidatePath(sitePath(session.site, `/professor/tests/${assignment.testId}`));
+  revalidateTestPaths(session.site, assignment.testId);
   revalidatePath(sitePath(session.site, `/student/tests/${assignmentId}`));
   return { message: "Score shared with the student.", success: true };
 }

@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { Badge, Card } from "@/components/ui";
 import { TakeTestForm } from "@/components/tests/take-test-form";
+import { TestTimer } from "@/components/tests/test-timer";
 import { TestResultView } from "@/components/tests/test-result-view";
 import { ASSIGNMENT_STATUS_LABEL, ASSIGNMENT_STATUS_TONE, isAssignmentLate } from "@/lib/tests";
 
@@ -51,7 +52,8 @@ export default async function StudentTestPage(props: PageProps<"/arts/student/te
           <h1 className="text-2xl font-semibold">{assignment.test.title}</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
             {assignment.test.professor.name} · Due{" "}
-            {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(assignment.test.dueAt)}
+            {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(assignment.test.dueAt)} ·{" "}
+            {assignment.test.durationMinutes} min once started
           </p>
           {assignment.test.description && <p className="mt-1 text-sm text-black/60 dark:text-white/60">{assignment.test.description}</p>}
         </div>
@@ -82,7 +84,13 @@ export default async function StudentTestPage(props: PageProps<"/arts/student/te
             </p>
           </Card>
         ) : (
-          <TakeTestForm assignmentId={assignment.id} disabled={false} questions={questions} />
+          <>
+            <TestTimer
+              assignmentId={assignment.id}
+              initialRemainingSeconds={Math.max(0, assignment.test.durationMinutes * 60 - assignment.timeSpentSeconds)}
+            />
+            <TakeTestForm assignmentId={assignment.id} disabled={false} questions={questions} />
+          </>
         )}
       </div>
     </div>

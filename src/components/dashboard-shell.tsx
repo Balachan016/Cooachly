@@ -28,13 +28,22 @@ export function DashboardShell({
       <header className="border-b border-black/10 dark:border-white/10">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-8">
-            <Link href={homeHref}>{logo}</Link>
-            <nav className="hidden gap-1 sm:flex">
+            {/* shrink-0: without it, pages with many nav links (admin's 8+)
+                squeeze this flex item and the logo image (w-full inside)
+                shrinks along with it, rendering much smaller than intended. */}
+            <Link href={homeHref} className="shrink-0">
+              {logo}
+            </Link>
+            {/* min-w-0 + overflow-x-auto: a role with many links (admin's 9)
+                would otherwise overflow the header and get squeezed by the
+                flex layout — wrapping onto the user-info block on the right
+                rather than cleanly disappearing into a horizontal scroll. */}
+            <nav className="hidden min-w-0 gap-1 overflow-x-auto sm:flex">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
+                  className="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
                 >
                   {link.label}
                 </Link>
