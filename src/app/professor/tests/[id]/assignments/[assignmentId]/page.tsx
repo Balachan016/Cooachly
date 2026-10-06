@@ -28,6 +28,7 @@ export default async function GradeAssignmentPage(props: PageProps<"/professor/t
     type: q.type,
     prompt: q.prompt,
     maxMarks: q.maxMarks,
+    modelAnswer: q.modelAnswer,
     options: q.options,
     answer: answerByQuestionId.get(q.id) ?? null,
   }));

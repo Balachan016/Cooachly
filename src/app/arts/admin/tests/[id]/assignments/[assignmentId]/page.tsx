@@ -27,6 +27,7 @@ export default async function AdminAssignmentDetailPage(props: PageProps<"/arts/
     type: q.type,
     prompt: q.prompt,
     maxMarks: q.maxMarks,
+    modelAnswer: q.modelAnswer,
     options: q.options,
     answer: answerByQuestionId.get(q.id) ?? null,
   }));

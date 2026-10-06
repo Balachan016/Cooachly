@@ -36,6 +36,7 @@ export default async function StudentTestPage(props: PageProps<"/student/tests/[
     type: q.type,
     prompt: q.prompt,
     maxMarks: q.maxMarks,
+    modelAnswer: q.modelAnswer,
     options: q.options,
     answer: answerByQuestionId.get(q.id) ?? null,
   }));

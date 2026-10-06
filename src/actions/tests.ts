@@ -9,6 +9,7 @@ import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { uploadFile, isBlobConfigured } from "@/lib/blob";
 import { autoGradeMultipleChoice, sumAwardedMarks } from "@/lib/tests";
+import { parseQuestionTemplateDocx } from "@/lib/test-template";
 import { sendTestAssignedEmail, sendTestScoreSharedEmail } from "@/lib/notifications/tests";
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
@@ -65,6 +66,7 @@ const AddQuestionSchema = z.object({
   type: z.enum(["MULTIPLE_CHOICE", "SHORT_ANSWER", "LONG_ANSWER", "FILE_UPLOAD"]),
   prompt: z.string().trim().min(1, "Please enter the question."),
   maxMarks: z.coerce.number().int().min(1, "Points must be at least 1.").max(1000),
+  modelAnswer: z.string().trim().max(2000).optional(),
 });
 
 export async function addQuestion(_state: TestFormState, formData: FormData): Promise<TestFormState> {
@@ -75,6 +77,7 @@ export async function addQuestion(_state: TestFormState, formData: FormData): Pr
     type: formData.get("type"),
     prompt: formData.get("prompt"),
     maxMarks: formData.get("maxMarks"),
+    modelAnswer: formData.get("modelAnswer") || undefined,
   });
   if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please fill in the question." };
 
@@ -105,12 +108,63 @@ export async function addQuestion(_state: TestFormState, formData: FormData): Pr
       type: parsed.data.type,
       prompt: parsed.data.prompt,
       maxMarks: parsed.data.maxMarks,
+      modelAnswer: parsed.data.modelAnswer || null,
       options: options.length > 0 ? { create: options.map((o, i) => ({ order: i, text: o.text, isCorrect: o.isCorrect })) } : undefined,
     },
   });
 
   revalidatePath(sitePath(session.site, `/professor/tests/${test.id}`));
   return { message: "Question added.", success: true };
+}
+
+const MAX_TEMPLATE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+
+export async function importQuestionsFromTemplate(_state: TestFormState, formData: FormData): Promise<TestFormState> {
+  const session = await requireRole("PROFESSOR");
+  const testId = String(formData.get("testId") || "");
+
+  const test = await prisma.test.findUnique({ where: { id: testId } });
+  if (!test || test.professorId !== session.userId) return { message: "Test not found." };
+  if (test.assignedAt) return { message: "This test has already been assigned, so its questions are locked." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { message: "Please choose the filled-in template file." };
+  if (file.size > MAX_TEMPLATE_SIZE_BYTES) return { message: "File is too large (max 5MB)." };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { questions, errors } = await parseQuestionTemplateDocx(buffer);
+
+  if (errors.length > 0) {
+    return { message: errors.join(" ") };
+  }
+  if (questions.length === 0) {
+    return { message: "No questions found in that file." };
+  }
+
+  const lastQuestion = await prisma.testQuestion.findFirst({ where: { testId: test.id }, orderBy: { order: "desc" } });
+  let order = (lastQuestion?.order ?? -1) + 1;
+
+  await prisma.$transaction(
+    questions.map((q) =>
+      prisma.testQuestion.create({
+        data: {
+          testId: test.id,
+          order: order++,
+          type: q.type,
+          prompt: q.prompt,
+          maxMarks: q.maxMarks,
+          modelAnswer: q.modelAnswer,
+          options:
+            q.options.length > 0
+              ? { create: q.options.map((o, i) => ({ order: i, text: o.text, isCorrect: o.isCorrect })) }
+              : undefined,
+        },
+      })
+    )
+  );
+
+  revalidatePath(sitePath(session.site, `/professor/tests/${test.id}`));
+  return { message: `Added ${questions.length} question${questions.length === 1 ? "" : "s"} from the file.`, success: true };
 }
 
 export async function deleteQuestion(_state: TestFormState, formData: FormData): Promise<TestFormState> {
