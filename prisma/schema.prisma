@@ -220,6 +220,7 @@ model DemoRequest {
   phone              String?
   subject            String
   grade              String?
+  referredBy         String?
   timezone           String?
   status             DemoRequestStatus @default(PENDING)
   professorId        String?
