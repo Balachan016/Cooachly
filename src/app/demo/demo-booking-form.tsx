@@ -44,6 +44,10 @@ export function DemoBookingForm({ site }: { site: Site }) {
         <Label htmlFor="phone">Phone (optional, for WhatsApp updates)</Label>
         <Input id="phone" name="phone" type="tel" placeholder="+1 555 123 4567" />
       </div>
+      <div>
+        <Label htmlFor="referredBy">How did you hear about us? (optional)</Label>
+        <Input id="referredBy" name="referredBy" placeholder="e.g. a friend's name, Google, Instagram" />
+      </div>
 
       {state?.message && <FormMessage>{state.message}</FormMessage>}
 

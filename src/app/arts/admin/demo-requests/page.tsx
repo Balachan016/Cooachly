@@ -69,6 +69,7 @@ export default async function AdminDemoRequestsPage() {
               <div className="mt-1 text-sm text-black/70 dark:text-white/70">
                 Subject: {r.subject}
                 {r.grade ? ` · Grade: ${r.grade}` : ""}
+                {r.referredBy ? ` · Referred by: ${r.referredBy}` : ""}
               </div>
               {r.scheduledAt && (
                 <div className="mt-1 text-sm text-black/70 dark:text-white/70">
