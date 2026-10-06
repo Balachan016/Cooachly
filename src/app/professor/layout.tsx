@@ -9,6 +9,7 @@ export default async function ProfessorLayout({ children }: { children: React.Re
     { href: p("/professor"), label: "Dashboard" },
     { href: p("/professor/availability"), label: "Availability" },
     { href: p("/professor/bookings"), label: "Bookings" },
+    { href: p("/professor/tests"), label: "Tests" },
     { href: p("/professor/messages"), label: "Messages" },
     { href: p("/professor/profile"), label: "Profile" },
   ];

@@ -10,6 +10,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     { href: p("/student"), label: "Dashboard" },
     { href: p("/student/professors"), label: "Find a guru" },
     { href: p("/student/bookings"), label: "My bookings" },
+    { href: p("/student/tests"), label: "Tests" },
     { href: p("/student/messages"), label: "Messages" },
   ];
 

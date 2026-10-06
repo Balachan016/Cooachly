@@ -153,6 +153,9 @@ model User {
 
   demoRequestsAsProfessor DemoRequest[] @relation("DemoRequestProfessor")
 
+  testsCreated         Test[]           @relation("TestsCreated")
+  testAssignments      TestAssignment[] @relation("TestAssignments")
+
   @@unique([site, email])
 }
 
@@ -418,6 +421,21 @@ enum AttachmentKind {
   ANSWER
 }
 
+enum TestQuestionType {
+  MULTIPLE_CHOICE
+  SHORT_ANSWER
+  LONG_ANSWER
+  FILE_UPLOAD
+}
+
+enum TestAssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+  SCORE_SHARED
+}
+
 model Attachment {
   id           String         @id @default(cuid())
   bookingId    String
@@ -498,4 +516,101 @@ model Review {
 
   @@unique([bookingId, raterId])
   @@index([rateeId])
+}
+
+// A professor-authored test: a due date plus an ordered list of questions.
+// Questions can only be added/edited/removed while assignedAt is null —
+// assigning the test to students locks its content so grading always refers
+// to what the students actually saw.
+model Test {
+  id          String    @id @default(cuid())
+  site        Site      @default(COOACHLY)
+  professorId String
+  professor   User      @relation("TestsCreated", fields: [professorId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  dueAt       DateTime
+  assignedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  questions   TestQuestion[]
+  assignments TestAssignment[]
+
+  @@index([professorId])
+  @@index([site])
+}
+
+model TestQuestion {
+  id          String           @id @default(cuid())
+  testId      String
+  test        Test             @relation(fields: [testId], references: [id], onDelete: Cascade)
+  order       Int
+  type        TestQuestionType
+  prompt      String
+  maxMarks    Int
+  // Professor's own grading reference (e.g. the expected answer) — never
+  // shown to the student.
+  modelAnswer String?
+  createdAt   DateTime         @default(now())
+
+  options TestQuestionOption[]
+  answers TestAnswer[]
+
+  @@index([testId])
+}
+
+model TestQuestionOption {
+  id         String       @id @default(cuid())
+  questionId String
+  question   TestQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  order      Int
+  text       String
+  isCorrect  Boolean      @default(false)
+
+  selectedBy TestAnswer[] @relation("SelectedOption")
+
+  @@index([questionId])
+}
+
+// One student's attempt at a Test. totalMarks is snapshotted from the
+// questions' maxMarks at assignment time, since the test is locked by then
+// anyway — grading always refers to this fixed total.
+model TestAssignment {
+  id            String               @id @default(cuid())
+  testId        String
+  test          Test                 @relation(fields: [testId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       User                 @relation("TestAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+  status        TestAssignmentStatus @default(ASSIGNED)
+  assignedAt    DateTime             @default(now())
+  startedAt     DateTime?
+  submittedAt   DateTime?
+  gradedAt      DateTime?
+  scoreSharedAt DateTime?
+  totalMarks    Int                  @default(0)
+  totalScore    Int?
+
+  answers TestAnswer[]
+
+  @@unique([testId, studentId])
+  @@index([studentId])
+}
+
+model TestAnswer {
+  id               String              @id @default(cuid())
+  assignmentId     String
+  assignment       TestAssignment      @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  questionId       String
+  question         TestQuestion        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOptionId String?
+  selectedOption   TestQuestionOption? @relation("SelectedOption", fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  textAnswer       String?
+  fileName         String?
+  fileUrl          String?
+  marksAwarded     Int?
+  comment          String?
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([assignmentId, questionId])
 }
