@@ -22,6 +22,10 @@ export function CreateTestForm() {
           <Label htmlFor="dueAt">Due date</Label>
           <Input id="dueAt" name="dueAt" type="datetime-local" required />
         </div>
+        <div>
+          <Label htmlFor="durationMinutes">Time limit once a student starts (minutes)</Label>
+          <Input id="durationMinutes" name="durationMinutes" type="number" min={1} max={600} defaultValue={30} required />
+        </div>
         {state?.message && <FormMessage>{state.message}</FormMessage>}
         <Button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Create & add questions"}

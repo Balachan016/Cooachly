@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { submitDemoRequest } from "@/actions/demo";
-import { Button, FormMessage, Input, Label } from "@/components/ui";
+import { Button, FormMessage, Input, Label, Select } from "@/components/ui";
+import { DEMO_SUBJECT_OPTIONS, DEMO_SUBJECT_OTHER } from "@/lib/demo-subjects";
 import type { Site } from "@prisma/client";
 
 export function DemoBookingForm({ site }: { site: Site }) {
@@ -14,6 +15,7 @@ export function DemoBookingForm({ site }: { site: Site }) {
       return "UTC";
     }
   });
+  const [subject, setSubject] = useState("");
 
   if (state?.success) {
     return <p className="text-black/70 dark:text-white/70">{state.message}</p>;
@@ -26,7 +28,25 @@ export function DemoBookingForm({ site }: { site: Site }) {
 
       <div>
         <Label htmlFor="subject">What would you like a demo for?</Label>
-        <Input id="subject" name="subject" placeholder="e.g. AP Calculus, Carnatic Vocals" required />
+        <Select id="subject" name="subject" value={subject} onChange={(e) => setSubject(e.target.value)} required>
+          <option value="" disabled>
+            Select a subject
+          </option>
+          {DEMO_SUBJECT_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value={DEMO_SUBJECT_OTHER}>{DEMO_SUBJECT_OTHER}</option>
+        </Select>
+        {subject === DEMO_SUBJECT_OTHER && (
+          <Input
+            name="subjectOther"
+            placeholder="Tell us what subject"
+            required
+            className="mt-2"
+          />
+        )}
       </div>
       <div>
         <Label htmlFor="name">Your name</Label>

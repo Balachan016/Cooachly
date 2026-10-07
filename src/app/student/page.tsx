@@ -9,12 +9,19 @@ export default async function StudentDashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const upcoming = await prisma.booking.findMany({
-    where: { studentId: user.id, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: new Date() } },
-    orderBy: { startAt: "asc" },
-    take: 5,
-    include: { professor: true },
-  });
+  const [upcoming, pendingTests] = await Promise.all([
+    prisma.booking.findMany({
+      where: { studentId: user.id, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: new Date() } },
+      orderBy: { startAt: "asc" },
+      take: 5,
+      include: { professor: true },
+    }),
+    prisma.testAssignment.findMany({
+      where: { studentId: user.id, status: { in: ["ASSIGNED", "IN_PROGRESS"] } },
+      orderBy: { assignedAt: "desc" },
+      include: { test: true },
+    }),
+  ]);
 
   return (
     <div>
@@ -45,6 +52,32 @@ export default async function StudentDashboardPage() {
           {upcoming.length === 0 && <p className="py-3 text-sm text-black/50 dark:text-white/50">No upcoming sessions yet.</p>}
         </div>
       </Card>
+
+      {pendingTests.length > 0 && (
+        <Card className="mt-6">
+          <h2 className="font-semibold">Pending tests</h2>
+          <div className="mt-4 divide-y divide-black/5 dark:divide-white/5">
+            {pendingTests.map((a) => {
+              const overdue = new Date() > a.test.dueAt;
+              return (
+                <Link
+                  key={a.id}
+                  href={sitePath(user.site, `/student/tests/${a.id}`)}
+                  className="flex items-center justify-between gap-2 py-3 hover:underline"
+                >
+                  <div>
+                    <div className="font-medium">{a.test.title}</div>
+                    <div className="text-sm text-black/50 dark:text-white/50">
+                      Due {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(a.test.dueAt)}
+                    </div>
+                  </div>
+                  <Badge tone={overdue ? "danger" : "warning"}>{overdue ? "Due" : "Pending"}</Badge>
+                </Link>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       <h2 className="mt-8 text-lg font-semibold">Contact info</h2>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">

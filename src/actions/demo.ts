@@ -6,6 +6,7 @@ import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { sendWhatsAppDemoConfirmation } from "@/lib/notifications/sms";
 import { DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { OptionalPhoneSchema } from "@/lib/phone";
+import { DEMO_SUBJECT_OTHER } from "@/lib/demo-subjects";
 import type { Site } from "@prisma/client";
 
 export type DemoRequestFormState = { message?: string; success?: true } | undefined;
@@ -16,6 +17,7 @@ const DemoRequestSchema = z.object({
   phone: OptionalPhoneSchema,
   timezone: z.string().min(1),
   subject: z.string().trim().min(2, "Please tell us what you'd like a demo for."),
+  subjectOther: z.string().trim().optional(),
   grade: z.string().trim().optional(),
   referredBy: z.string().trim().optional(),
 });
@@ -30,6 +32,7 @@ export async function submitDemoRequest(
     phone: formData.get("phone") || undefined,
     timezone: formData.get("timezone"),
     subject: formData.get("subject"),
+    subjectOther: formData.get("subjectOther") || undefined,
     grade: formData.get("grade") || undefined,
     referredBy: formData.get("referredBy") || undefined,
   });
@@ -38,7 +41,8 @@ export async function submitDemoRequest(
     return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
   }
 
-  const { name, email, phone, timezone, subject, grade, referredBy } = parsed.data;
+  const { name, email, phone, timezone, grade, referredBy } = parsed.data;
+  const subject = parsed.data.subject === DEMO_SUBJECT_OTHER ? parsed.data.subjectOther?.trim() || DEMO_SUBJECT_OTHER : parsed.data.subject;
   const site: Site = formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
   const brandName = SITE_CONFIG[site].brandName;
 

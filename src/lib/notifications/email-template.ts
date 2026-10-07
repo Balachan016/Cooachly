@@ -27,9 +27,12 @@ export function renderEmailLayout(opts: { site: Site; appUrl: string; bodyHtml: 
     <div style="padding:20px 28px 28px;">
       <div style="border-top:1px solid #efefe9; padding-top:16px; color:#6b6b63; font-size:12px; line-height:1.6;">
         <p style="margin:0 0 4px;"><strong>${config.brandName}</strong> — ${config.tagline}</p>
-        <p style="margin:0;">
+        <p style="margin:0 0 4px;">
           Questions? Email <a href="mailto:${config.supportEmail}" style="color:#0f3d2e;">${config.supportEmail}</a>
           or call ${config.supportPhone}.
+        </p>
+        <p style="margin:0;">
+          <a href="${opts.appUrl}${config.homeHref}" style="color:#0f3d2e;">Visit ${config.brandName}</a>
         </p>
       </div>
     </div>

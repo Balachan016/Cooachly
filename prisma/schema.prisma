@@ -531,6 +531,10 @@ model Test {
   title       String
   description String?
   dueAt       DateTime
+  // How long a student gets to actively work on the test once they open it
+  // (see TestAssignment.timeSpentSeconds) — independent of dueAt, which is
+  // just the deadline by which they must have taken it at all.
+  durationMinutes Int @default(30)
   assignedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -591,6 +595,10 @@ model TestAssignment {
   scoreSharedAt DateTime?
   totalMarks    Int                  @default(0)
   totalScore    Int?
+  // Accumulated active seconds against the test's durationMinutes — only
+  // incremented by a heartbeat while the student has the test page open, so
+  // it naturally pauses when they close/leave and resumes where it left off.
+  timeSpentSeconds Int @default(0)
 
   answers TestAnswer[]
 

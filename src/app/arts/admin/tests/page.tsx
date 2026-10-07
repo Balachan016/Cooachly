@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Button, Card } from "@/components/ui";
 
 export default async function AdminTestsPage() {
   const session = await requireRole("ADMIN", "SUPERADMIN");
@@ -15,8 +15,17 @@ export default async function AdminTestsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Tests</h1>
-      <p className="mt-1 text-sm text-black/60 dark:text-white/60">Every test created by professors on this site.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Tests</h1>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            Every test created by professors on this site, plus any you create yourself.
+          </p>
+        </div>
+        <Link href={sitePath(session.site, "/admin/tests/new")}>
+          <Button>Create test</Button>
+        </Link>
+      </div>
 
       <div className="mt-6 space-y-3">
         {tests.map((test) => {

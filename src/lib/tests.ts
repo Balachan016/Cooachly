@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { TestAssignmentStatus, TestQuestionType } from "@prisma/client";
+import type { Site, TestAssignmentStatus, TestQuestionType } from "@prisma/client";
 
 export const QUESTION_TYPE_LABEL: Record<TestQuestionType, string> = {
   MULTIPLE_CHOICE: "Multiple choice",
@@ -36,6 +36,14 @@ export async function getMyStudents(professorId: string) {
 
   return prisma.user.findMany({
     where: { id: { in: bookings.map((b) => b.studentId) } },
+    orderBy: { name: "asc" },
+  });
+}
+
+/** Every active student on the site — for admin-created tests, which aren't scoped to one professor's own booking roster. */
+export async function getAllStudents(site: Site) {
+  return prisma.user.findMany({
+    where: { role: "STUDENT", site, isActive: true },
     orderBy: { name: "asc" },
   });
 }
