@@ -55,7 +55,13 @@ export function ProfessorBookingRow({
           {canModify && (
             <>
               <CancelBookingControl bookingId={booking.id} />
-              <RescheduleControl bookingId={booking.id} />
+              <RescheduleControl
+                bookingId={booking.id}
+                viewerRole="PROFESSOR"
+                proposedStartAt={booking.rescheduleProposedStartAt}
+                proposedBy={booking.rescheduleProposedBy}
+                proposedReason={booking.rescheduleProposedReason}
+              />
             </>
           )}
           {isPast && booking.status !== "CANCELLED" && booking.status !== "COMPLETED" && (

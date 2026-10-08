@@ -21,6 +21,7 @@ export default async function ProfessorLayout({ children }: { children: React.Re
       userName={session.name}
       homeHref={SITE_CONFIG[session.site].homeHref}
       settingsHref={p("/settings")}
+      switchedInBy={session.impersonatorName}
     >
       {children}
     </DashboardShell>

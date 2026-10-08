@@ -4,7 +4,8 @@ import { sendEmail, isEmailConfigured } from "./email";
 import { logNotification } from "./log";
 import { getAdminCcEmails } from "./admin-recipients";
 import { formatWhenFor } from "./format";
-import { SITE_CONFIG } from "@/lib/site";
+import { SITE_CONFIG, sitePath } from "@/lib/site";
+import { getAppUrl } from "@/lib/url";
 import { buildIcsCalendar, googleCalendarLink, icsBookingUid } from "@/lib/ics";
 
 type BookingWithParties = Booking & { student: User; professor: User };
@@ -192,6 +193,75 @@ export async function sendBookingRescheduledEmail(
     kind: "booking_rescheduled",
     result: professorResult,
   });
+}
+
+/**
+ * Sent to the OTHER party when a student or professor proposes moving a
+ * booking to a new time — the session stays at its current time until they
+ * accept. CC'd via getAdminCcEmails(), same as every other booking
+ * lifecycle notification.
+ */
+export async function sendRescheduleProposedEmail(
+  booking: BookingWithParties,
+  opts: { proposedBy: "STUDENT" | "PROFESSOR"; proposedStartAt: Date; reason: string }
+) {
+  if (!isEmailConfigured) return;
+
+  const brandName = SITE_CONFIG[booking.student.site].brandName;
+  const adminEmails = getAdminCcEmails();
+  const proposerName = opts.proposedBy === "STUDENT" ? booking.student.name : booking.professor.name;
+  const recipient = opts.proposedBy === "STUDENT" ? booking.professor : booking.student;
+  const appUrl = await getAppUrl();
+  const reviewUrl = `${appUrl}${sitePath(recipient.site, recipient.id === booking.studentId ? "/student/bookings" : "/professor/bookings")}`;
+
+  const result = await sendEmail({
+    to: recipient.email,
+    cc: adminEmails,
+    site: recipient.site,
+    subject: `${proposerName} proposed a new time for your session`,
+    html: `
+      <p>Hi ${recipient.name},</p>
+      <p><strong>${proposerName}</strong> proposed moving your session from
+      <strong>${formatWhenFor(booking.startAt, recipient.timezone)}</strong> to
+      <strong>${formatWhenFor(opts.proposedStartAt, recipient.timezone)}</strong>.</p>
+      <p><strong>Reason given:</strong> ${opts.reason}</p>
+      <p>The session stays at its current time until you accept or decline.</p>
+      <p><a href="${reviewUrl}">Review and respond</a></p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({ bookingId: booking.id, userId: recipient.id, channel: "EMAIL", kind: "reschedule_proposed", result });
+}
+
+/**
+ * Sent to the proposer when their reschedule proposal is declined (by the
+ * other party) or withdrawn (by themselves, in which case this is skipped —
+ * see callers).
+ */
+export async function sendRescheduleDeclinedEmail(
+  booking: BookingWithParties,
+  opts: { proposedBy: "STUDENT" | "PROFESSOR"; proposedStartAt: Date; declinedByName: string }
+) {
+  if (!isEmailConfigured) return;
+
+  const brandName = SITE_CONFIG[booking.student.site].brandName;
+  const adminEmails = getAdminCcEmails();
+  const proposer = opts.proposedBy === "STUDENT" ? booking.student : booking.professor;
+
+  const result = await sendEmail({
+    to: proposer.email,
+    cc: adminEmails,
+    site: proposer.site,
+    subject: `Your proposed new time was declined`,
+    html: `
+      <p>Hi ${proposer.name},</p>
+      <p>${opts.declinedByName} declined your proposal to move the session to
+      <strong>${formatWhenFor(opts.proposedStartAt, proposer.timezone)}</strong>. The session stays at its
+      current time: <strong>${formatWhenFor(booking.startAt, proposer.timezone)}</strong>.</p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({ bookingId: booking.id, userId: proposer.id, channel: "EMAIL", kind: "reschedule_declined", result });
 }
 
 /**

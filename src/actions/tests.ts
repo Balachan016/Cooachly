@@ -11,6 +11,7 @@ import { uploadFile, isBlobConfigured } from "@/lib/blob";
 import { autoGradeMultipleChoice, sumAwardedMarks } from "@/lib/tests";
 import { parseQuestionTemplateDocx } from "@/lib/test-template";
 import { sendTestAssignedEmail, sendTestScoreSharedEmail } from "@/lib/notifications/tests";
+import { logAudit } from "@/lib/audit";
 import type { Site } from "@prisma/client";
 
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
@@ -230,6 +231,17 @@ export async function assignTest(_state: TestFormState, formData: FormData): Pro
   for (const assignment of assignments) {
     const student = students.find((s) => s.id === assignment.studentId);
     if (student) await sendTestAssignedEmail(test, assignment, student, test.professor);
+  }
+
+  if (session.role !== "PROFESSOR" && test.professorId !== session.userId) {
+    await logAudit({
+      site: session.site,
+      action: "TEST_ASSIGNED_BY_ADMIN",
+      actorId: session.userId,
+      targetType: "Test",
+      targetId: testId,
+      detail: `${session.name} assigned ${test.professor.name}'s test "${test.title}" to ${students.length} student${students.length === 1 ? "" : "s"}`,
+    });
   }
 
   revalidateTestPaths(session.site, testId);

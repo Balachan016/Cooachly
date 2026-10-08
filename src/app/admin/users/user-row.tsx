@@ -6,6 +6,7 @@ import type { User, Role } from "@prisma/client";
 import { setUserActive, setUserRole, deleteUserAccount } from "@/actions/admin";
 import { sitePath } from "@/lib/site";
 import { Badge, Button, Select } from "@/components/ui";
+import { SwitchToUserButton } from "@/components/switch-to-user-button";
 
 export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) {
   const [isPending, startTransition] = useTransition();
@@ -56,6 +57,7 @@ export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) 
             <Link href={sitePath(user.site, `/admin/view-as/${user.id}`)}>
               <Button variant="secondary">View</Button>
             </Link>
+            {user.isActive && <SwitchToUserButton userId={user.id} />}
             <Link href={sitePath(user.site, `/admin/users/${user.id}`)}>
               <Button variant="secondary">Edit</Button>
             </Link>

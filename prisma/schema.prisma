@@ -104,6 +104,12 @@ enum AuditAction {
   DEMO_REQUEST_STATUS_CHANGED
   ADMIN_ACCOUNT_CREATED
   SCHEDULE_IMPORTED
+  ADMIN_VIEWED_USER
+  ADMIN_SWITCHED_TO_USER
+  ADMIN_RETURNED_TO_OWN_ACCOUNT
+  TEST_ASSIGNED_BY_ADMIN
+  BOOKING_RESCHEDULE_PROPOSED
+  BOOKING_RESCHEDULE_DECLINED
 }
 
 model User {
@@ -338,6 +344,14 @@ model Booking {
   demoRequestId          String?       @unique
   demoRequest            DemoRequest?  @relation(fields: [demoRequestId], references: [id], onDelete: SetNull)
   rescheduledAt          DateTime?
+  // A pending reschedule proposal — set by proposeReschedule, cleared by
+  // acceptRescheduleProposal (which also moves startAt/endAt) or
+  // declineRescheduleProposal. startAt/endAt only change on acceptance, so a
+  // proposal never moves the session until the other party agrees.
+  rescheduleProposedStartAt  DateTime?
+  rescheduleProposedBy       Role?
+  rescheduleProposedReason   String?
+  rescheduleProposedAt       DateTime?
   priceCents             Int
   currency               String        @default("usd")
   meetingLink            String?
@@ -599,6 +613,9 @@ model TestAssignment {
   // incremented by a heartbeat while the student has the test page open, so
   // it naturally pauses when they close/leave and resumes where it left off.
   timeSpentSeconds Int @default(0)
+  // Stamped once the ~24h-before-due nudge email goes out, so the cron job
+  // doesn't send it twice.
+  dueReminderSentAt DateTime?
 
   answers TestAnswer[]
 

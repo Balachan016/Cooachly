@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { createSession, deleteSession, getSessionCookie, decrypt } from "@/lib/session";
+import { requireRole } from "@/lib/dal";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, DEFAULT_SITE, SITE_CONFIG } from "@/lib/site";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
@@ -100,6 +101,80 @@ export async function logout() {
 }
 
 export type SimpleFormState = { message?: string; success?: true } | undefined;
+
+/**
+ * Lets an admin/superadmin open a student's or professor's account as if
+ * logged in as them — e.g. to help with a support request without needing
+ * their password. Switching is one level deep only (can't switch again
+ * while already switched in) and restricted to student/professor accounts
+ * on the admin's own site; the admin's own identity is carried in the new
+ * session's impersonatorId so returnFromSwitch() can switch back without
+ * re-authenticating.
+ */
+export async function switchToUser(_state: SimpleFormState, formData: FormData): Promise<SimpleFormState> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+
+  if (session.impersonatorId) {
+    return { message: "Return to your own account before switching to someone else." };
+  }
+
+  const targetUserId = String(formData.get("userId") || "");
+  const target = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!target || target.site !== session.site || !target.isActive) {
+    return { message: "User not found." };
+  }
+  if (target.role !== "STUDENT" && target.role !== "PROFESSOR") {
+    return { message: "You can only switch into a student or professor account." };
+  }
+
+  await createSession({
+    userId: target.id,
+    role: target.role,
+    site: target.site,
+    name: target.name,
+    email: target.email,
+    impersonatorId: session.userId,
+    impersonatorName: session.name,
+  });
+
+  await logAudit({
+    site: session.site,
+    action: "ADMIN_SWITCHED_TO_USER",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: target.id,
+    detail: `${session.name} switched into ${target.role.toLowerCase()} account: ${target.name}`,
+  });
+
+  redirect(roleHomePath(target.role, target.site));
+}
+
+/** Switches a "switched in" session back to the original admin account. */
+export async function returnFromSwitch() {
+  const session = await decrypt(await getSessionCookie());
+  if (!session?.impersonatorId) {
+    redirect(sitePath(session?.site ?? DEFAULT_SITE, "/login"));
+  }
+
+  const admin = await prisma.user.findUnique({ where: { id: session.impersonatorId } });
+  if (!admin || !admin.isActive) {
+    await deleteSession();
+    redirect(sitePath(session.site, "/login"));
+  }
+
+  await createSession({ userId: admin.id, role: admin.role, site: admin.site, name: admin.name, email: admin.email });
+
+  await logAudit({
+    site: session.site,
+    action: "ADMIN_RETURNED_TO_OWN_ACCOUNT",
+    actorId: admin.id,
+    targetType: "User",
+    targetId: session.userId,
+    detail: `${admin.name} returned from switched-in account: ${session.name}`,
+  });
+
+  redirect(roleHomePath(admin.role, admin.site));
+}
 
 const ForgotPasswordSchema = z.object({
   email: z.string().trim().email("Please enter a valid email."),

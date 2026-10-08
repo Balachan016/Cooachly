@@ -60,6 +60,14 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
     const qs = params.toString();
     return qs ? `?${qs}` : "";
   };
+  const exportHref = (() => {
+    const params = new URLSearchParams();
+    if (studentId) params.set("student", studentId);
+    if (date) params.set("date", date);
+    if (view === "completed") params.set("view", "completed");
+    const qs = params.toString();
+    return `/api/admin/export/bookings${qs ? `?${qs}` : ""}`;
+  })();
 
   return (
     <div>
@@ -74,12 +82,20 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
                 : "Up to 300 upcoming sessions, soonest first."}
           </p>
         </div>
-        <a
-          href={sitePath(session.site, "/admin/bookings/import")}
-          className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-        >
-          Import schedule
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={exportHref}
+            className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            Export CSV
+          </a>
+          <a
+            href={sitePath(session.site, "/admin/bookings/import")}
+            className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            Import schedule
+          </a>
+        </div>
       </div>
 
       <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">

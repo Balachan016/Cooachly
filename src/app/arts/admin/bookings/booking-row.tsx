@@ -71,6 +71,7 @@ export function AdminBookingRow({
             </Badge>
             <Badge>Pay guru directly</Badge>
             {booking.isDemo && <Badge tone="default">Free demo</Badge>}
+            {booking.rescheduleProposedStartAt && <Badge tone="warning">Reschedule pending</Badge>}
           </div>
         </td>
         <td className="px-4 py-1.5">

@@ -47,7 +47,13 @@ export function StudentBookingRow({
           {canModify && (
             <>
               <CancelBookingControl bookingId={booking.id} />
-              <RescheduleControl bookingId={booking.id} />
+              <RescheduleControl
+                bookingId={booking.id}
+                viewerRole="STUDENT"
+                proposedStartAt={booking.rescheduleProposedStartAt}
+                proposedBy={booking.rescheduleProposedBy}
+                proposedReason={booking.rescheduleProposedReason}
+              />
             </>
           )}
           {hasDetails && (

@@ -5,6 +5,8 @@ import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { ASSIGNMENT_STATUS_LABEL, ASSIGNMENT_STATUS_TONE } from "@/lib/tests";
 import { Badge, Card } from "@/components/ui";
+import { SwitchToUserButton } from "@/components/switch-to-user-button";
+import { logAudit } from "@/lib/audit";
 
 export default async function AdminViewAsPage(props: PageProps<"/admin/view-as/[userId]">) {
   const { userId } = await props.params;
@@ -17,6 +19,15 @@ export default async function AdminViewAsPage(props: PageProps<"/admin/view-as/[
   if (!user || user.site !== session.site || (user.role !== "STUDENT" && user.role !== "PROFESSOR")) notFound();
 
   const isStudent = user.role === "STUDENT";
+
+  await logAudit({
+    site: session.site,
+    action: "ADMIN_VIEWED_USER",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: user.id,
+    detail: `${session.name} viewed ${user.role.toLowerCase()} account: ${user.name}`,
+  });
 
   const [bookings, monthlySummaries, testAssignments, testsCreated] = await Promise.all([
     prisma.booking.findMany({
@@ -51,8 +62,11 @@ export default async function AdminViewAsPage(props: PageProps<"/admin/view-as/[
         ← All users
       </Link>
 
-      <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-        Read-only — you&apos;re viewing {user.name}&apos;s account as an admin. Nothing here can be edited or sent on their behalf.
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+        <span>
+          Read-only — you&apos;re viewing {user.name}&apos;s account as an admin. Nothing here can be edited or sent on their behalf.
+        </span>
+        {user.isActive && <SwitchToUserButton userId={user.id} label="Log in as this user instead" />}
       </div>
 
       <h1 className="mt-4 text-2xl font-semibold">{user.name}</h1>

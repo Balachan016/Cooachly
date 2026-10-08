@@ -20,6 +20,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
       userName={session.name}
       homeHref={SITE_CONFIG[session.site].homeHref}
       settingsHref={p("/settings")}
+      switchedInBy={session.impersonatorName}
     >
       {children}
     </DashboardShell>

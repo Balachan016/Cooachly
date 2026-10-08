@@ -3,12 +3,14 @@ import { addHours, addMinutes } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { sendBookingReminder } from "@/lib/notifications/reminders";
 import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
+import { sendTestDueSoonEmail } from "@/lib/notifications/tests";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
 // cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
 // or ~5m from now that haven't had that reminder sent yet, and sends it
 // (email always; WhatsApp if the user has a phone number and Twilio is
-// configured).
+// configured). Also sends a one-time "due soon" nudge for unsubmitted
+// tests whose due date is ~24h away.
 
 const WINDOW_MINUTES = 5;
 const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day
@@ -70,6 +72,27 @@ export async function GET(request: Request) {
     await prisma.demoRequest.update({
       where: { id: demoRequest.id },
       data: { lastReminderSentAt: new Date() },
+    });
+    sentCount += 1;
+  }
+
+  const testDueTarget = addHours(new Date(), 24);
+  const testDueRangeStart = addMinutes(testDueTarget, -WINDOW_MINUTES);
+  const testDueRangeEnd = addMinutes(testDueTarget, WINDOW_MINUTES);
+  const dueSoonAssignments = await prisma.testAssignment.findMany({
+    where: {
+      status: { in: ["ASSIGNED", "IN_PROGRESS"] },
+      dueReminderSentAt: null,
+      test: { dueAt: { gte: testDueRangeStart, lte: testDueRangeEnd } },
+    },
+    include: { test: true, student: true },
+  });
+
+  for (const assignment of dueSoonAssignments) {
+    await sendTestDueSoonEmail(assignment.test, assignment, assignment.student);
+    await prisma.testAssignment.update({
+      where: { id: assignment.id },
+      data: { dueReminderSentAt: new Date() },
     });
     sentCount += 1;
   }
