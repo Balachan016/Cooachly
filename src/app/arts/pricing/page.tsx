@@ -69,15 +69,8 @@ export default function PricingPage() {
               <li>
                 <strong>How rates work:</strong> every guru sets their own rate and shares it with
                 you directly — usually on their profile bio or the first time you message them.
-                It varies guru to guru and can vary student to student.
-              </li>
-              <li>
-                <strong>Booking is free either way:</strong> classes auto-confirm the moment you
-                pick a slot — there&apos;s no payment step in Cooachly Arts itself.
-              </li>
-              <li>
-                <strong>How you pay your guru:</strong> that&apos;s arranged between the two of you —
-                Cooachly Arts doesn&apos;t process or track payment.
+                Rates vary by guru, and can also depend on a student&apos;s experience level and
+                availability, much like private music tuition.
               </li>
               <li>
                 Questions about a specific guru&apos;s rate? Message them directly from their
