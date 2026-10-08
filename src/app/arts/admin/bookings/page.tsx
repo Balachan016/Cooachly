@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
+import { bookingStatusFilter } from "@/lib/bookings";
 import { Card, Select } from "@/components/ui";
 import { AdminBookingRow } from "./booking-row";
 
@@ -14,7 +15,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
-    status: view === "completed" ? "COMPLETED" : { not: "COMPLETED" },
+    ...bookingStatusFilter(view),
     ...(studentId ? { studentId } : {}),
     ...(date ? { startAt: { gte: new Date(`${date}T00:00:00.000Z`), lt: new Date(`${date}T23:59:59.999Z`) } } : {}),
   };
@@ -23,7 +24,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
     prisma.booking.findMany({
       where,
       orderBy: { startAt: view === "completed" ? "desc" : "asc" },
-      take: 100,
+      take: 300,
       include: {
         student: true,
         professor: true,
@@ -57,8 +58,8 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
             {hasFilters
               ? "Classes matching your filters."
               : view === "completed"
-                ? "Up to 100 completed classes, most recent first."
-                : "Up to 100 upcoming classes, soonest first."}{" "}
+                ? "Up to 300 completed classes, most recent first."
+                : "Up to 300 upcoming classes, soonest first."}{" "}
             Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
           </p>
         </div>
@@ -133,11 +134,11 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
         <table className="w-full text-left text-sm">
           <thead className="border-b border-black/10 text-xs uppercase text-black/50 dark:border-white/10 dark:text-white/50">
             <tr>
-              <th className="px-4 py-3">When</th>
-              <th className="px-4 py-3">Student</th>
-              <th className="px-4 py-3">Guru</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Details</th>
+              <th className="px-4 py-2">When</th>
+              <th className="px-4 py-2">Student</th>
+              <th className="px-4 py-2">Guru</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Details</th>
             </tr>
           </thead>
           <tbody>

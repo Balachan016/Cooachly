@@ -53,6 +53,9 @@ export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) 
           <span className="text-xs text-black/40 dark:text-white/40">Only a superadmin can manage this account.</span>
         ) : (
           <div className="flex flex-wrap gap-2">
+            <Link href={sitePath(user.site, `/admin/view-as/${user.id}`)}>
+              <Button variant="secondary">View</Button>
+            </Link>
             <Link href={sitePath(user.site, `/admin/users/${user.id}`)}>
               <Button variant="secondary">Edit</Button>
             </Link>

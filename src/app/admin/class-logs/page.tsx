@@ -1,13 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
-import { Card } from "@/components/ui";
+import { sitePath } from "@/lib/site";
+import { Card, Select } from "@/components/ui";
 import { ClassLogRow } from "./class-log-row";
 import { GenerateMonthlyButton } from "./generate-monthly-button";
+import { GenerateForPairButton } from "./generate-for-pair-button";
 
-export default async function ClassLogsPage() {
+export default async function ClassLogsPage(props: PageProps<"/admin/class-logs">) {
   const session = await requireRole("ADMIN");
+  const searchParams = await props.searchParams;
+  const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
+  const subject = typeof searchParams.subject === "string" ? searchParams.subject : "";
 
-  const [bookings, monthlySummaries] = await Promise.all([
+  const [bookings, monthlySummaries, students, subjectRows] = await Promise.all([
     prisma.booking.findMany({
       where: { status: "COMPLETED", professor: { site: session.site } },
       orderBy: { startAt: "desc" },
@@ -15,12 +20,31 @@ export default async function ClassLogsPage() {
       include: { student: true, professor: true },
     }),
     prisma.monthlySummary.findMany({
-      where: { professor: { site: session.site } },
+      where: {
+        professor: { site: session.site },
+        ...(studentId ? { studentId } : {}),
+        ...(subject ? { subject: { equals: subject, mode: "insensitive" } } : {}),
+      },
       orderBy: { periodStart: "desc" },
       take: 50,
       include: { student: true, professor: true },
     }),
+    prisma.user.findMany({
+      where: { role: "STUDENT", site: session.site, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.professorProfile.findMany({
+      where: { user: { site: session.site }, subject: { not: "" } },
+      select: { subject: true },
+      distinct: ["subject"],
+      orderBy: { subject: "asc" },
+    }),
   ]);
+
+  const subjects = subjectRows.map((r) => r.subject);
+  const selectedStudent = studentId ? students.find((s) => s.id === studentId) : undefined;
+  const hasFilters = Boolean(studentId || subject);
 
   return (
     <div>
@@ -32,13 +56,60 @@ export default async function ClassLogsPage() {
       <Card className="mt-6">
         <h2 className="font-semibold">Monthly summaries</h2>
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-          Generates one recap per student/professor pair from last month&apos;s completed session summaries.
+          Generates one recap per student/professor pair from last month&apos;s completed session summaries. Pick a student and
+          subject below to find one directly, or generate a fresh recap covering every session to date.
         </p>
         <div className="mt-4">
           <GenerateMonthlyButton />
         </div>
 
-        {monthlySummaries.length > 0 && (
+        <form method="get" className="mt-4 flex flex-wrap items-end gap-3 border-t border-black/10 pt-4 dark:border-white/10">
+          <div className="w-56">
+            <label htmlFor="student" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+              Student
+            </label>
+            <Select id="student" name="student" defaultValue={studentId}>
+              <option value="">All students</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="w-56">
+            <label htmlFor="subject" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+              Subject
+            </label>
+            <Select id="subject" name="subject" defaultValue={subject}>
+              <option value="">All subjects</option>
+              {subjects.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <button type="submit" className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
+            Filter
+          </button>
+          {hasFilters && (
+            <a
+              href={sitePath(session.site, "/admin/class-logs")}
+              className="text-sm font-medium text-black/50 hover:underline dark:text-white/50"
+            >
+              Clear filters
+            </a>
+          )}
+        </form>
+
+        {selectedStudent && subject && (
+          <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
+            <GenerateForPairButton studentId={selectedStudent.id} subject={subject} />
+          </div>
+        )}
+
+        {monthlySummaries.length > 0 ? (
           <div className="mt-6 space-y-4 border-t border-black/10 pt-4 dark:border-white/10">
             {monthlySummaries.map((m) => (
               <div key={m.id} className="rounded-lg bg-black/5 p-4 text-sm dark:bg-white/5">
@@ -56,6 +127,12 @@ export default async function ClassLogsPage() {
               </div>
             ))}
           </div>
+        ) : (
+          hasFilters && (
+            <p className="mt-4 border-t border-black/10 pt-4 text-sm text-black/50 dark:border-white/10 dark:text-white/50">
+              No summary found for this filter yet{selectedStudent && subject ? " — generate one above." : "."}
+            </p>
+          )
         )}
       </Card>
 

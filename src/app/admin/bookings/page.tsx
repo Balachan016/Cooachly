@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isDailyConfigured } from "@/lib/daily";
 import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
+import { bookingStatusFilter } from "@/lib/bookings";
 import { Card, Select } from "@/components/ui";
 import { AdminBookingRow } from "./booking-row";
 import { InstantCallForm } from "./instant-call-form";
@@ -16,7 +17,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
-    status: view === "completed" ? "COMPLETED" : { not: "COMPLETED" },
+    ...bookingStatusFilter(view),
     ...(studentId ? { studentId } : {}),
     ...(date ? { startAt: { gte: new Date(`${date}T00:00:00.000Z`), lt: new Date(`${date}T23:59:59.999Z`) } } : {}),
   };
@@ -25,7 +26,7 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
     prisma.booking.findMany({
       where,
       orderBy: { startAt: view === "completed" ? "desc" : "asc" },
-      take: 100,
+      take: 300,
       include: {
         student: true,
         professor: true,
@@ -69,8 +70,8 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
             {hasFilters
               ? "Sessions matching your filters."
               : view === "completed"
-                ? "Up to 100 completed sessions, most recent first."
-                : "Up to 100 upcoming sessions, soonest first."}
+                ? "Up to 300 completed sessions, most recent first."
+                : "Up to 300 upcoming sessions, soonest first."}
           </p>
         </div>
         <a
@@ -154,12 +155,12 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
         <table className="w-full text-left text-sm">
           <thead className="border-b border-black/10 text-xs uppercase text-black/50 dark:border-white/10 dark:text-white/50">
             <tr>
-              <th className="px-4 py-3">When</th>
-              <th className="px-4 py-3">Student</th>
-              <th className="px-4 py-3">Professor</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Price</th>
-              <th className="px-4 py-3">Details</th>
+              <th className="px-4 py-2">When</th>
+              <th className="px-4 py-2">Student</th>
+              <th className="px-4 py-2">Professor</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2 text-right">Price</th>
+              <th className="px-4 py-2">Details</th>
             </tr>
           </thead>
           <tbody>

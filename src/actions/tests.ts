@@ -202,8 +202,12 @@ export async function assignTest(_state: TestFormState, formData: FormData): Pro
   const studentIds = formData.getAll("studentIds").map(String).filter(Boolean);
   if (studentIds.length === 0) return { message: "Pick at least one student to assign this test to." };
 
-  const test = await prisma.test.findUnique({ where: { id: testId }, include: { questions: true } });
-  if (!test || test.professorId !== session.userId) return { message: "Test not found." };
+  const test = await prisma.test.findUnique({ where: { id: testId }, include: { questions: true, professor: true } });
+  if (!test || test.site !== session.site) return { message: "Test not found." };
+  // Professors can only assign their own tests; admins/superadmins can assign
+  // any professor's test to any student (the test still goes out "from" its
+  // actual owning professor — see sendTestAssignedEmail below).
+  if (session.role === "PROFESSOR" && test.professorId !== session.userId) return { message: "Test not found." };
   if (test.questions.length === 0) return { message: "Add at least one question before assigning this test." };
 
   const existing = await prisma.testAssignment.findMany({ where: { testId }, select: { studentId: true } });
@@ -211,11 +215,7 @@ export async function assignTest(_state: TestFormState, formData: FormData): Pro
   const newStudentIds = studentIds.filter((id) => !alreadyAssigned.has(id));
   if (newStudentIds.length === 0) return { message: "Those students are already assigned this test." };
 
-  const [students, professor] = await Promise.all([
-    prisma.user.findMany({ where: { id: { in: newStudentIds }, role: "STUDENT", site: session.site } }),
-    prisma.user.findUnique({ where: { id: session.userId } }),
-  ]);
-  if (!professor) return { message: "Professor not found." };
+  const students = await prisma.user.findMany({ where: { id: { in: newStudentIds }, role: "STUDENT", site: session.site } });
 
   const totalMarks = test.questions.reduce((sum, q) => sum + q.maxMarks, 0);
 
@@ -229,7 +229,7 @@ export async function assignTest(_state: TestFormState, formData: FormData): Pro
 
   for (const assignment of assignments) {
     const student = students.find((s) => s.id === assignment.studentId);
-    if (student) await sendTestAssignedEmail(test, assignment, student, professor);
+    if (student) await sendTestAssignedEmail(test, assignment, student, test.professor);
   }
 
   revalidateTestPaths(session.site, testId);

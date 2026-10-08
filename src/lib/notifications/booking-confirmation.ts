@@ -5,16 +5,45 @@ import { logNotification } from "./log";
 import { getAdminCcEmails } from "./admin-recipients";
 import { formatWhenFor } from "./format";
 import { SITE_CONFIG } from "@/lib/site";
+import { buildIcsCalendar, googleCalendarLink, icsBookingUid } from "@/lib/ics";
 
 type BookingWithParties = Booking & { student: User; professor: User };
+
+function eventSummary(booking: BookingWithParties) {
+  return `${booking.student.name} & ${booking.professor.name} — ${SITE_CONFIG[booking.student.site].brandName}`;
+}
 
 function sessionListHtml(bookings: BookingWithParties[], timezone: string) {
   return `<ul>${bookings
     .map((b) => {
       const joinLink = b.dailyRoomUrl || b.meetingLink;
-      return `<li>${formatWhenFor(b.startAt, timezone)}${joinLink ? ` — <a href="${joinLink}">Join the session</a>` : ""}</li>`;
+      const calendarLink = googleCalendarLink({
+        start: b.startAt,
+        end: b.endAt,
+        summary: eventSummary(b),
+        description: joinLink ? `Join: ${joinLink}` : undefined,
+        location: joinLink ?? undefined,
+      });
+      return `<li>${formatWhenFor(b.startAt, timezone)}${joinLink ? ` — <a href="${joinLink}">Join the session</a>` : ""} — <a href="${calendarLink}">Add to Google Calendar</a></li>`;
     })
     .join("")}</ul>`;
+}
+
+function icsAttachment(bookings: BookingWithParties[], opts: { method?: "PUBLISH" | "CANCEL"; sequence?: number } = {}) {
+  const ics = buildIcsCalendar(
+    bookings.map((b) => ({
+      uid: icsBookingUid(b.id),
+      start: b.startAt,
+      end: b.endAt,
+      summary: eventSummary(b),
+      description: (b.dailyRoomUrl || b.meetingLink) ? `Join: ${b.dailyRoomUrl || b.meetingLink}` : undefined,
+      location: b.dailyRoomUrl || b.meetingLink || undefined,
+      status: opts.method === "CANCEL" ? ("CANCELLED" as const) : ("CONFIRMED" as const),
+      sequence: opts.sequence,
+    })),
+    opts
+  );
+  return [{ filename: "session.ics", content: Buffer.from(ics).toString("base64"), contentType: "text/calendar" }];
 }
 
 /**
@@ -44,8 +73,10 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
       <p>Hi ${first.student.name},</p>
       <p>Your ${countWord} with <strong>${first.professor.name}</strong> ${verb} confirmed:</p>
       ${sessionListHtml(sorted, first.student.timezone)}
+      <p>A calendar file is attached — open it to block the time, or use the "Add to Google Calendar" link above.</p>
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment(sorted),
   });
   for (const booking of sorted) {
     await logNotification({
@@ -66,8 +97,10 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
       <p>Hi ${first.professor.name},</p>
       <p>Your ${countWord} with <strong>${first.student.name}</strong> ${verb} confirmed:</p>
       ${sessionListHtml(sorted, first.professor.timezone)}
+      <p>A calendar file is attached — open it to block the time, or use the "Add to Google Calendar" link above.</p>
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment(sorted),
   });
   for (const booking of sorted) {
     await logNotification({
@@ -96,6 +129,14 @@ export async function sendBookingRescheduledEmail(
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const joinLink = booking.dailyRoomUrl || booking.meetingLink;
   const joinLine = joinLink ? `<p><a href="${joinLink}">Join the session</a></p>` : "";
+  const calendarLink = googleCalendarLink({
+    start: booking.startAt,
+    end: booking.endAt,
+    summary: eventSummary(booking),
+    description: joinLink ? `Join: ${joinLink}` : undefined,
+    location: joinLink ?? undefined,
+  });
+  const calendarLine = `<p>Calendar updated — a new .ics is attached, or <a href="${calendarLink}">add the new time to Google Calendar</a>.</p>`;
   const adminEmails = getAdminCcEmails();
   const requestedByName = opts.requestedBy === "STUDENT" ? booking.student.name : booking.professor.name;
   const reasonLine = opts.reason
@@ -114,8 +155,10 @@ export async function sendBookingRescheduledEmail(
       <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>, requested by ${requestedByName}.</p>
       ${reasonLine}
       ${joinLine}
+      ${calendarLine}
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment([booking], { sequence: 1 }),
   });
   await logNotification({
     bookingId: booking.id,
@@ -137,8 +180,10 @@ export async function sendBookingRescheduledEmail(
       <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>, requested by ${requestedByName}.</p>
       ${reasonLine}
       ${joinLine}
+      ${calendarLine}
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment([booking], { sequence: 1 }),
   });
   await logNotification({
     bookingId: booking.id,
@@ -176,9 +221,11 @@ export async function sendBookingCancelledEmail(
       <p>Your session with <strong>${booking.professor.name}</strong> on <strong>${whenForStudent}</strong>
       has been cancelled by ${cancelledByName}.</p>
       ${reasonLine}
+      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
       <p>If you have questions about this, please get in touch with us.</p>
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment([booking], { method: "CANCEL" }),
   });
   await logNotification({
     bookingId: booking.id,
@@ -199,9 +246,11 @@ export async function sendBookingCancelledEmail(
       <p>The session with <strong>${booking.student.name}</strong> on <strong>${whenForProfessor}</strong>
       has been cancelled by ${cancelledByName}.</p>
       ${reasonLine}
+      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
       <p>If you have questions about this, please get in touch with us.</p>
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment([booking], { method: "CANCEL" }),
   });
   await logNotification({
     bookingId: booking.id,
@@ -233,9 +282,11 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
       <p>Hi ${booking.student.name},</p>
       <p>Your session with <strong>${booking.professor.name}</strong> scheduled for <strong>${whenForStudent}</strong>
       has been removed by the ${brandName} team.</p>
+      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
       <p>If you have questions about this, please get in touch with us.</p>
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment([booking], { method: "CANCEL" }),
   });
   await logNotification({
     userId: booking.student.id,
@@ -254,9 +305,11 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
       <p>Hi ${booking.professor.name},</p>
       <p>The session with <strong>${booking.student.name}</strong> scheduled for <strong>${whenForProfessor}</strong>
       has been removed by the ${brandName} team.</p>
+      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
       <p>If you have questions about this, please get in touch with us.</p>
       <p>— ${brandName}</p>
     `,
+    attachments: icsAttachment([booking], { method: "CANCEL" }),
   });
   await logNotification({
     userId: booking.professor.id,
