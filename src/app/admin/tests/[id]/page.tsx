@@ -27,10 +27,16 @@ export default async function AdminTestDetailPage(props: PageProps<"/admin/tests
 
   const totalMarks = test.questions.reduce((sum, q) => sum + q.maxMarks, 0);
   const ownedByMe = test.professorId === session.userId;
+  const allStudents = await getAllStudents(session.site);
+  const assignedIds = new Set(test.assignments.map((a) => a.studentId));
+  const unassignedStudents = allStudents.filter((s) => !assignedIds.has(s.id));
 
   // An admin only gets the full build/grade UI for tests they created
   // themselves (see "Allow admin to initiate test for any student") — tests
-  // other professors created stay a read-only oversight view, same as before.
+  // other professors created stay a read-only oversight view, except admins
+  // can still assign that test to any student on the owning professor's
+  // behalf (see "Test created by any professor should be enabled to admins
+  // to assign the same to any student").
   if (!ownedByMe) {
     return (
       <div>
@@ -56,6 +62,16 @@ export default async function AdminTestDetailPage(props: PageProps<"/admin/tests
             ))}
           </ul>
         </Card>
+
+        {test.questions.length > 0 && unassignedStudents.length > 0 && (
+          <Card className="mt-4">
+            <h2 className="font-semibold">Assign to students</h2>
+            <p className="mt-1 text-sm text-black/50 dark:text-white/50">
+              This test belongs to {test.professor.name}; assigning it here sends it on their behalf.
+            </p>
+            <AssignTestForm testId={test.id} students={unassignedStudents} />
+          </Card>
+        )}
 
         <Card className="mt-4 p-0">
           <h2 className="p-4 pb-0 font-semibold">Assignments ({test.assignments.length})</h2>
@@ -89,10 +105,6 @@ export default async function AdminTestDetailPage(props: PageProps<"/admin/tests
       </div>
     );
   }
-
-  const allStudents = await getAllStudents(session.site);
-  const assignedIds = new Set(test.assignments.map((a) => a.studentId));
-  const unassignedStudents = allStudents.filter((s) => !assignedIds.has(s.id));
 
   return (
     <div>

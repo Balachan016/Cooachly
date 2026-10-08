@@ -60,18 +60,13 @@ export function AdminBookingRow({
   return (
     <>
       <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
-        <td className="whitespace-nowrap px-4 py-3">
-          <div className="font-medium">
-            {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(booking.startAt)}
-          </div>
-          <div className="text-xs text-black/50 dark:text-white/50">
-            {new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(booking.startAt)}
-          </div>
+        <td className="whitespace-nowrap px-4 py-1.5">
+          {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(booking.startAt)}
         </td>
-        <td className="px-4 py-3">{booking.student.name}</td>
-        <td className="px-4 py-3">{booking.professor.name}</td>
-        <td className="px-4 py-3">
-          <div className="flex flex-col items-start gap-1">
+        <td className="px-4 py-1.5">{booking.student.name}</td>
+        <td className="px-4 py-1.5">{booking.professor.name}</td>
+        <td className="px-4 py-1.5">
+          <div className="flex flex-wrap items-center gap-1">
             <Badge tone={booking.status === "CANCELLED" ? "danger" : booking.status === "COMPLETED" ? "success" : "default"}>
               {booking.status}
             </Badge>
@@ -79,8 +74,8 @@ export function AdminBookingRow({
             {booking.isDemo && <Badge tone="default">Free demo</Badge>}
           </div>
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
-        <td className="px-4 py-3">
+        <td className="whitespace-nowrap px-4 py-1.5 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
+        <td className="px-4 py-1.5">
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"

@@ -13,6 +13,8 @@ const resend = apiKey ? new Resend(apiKey) : null;
 
 export type EmailSendResult = { skipped: boolean; error?: string; from: string; to: string; cc?: string[] };
 
+export type EmailAttachment = { filename: string; content: string; contentType?: string };
+
 // `site` picks which brand's logo/footer wraps the email. Every caller in
 // this codebase belongs to one site or the other — pass it so the HTML you
 // hand in (a few lines of <p>…</p>) always goes out looking like a real,
@@ -23,6 +25,7 @@ export async function sendEmail(opts: {
   html: string;
   site: Site;
   cc?: string[];
+  attachments?: EmailAttachment[];
 }): Promise<EmailSendResult> {
   // Echoed back on every result so callers can log exactly who it went from/to.
   const addresses = { from: fromAddress, to: opts.to, cc: opts.cc?.length ? opts.cc : undefined };
@@ -42,6 +45,11 @@ export async function sendEmail(opts: {
       cc: addresses.cc,
       subject: opts.subject,
       html,
+      attachments: opts.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     });
     if (result.error) {
       console.error("Failed to send email", result.error);

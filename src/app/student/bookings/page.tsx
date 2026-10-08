@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { isPastDate, isWithinJoinWindow } from "@/lib/time";
+import { bookingStatusFilter } from "@/lib/bookings";
 import { Card } from "@/components/ui";
 import { StudentBookingRow } from "./booking-row";
 
@@ -12,7 +13,7 @@ export default async function StudentBookingsPage(props: PageProps<"/student/boo
   const view = searchParams.view === "completed" ? "completed" : "upcoming";
 
   const bookings = await prisma.booking.findMany({
-    where: { studentId: user.id, status: view === "completed" ? "COMPLETED" : { not: "COMPLETED" } },
+    where: { studentId: user.id, ...bookingStatusFilter(view) },
     orderBy: { startAt: view === "completed" ? "desc" : "asc" },
     include: { professor: true, attachments: true, reviews: true },
   });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Attachment, Booking, Review, User } from "@prisma/client";
 import { Badge } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
@@ -16,41 +17,55 @@ export function StudentBookingRow({
   isPast: boolean;
   canJoin: boolean;
 }) {
+  const [showDetails, setShowDetails] = useState(false);
   const myReview = booking.reviews.find((r) => r.raterId === booking.studentId);
-
   const canModify = !isPast && booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
+  const hasDetails = booking.status !== "CANCELLED" || booking.attachments.length > 0;
 
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="font-medium">{booking.professor.name}</div>
-          <div className="text-sm text-black/50 dark:text-white/50">
-            {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(booking.startAt)}
-          </div>
-          <div className="mt-1 flex gap-2">
-            <Badge tone={booking.status === "CANCELLED" ? "danger" : booking.status === "COMPLETED" ? "success" : "default"}>
-              {booking.status}
-            </Badge>
-            <Badge>Pay guru directly</Badge>
-          </div>
-          {booking.meetingLink && booking.status !== "CANCELLED" && (
-            canJoin ? (
-              <a
-                href={booking.meetingLink}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
-              >
-                Join video call →
-              </a>
-            ) : (
-              !isPast && (
-                <p className="mt-2 text-sm text-black/40 dark:text-white/40">
-                  Join link opens 5 minutes before your class.
-                </p>
-              )
-            )
+    <div className="px-4 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-medium">{booking.professor.name}</span>
+        <span className="text-sm text-black/50 dark:text-white/50">
+          {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(booking.startAt)}
+        </span>
+        <Badge tone={booking.status === "CANCELLED" ? "danger" : booking.status === "COMPLETED" ? "success" : "default"}>
+          {booking.status}
+        </Badge>
+        <Badge>Pay guru directly</Badge>
+        {canJoin && booking.meetingLink && (
+          <a
+            href={booking.meetingLink}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
+          >
+            Join video call →
+          </a>
+        )}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {canModify && (
+            <>
+              <CancelBookingControl bookingId={booking.id} />
+              <RescheduleControl bookingId={booking.id} />
+            </>
+          )}
+          {hasDetails && (
+            <button
+              type="button"
+              onClick={() => setShowDetails((v) => !v)}
+              className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
+            >
+              {showDetails ? "Hide details" : "Details"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showDetails && hasDetails && (
+        <div className="mt-2 border-t border-black/5 pt-2 dark:border-white/5">
+          {booking.meetingLink && booking.status !== "CANCELLED" && !canJoin && !isPast && (
+            <p className="text-sm text-black/40 dark:text-white/40">Join link opens 5 minutes before your class.</p>
           )}
           {booking.status !== "CANCELLED" && (
             <AttachmentPanel
@@ -72,14 +87,7 @@ export function StudentBookingRow({
             />
           )}
         </div>
-
-        {canModify && (
-          <div className="flex flex-wrap items-start gap-2">
-            <CancelBookingControl bookingId={booking.id} />
-            <RescheduleControl bookingId={booking.id} />
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

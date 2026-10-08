@@ -24,44 +24,57 @@ export function DashboardShell({
   logo?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-1 flex-col">
-      <header className="border-b border-black/10 dark:border-white/10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-8">
-            {/* shrink-0: without it, pages with many nav links (admin's 8+)
-                squeeze this flex item and the logo image (w-full inside)
-                shrinks along with it, rendering much smaller than intended. */}
-            <Link href={homeHref} className="shrink-0">
-              {logo}
+    <div className="flex min-h-screen flex-1 flex-col sm:flex-row">
+      {/* Desktop: a sticky left sidebar instead of a top bar, so a long nav
+          list (e.g. admin's 9 links) grows down the page instead of
+          squeezing or overflowing a horizontal row. */}
+      <aside className="hidden shrink-0 flex-col border-r border-black/10 dark:border-white/10 sm:sticky sm:top-0 sm:flex sm:h-screen sm:w-60 sm:overflow-y-auto">
+        <Link href={homeHref} className="block border-b border-black/10 p-4 dark:border-white/10">
+          {logo}
+        </Link>
+        <nav className="flex-1 space-y-1 p-3">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="block rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
+            >
+              {link.label}
             </Link>
-            {/* min-w-0 + overflow-x-auto: a role with many links (admin's 9)
-                would otherwise overflow the header and get squeezed by the
-                flex layout — wrapping onto the user-info block on the right
-                rather than cleanly disappearing into a horizontal scroll. */}
-            <nav className="hidden min-w-0 gap-1 overflow-x-auto sm:flex">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+          ))}
+        </nav>
+        <div className="space-y-3 border-t border-black/10 p-4 dark:border-white/10">
+          <div className="text-sm">
+            <div className="font-medium">{userName}</div>
+            <div className="text-xs text-black/50 dark:text-white/50">{roleLabel}</div>
           </div>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            {/* Name and the Home button don't fit next to the logo on a phone;
-                the logo already links home. */}
-            <div className="hidden text-right text-sm sm:block">
-              <div className="font-medium">{userName}</div>
-              <div className="text-xs text-black/50 dark:text-white/50">{roleLabel}</div>
-            </div>
-            <Link href={homeHref} className="hidden sm:block">
-              <Button variant="secondary" type="button">
+          <div className="flex flex-col gap-2">
+            <Link href={homeHref}>
+              <Button variant="secondary" type="button" className="w-full">
                 Home
               </Button>
             </Link>
+            <Link href={settingsHref}>
+              <Button variant="secondary" type="button" className="w-full">
+                Settings
+              </Button>
+            </Link>
+            <form action={logout}>
+              <Button variant="secondary" type="submit" className="w-full">
+                Log out
+              </Button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile: the old top bar + horizontally-scrollable nav. */}
+      <header className="border-b border-black/10 dark:border-white/10 sm:hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-4">
+          <Link href={homeHref} className="shrink-0">
+            {logo}
+          </Link>
+          <div className="flex shrink-0 items-center gap-2">
             <Link href={settingsHref}>
               <Button variant="secondary" type="button">
                 Settings
@@ -74,7 +87,7 @@ export function DashboardShell({
             </form>
           </div>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-4 pb-3 sm:hidden">
+        <nav className="flex gap-1 overflow-x-auto px-4 pb-3">
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -86,7 +99,10 @@ export function DashboardShell({
           ))}
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto w-full max-w-6xl">{children}</div>
+      </main>
     </div>
   );
 }
