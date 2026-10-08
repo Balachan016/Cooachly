@@ -72,6 +72,7 @@ export function AdminBookingRow({
             </Badge>
             <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
             {booking.isDemo && <Badge tone="default">Free demo</Badge>}
+            {booking.rescheduleProposedStartAt && <Badge tone="warning">Reschedule pending</Badge>}
           </div>
         </td>
         <td className="whitespace-nowrap px-4 py-1.5 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>

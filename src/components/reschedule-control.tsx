@@ -1,12 +1,32 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getRescheduleOptions, rescheduleBooking, type RescheduleOptions, type RescheduleFormState } from "@/actions/bookings";
+import type { Role } from "@prisma/client";
+import {
+  getRescheduleOptions,
+  proposeReschedule,
+  acceptRescheduleProposal,
+  declineRescheduleProposal,
+  type RescheduleOptions,
+  type RescheduleFormState,
+} from "@/actions/bookings";
 import { Button, FormMessage, Textarea } from "@/components/ui";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function RescheduleControl({ bookingId }: { bookingId: string }) {
+export function RescheduleControl({
+  bookingId,
+  viewerRole,
+  proposedStartAt,
+  proposedBy,
+  proposedReason,
+}: {
+  bookingId: string;
+  viewerRole: "STUDENT" | "PROFESSOR";
+  proposedStartAt?: Date | null;
+  proposedBy?: Role | null;
+  proposedReason?: string | null;
+}) {
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<RescheduleOptions | null>(null);
   const [open, setOpen] = useState(false);
@@ -31,10 +51,55 @@ export function RescheduleControl({ bookingId }: { bookingId: string }) {
       formData.set("bookingId", bookingId);
       formData.set("newStartAt", selected);
       formData.set("reason", reason.trim());
-      const res = await rescheduleBooking(undefined, formData);
+      const res = await proposeReschedule(undefined, formData);
       setResult(res);
       if (res?.success) setOpen(false);
     });
+  }
+
+  function handleAccept() {
+    startTransition(async () => {
+      setResult(await acceptRescheduleProposal(bookingId));
+    });
+  }
+
+  function handleDecline() {
+    startTransition(async () => {
+      setResult(await declineRescheduleProposal(bookingId));
+    });
+  }
+
+  // A pending proposal takes over the whole control — resolve it before a
+  // new one can be opened (also enforced server-side by getRescheduleOptions).
+  if (proposedStartAt && proposedBy) {
+    const isProposer = proposedBy === viewerRole;
+    const formattedTime = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(proposedStartAt);
+
+    return (
+      <div className="mt-3 w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
+        {isProposer ? (
+          <p className="text-amber-800 dark:text-amber-300">
+            You proposed moving this session to <strong>{formattedTime}</strong>. Waiting for a response.
+          </p>
+        ) : (
+          <p className="text-amber-800 dark:text-amber-300">
+            A new time was proposed: <strong>{formattedTime}</strong>
+            {proposedReason ? ` — "${proposedReason}"` : ""}
+          </p>
+        )}
+        {result?.message && <FormMessage>{result.message}</FormMessage>}
+        <div className="mt-2 flex gap-2">
+          {!isProposer && (
+            <Button disabled={isPending} onClick={handleAccept}>
+              {isPending ? "Accepting…" : "Accept"}
+            </Button>
+          )}
+          <Button variant="secondary" disabled={isPending} onClick={handleDecline}>
+            {isPending ? "Please wait…" : isProposer ? "Cancel proposal" : "Decline"}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   if (!open) {
@@ -145,7 +210,7 @@ export function RescheduleControl({ bookingId }: { bookingId: string }) {
 
       <div className="mt-3 flex gap-2">
         <Button disabled={!selected || !reason.trim() || isPending} onClick={handleConfirm}>
-          {isPending ? "Rescheduling…" : "Confirm reschedule"}
+          {isPending ? "Proposing…" : "Propose this time"}
         </Button>
         <Button variant="secondary" disabled={isPending} onClick={() => setOpen(false)}>
           Cancel

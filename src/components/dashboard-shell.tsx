@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { logout } from "@/actions/auth";
+import { logout, returnFromSwitch } from "@/actions/auth";
 import { Button } from "@/components/ui";
 import { Logo } from "@/components/logo";
 
@@ -14,6 +14,7 @@ export function DashboardShell({
   homeHref = "/",
   settingsHref = "/settings",
   logo = <Logo />,
+  switchedInBy,
 }: {
   children: React.ReactNode;
   navLinks: NavLink[];
@@ -22,13 +23,28 @@ export function DashboardShell({
   homeHref?: string;
   settingsHref?: string;
   logo?: ReactNode;
+  /** The admin's name, when this session is an admin "switched in" as this user. */
+  switchedInBy?: string;
 }) {
   return (
-    <div className="flex min-h-screen flex-1 flex-col sm:flex-row">
+    <div className="flex min-h-screen flex-1 flex-col">
+      {switchedInBy && (
+        <div className="flex flex-wrap items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-center text-sm text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+          <span>
+            <strong>{switchedInBy}</strong> is switched in as {userName} ({roleLabel}).
+          </span>
+          <form action={returnFromSwitch}>
+            <button type="submit" className="font-medium underline underline-offset-2">
+              Return to admin
+            </button>
+          </form>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
       {/* Desktop: a sticky left sidebar instead of a top bar, so a long nav
           list (e.g. admin's 9 links) grows down the page instead of
           squeezing or overflowing a horizontal row. */}
-      <aside className="hidden shrink-0 flex-col border-r border-black/10 dark:border-white/10 sm:sticky sm:top-0 sm:flex sm:h-screen sm:w-60 sm:overflow-y-auto">
+      <aside className="hidden shrink-0 flex-col border-r border-black/10 dark:border-white/10 sm:sticky sm:top-0 sm:flex sm:max-h-screen sm:w-60 sm:overflow-y-auto">
         <Link href={homeHref} className="block border-b border-black/10 p-4 dark:border-white/10">
           {logo}
         </Link>
@@ -103,6 +119,7 @@ export function DashboardShell({
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
+      </div>
     </div>
   );
 }

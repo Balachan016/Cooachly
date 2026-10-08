@@ -33,6 +33,30 @@ export async function sendTestAssignedEmail(test: Test, assignment: TestAssignme
   await logNotification({ userId: student.id, channel: "EMAIL", kind: "test_assigned", result });
 }
 
+/** Sent ~24h before a test's due date if the student hasn't submitted it yet. */
+export async function sendTestDueSoonEmail(test: Test, assignment: TestAssignment, student: User) {
+  if (!isEmailConfigured) return;
+
+  const appUrl = await getAppUrl();
+  const link = `${appUrl}${sitePath(student.site, `/student/tests/${assignment.id}`)}`;
+  const brandName = SITE_CONFIG[student.site].brandName;
+  const dueWhen = formatWhenFor(test.dueAt, student.timezone);
+
+  const result = await sendEmail({
+    to: student.email,
+    cc: getAdminCcEmails(),
+    site: student.site,
+    subject: `Due soon: ${test.title}`,
+    html: `
+      <p>Hi ${student.name},</p>
+      <p>Your test <strong>${test.title}</strong> is due <strong>${dueWhen}</strong> and you haven't submitted it yet.</p>
+      <p><a href="${link}">Click here to take the test</a></p>
+      <p>— ${brandName}</p>
+    `,
+  });
+  await logNotification({ userId: student.id, channel: "EMAIL", kind: "test_due_soon", result });
+}
+
 /** Sent once the professor clicks "Share test score" — this is the only point the student learns their score. */
 export async function sendTestScoreSharedEmail(test: Test, assignment: TestAssignment, student: User, professor: User) {
   if (!isEmailConfigured) return;

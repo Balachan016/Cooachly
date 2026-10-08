@@ -18,6 +18,8 @@ import {
   sendBookingRescheduledEmail,
   sendBookingDeletedEmail,
   sendBookingCancelledEmail,
+  sendRescheduleProposedEmail,
+  sendRescheduleDeclinedEmail,
 } from "@/lib/notifications/booking-confirmation";
 import { formatWhenFor } from "@/lib/notifications/format";
 import { logAudit } from "@/lib/audit";
@@ -387,6 +389,9 @@ export async function getRescheduleOptions(bookingId: string): Promise<Reschedul
   if (booking.startAt.getTime() <= Date.now()) {
     return { eligible: false, message: "This session has already started." };
   }
+  if (booking.rescheduleProposedStartAt) {
+    return { eligible: false, message: "There's already a pending reschedule proposal on this session — resolve it first." };
+  }
 
   // The reschedule quota exists to bound how often a student can shuffle
   // their own sessions — it doesn't apply when the professor is the one
@@ -412,13 +417,12 @@ export async function getRescheduleOptions(bookingId: string): Promise<Reschedul
 export type RescheduleFormState = { message?: string; success?: true } | undefined;
 
 /**
- * Moves a booking to a new time with the same professor, freeing its old
- * slot (slot availability is derived live from each booking's startAt/endAt,
- * so updating them is all "freeing" the old slot requires) and consuming one
- * of the student's MAX_RESCHEDULES_PER_MONTH reschedules for this calendar
- * month.
+ * Proposes moving a booking to a new time — doesn't move it yet. The other
+ * party (student ↔ professor) must accept via acceptRescheduleProposal
+ * before startAt/endAt actually change and the student's monthly quota is
+ * consumed; declineRescheduleProposal leaves everything as it was.
  */
-export async function rescheduleBooking(_state: RescheduleFormState, formData: FormData): Promise<RescheduleFormState> {
+export async function proposeReschedule(_state: RescheduleFormState, formData: FormData): Promise<RescheduleFormState> {
   const session = await requireRole("STUDENT", "PROFESSOR");
 
   const bookingId = String(formData.get("bookingId") ?? "");
@@ -443,6 +447,9 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
   if (booking.startAt.getTime() <= Date.now()) {
     return { message: "This session has already started." };
   }
+  if (booking.rescheduleProposedStartAt) {
+    return { message: "There's already a pending reschedule proposal on this session." };
+  }
 
   if (session.role === "STUDENT") {
     const used = await monthlyReschedulesUsed(session.userId, new Date());
@@ -457,10 +464,108 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
   const match = slots.find((s) => s.startAt.getTime() === newStartDate.getTime());
   if (!match) return { message: "That time is no longer available. Please pick another." };
 
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      rescheduleProposedStartAt: match.startAt,
+      rescheduleProposedBy: session.role,
+      rescheduleProposedReason: reason,
+      rescheduleProposedAt: new Date(),
+    },
+    include: { student: true, professor: true },
+  });
+
+  await sendRescheduleProposedEmail(updated, {
+    proposedBy: session.role as "STUDENT" | "PROFESSOR",
+    proposedStartAt: match.startAt,
+    reason,
+  });
+
+  await logAudit({
+    site: session.site,
+    action: "BOOKING_RESCHEDULE_PROPOSED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: booking.id,
+    detail: `${booking.startAt.toISOString()} → ${match.startAt.toISOString()} proposed (by ${session.role.toLowerCase()}: ${reason})`,
+  });
+
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+
+  return { message: "Reschedule proposed — waiting for the other party to respond.", success: true };
+}
+
+/**
+ * Accepts a pending reschedule proposal — only the party who did NOT
+ * propose it can accept. Moves the booking, consumes the student's monthly
+ * quota when a student was the one who proposed it, and clears the
+ * proposal fields.
+ */
+export async function acceptRescheduleProposal(bookingId: string): Promise<RescheduleFormState> {
+  const session = await requireRole("STUDENT", "PROFESSOR");
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { student: true, professor: true } });
+  const isOwner =
+    session.role === "STUDENT" ? booking?.studentId === session.userId : booking?.professorId === session.userId;
+  if (!booking || !isOwner) return { message: "Booking not found." };
+  if (!booking.rescheduleProposedStartAt || !booking.rescheduleProposedBy || !booking.rescheduleProposedReason) {
+    return { message: "There's no pending proposal to accept." };
+  }
+  if (booking.rescheduleProposedBy === session.role) {
+    return { message: "Waiting on the other party to respond to your own proposal." };
+  }
+  if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
+    return { message: "This booking can no longer be rescheduled." };
+  }
+  if (booking.startAt.getTime() <= Date.now()) {
+    return { message: "This session has already started." };
+  }
+
+  if (booking.rescheduleProposedBy === "STUDENT") {
+    const used = await monthlyReschedulesUsed(booking.studentId, new Date());
+    if (used >= MAX_RESCHEDULES_PER_MONTH) {
+      return {
+        message: `The student has used their ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month.`,
+      };
+    }
+  }
+
+  const proposedStartAt = booking.rescheduleProposedStartAt;
+  const proposedBy = booking.rescheduleProposedBy;
+  const proposedReason = booking.rescheduleProposedReason;
+
+  const slots = await getAvailableSlots(booking.professorId);
+  const match = slots.find((s) => s.startAt.getTime() === proposedStartAt.getTime());
+  if (!match) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        rescheduleProposedStartAt: null,
+        rescheduleProposedBy: null,
+        rescheduleProposedReason: null,
+        rescheduleProposedAt: null,
+      },
+    });
+    revalidatePath(sitePath(session.site, "/student/bookings"));
+    revalidatePath(sitePath(session.site, "/professor/bookings"));
+    revalidatePath(sitePath(session.site, "/admin/bookings"));
+    return { message: "That proposed time is no longer available. The proposal has been cleared — please propose a new time." };
+  }
+
   const previousStartAt = booking.startAt;
   const updated = await prisma.booking.update({
     where: { id: booking.id },
-    data: { startAt: match.startAt, endAt: match.endAt, rescheduledAt: new Date() },
+    data: {
+      startAt: match.startAt,
+      endAt: match.endAt,
+      rescheduledAt: new Date(),
+      rescheduleProposedStartAt: null,
+      rescheduleProposedBy: null,
+      rescheduleProposedReason: null,
+      rescheduleProposedAt: null,
+    },
     include: { student: true, professor: true },
   });
 
@@ -470,8 +575,8 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
   }
 
   await sendBookingRescheduledEmail(updated, previousStartAt, {
-    requestedBy: session.role as "STUDENT" | "PROFESSOR",
-    reason,
+    requestedBy: proposedBy as "STUDENT" | "PROFESSOR",
+    reason: proposedReason,
   });
 
   await logAudit({
@@ -480,14 +585,65 @@ export async function rescheduleBooking(_state: RescheduleFormState, formData: F
     actorId: session.userId,
     targetType: "Booking",
     targetId: booking.id,
-    detail: `${previousStartAt.toISOString()} → ${match.startAt.toISOString()} (by ${session.role.toLowerCase()}: ${reason})`,
+    detail: `${previousStartAt.toISOString()} → ${match.startAt.toISOString()} accepted by ${session.role.toLowerCase()} (proposed by ${proposedBy.toLowerCase()}: ${proposedReason})`,
   });
 
   revalidatePath(sitePath(session.site, "/student/bookings"));
   revalidatePath(sitePath(session.site, "/professor/bookings"));
   revalidatePath(sitePath(session.site, "/admin/bookings"));
 
-  return { message: "Session rescheduled.", success: true };
+  return { message: "Reschedule accepted — session moved.", success: true };
+}
+
+/**
+ * Declines (or, if called by the proposer themselves, withdraws) a pending
+ * reschedule proposal, leaving the booking at its current time. Either
+ * party to the booking can call this.
+ */
+export async function declineRescheduleProposal(bookingId: string): Promise<RescheduleFormState> {
+  const session = await requireRole("STUDENT", "PROFESSOR");
+
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId }, include: { student: true, professor: true } });
+  const isOwner =
+    session.role === "STUDENT" ? booking?.studentId === session.userId : booking?.professorId === session.userId;
+  if (!booking || !isOwner) return { message: "Booking not found." };
+  if (!booking.rescheduleProposedStartAt || !booking.rescheduleProposedBy) {
+    return { message: "There's no pending proposal to decline." };
+  }
+
+  const wasProposer = booking.rescheduleProposedBy === session.role;
+  const proposedStartAt = booking.rescheduleProposedStartAt;
+  const proposedBy = booking.rescheduleProposedBy as "STUDENT" | "PROFESSOR";
+
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      rescheduleProposedStartAt: null,
+      rescheduleProposedBy: null,
+      rescheduleProposedReason: null,
+      rescheduleProposedAt: null,
+    },
+    include: { student: true, professor: true },
+  });
+
+  if (!wasProposer) {
+    await sendRescheduleDeclinedEmail(updated, { proposedBy, proposedStartAt, declinedByName: session.name });
+  }
+
+  await logAudit({
+    site: session.site,
+    action: "BOOKING_RESCHEDULE_DECLINED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: booking.id,
+    detail: `Proposal for ${proposedStartAt.toISOString()} ${wasProposer ? "withdrawn by proposer" : "declined"} (${session.role.toLowerCase()}: ${session.name})`,
+  });
+
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  revalidatePath(sitePath(session.site, "/admin/bookings"));
+
+  return { message: wasProposer ? "Proposal withdrawn." : "Proposal declined.", success: true };
 }
 
 export async function setMeetingLink(bookingId: string, meetingLink: string) {

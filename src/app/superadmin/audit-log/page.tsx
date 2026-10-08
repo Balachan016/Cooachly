@@ -6,10 +6,13 @@ const ACTION_LABEL: Record<string, string> = {
   LOGIN: "Login",
   LOGOUT: "Logout",
   BOOKING_CANCELLED: "Booking cancelled",
+  BOOKING_RESCHEDULED: "Booking rescheduled",
+  BOOKING_DELETED: "Booking deleted",
   COACH_APPLICATION_STATUS_CHANGED: "Coach application updated",
   USER_ROLE_CHANGED: "Role changed",
   USER_ACTIVATED: "User activated",
   USER_DEACTIVATED: "User deactivated",
+  USER_DELETED: "User deleted",
   USER_PROFILE_UPDATED: "Profile updated",
   PASSWORD_RESET_BY_ADMIN: "Password reset by admin",
   ACCOUNT_INVITE_SENT: "Invite sent",
@@ -17,6 +20,13 @@ const ACTION_LABEL: Record<string, string> = {
   DEMO_REQUEST_SCHEDULED: "Demo call scheduled",
   DEMO_REQUEST_STATUS_CHANGED: "Demo request status changed",
   ADMIN_ACCOUNT_CREATED: "Admin account created",
+  SCHEDULE_IMPORTED: "Schedule imported",
+  ADMIN_VIEWED_USER: "Admin viewed user (read-only)",
+  ADMIN_SWITCHED_TO_USER: "Admin switched into user account",
+  ADMIN_RETURNED_TO_OWN_ACCOUNT: "Admin returned from switched-in account",
+  TEST_ASSIGNED_BY_ADMIN: "Test assigned by admin on professor's behalf",
+  BOOKING_RESCHEDULE_PROPOSED: "Reschedule proposed",
+  BOOKING_RESCHEDULE_DECLINED: "Reschedule declined",
 };
 
 export default async function SuperadminAuditLogPage(props: PageProps<"/superadmin/audit-log">) {

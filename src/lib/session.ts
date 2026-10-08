@@ -22,6 +22,11 @@ export type SessionPayload = {
   site: Site;
   name: string;
   email: string;
+  // Set only while an admin is "switched in" as this user — the admin's own
+  // id/name, so the UI can show a "Return to admin" banner and the return
+  // action knows who to switch back to, without a DB lookup on every page.
+  impersonatorId?: string;
+  impersonatorName?: string;
 };
 
 export async function encrypt(payload: SessionPayload) {
