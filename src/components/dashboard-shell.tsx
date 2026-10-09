@@ -48,18 +48,7 @@ export function DashboardShell({
         <Link href={homeHref} className="block border-b border-black/10 p-4 dark:border-white/10">
           {logo}
         </Link>
-        <nav className="flex-1 space-y-1 p-3">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="block rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="space-y-3 border-t border-black/10 p-4 dark:border-white/10">
+        <div className="space-y-3 border-b border-black/10 p-4 dark:border-white/10">
           <div className="text-sm">
             <div className="font-medium">{userName}</div>
             <div className="text-xs text-black/50 dark:text-white/50">{roleLabel}</div>
@@ -82,6 +71,17 @@ export function DashboardShell({
             </form>
           </div>
         </div>
+        <nav className="flex-1 space-y-1 p-3">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="block rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
       </aside>
 
       {/* Mobile: the old top bar + horizontally-scrollable nav. */}

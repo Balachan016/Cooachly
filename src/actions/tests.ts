@@ -9,7 +9,8 @@ import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { uploadFile, isBlobConfigured } from "@/lib/blob";
 import { autoGradeMultipleChoice, sumAwardedMarks } from "@/lib/tests";
-import { parseQuestionTemplateDocx } from "@/lib/test-template";
+import { parseQuestionTemplateDocx, type ParsedQuestionDraft } from "@/lib/test-template";
+import { parseQuestionPaperPdf } from "@/lib/test-paper-pdf";
 import { sendTestAssignedEmail, sendTestScoreSharedEmail } from "@/lib/notifications/tests";
 import { logAudit } from "@/lib/audit";
 import type { Site } from "@prisma/client";
@@ -144,11 +145,24 @@ export async function importQuestionsFromTemplate(_state: TestFormState, formDat
   if (test.assignedAt) return { message: "This test has already been assigned, so its questions are locked." };
 
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { message: "Please choose the filled-in template file." };
+  if (!(file instanceof File) || file.size === 0) return { message: "Please choose a file to upload." };
   if (file.size > MAX_TEMPLATE_SIZE_BYTES) return { message: "File is too large (max 5MB)." };
 
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   const buffer = Buffer.from(await file.arrayBuffer());
-  const { questions, errors } = await parseQuestionTemplateDocx(buffer);
+  let questions: ParsedQuestionDraft[];
+  let errors: string[];
+  let suggestedDurationMinutes: number | undefined;
+  if (isPdf) {
+    const result = await parseQuestionPaperPdf(buffer);
+    questions = result.questions;
+    errors = result.errors;
+    suggestedDurationMinutes = result.suggestedDurationMinutes;
+  } else {
+    const result = await parseQuestionTemplateDocx(buffer);
+    questions = result.questions;
+    errors = result.errors;
+  }
 
   if (errors.length > 0) {
     return { message: errors.join(" ") };
@@ -159,6 +173,7 @@ export async function importQuestionsFromTemplate(_state: TestFormState, formDat
 
   const lastQuestion = await prisma.testQuestion.findFirst({ where: { testId: test.id }, orderBy: { order: "desc" } });
   let order = (lastQuestion?.order ?? -1) + 1;
+  const isFirstImport = !lastQuestion;
 
   await prisma.$transaction(
     questions.map((q) =>
@@ -178,6 +193,13 @@ export async function importQuestionsFromTemplate(_state: TestFormState, formDat
       })
     )
   );
+
+  // A PDF question paper's "Recommended Time" is a strong signal of intended
+  // duration — apply it, but only on the test's very first import, so a
+  // later file added to an already-set-up test never silently overrides it.
+  if (isFirstImport && suggestedDurationMinutes && suggestedDurationMinutes > 0) {
+    await prisma.test.update({ where: { id: test.id }, data: { durationMinutes: suggestedDurationMinutes } });
+  }
 
   revalidateTestPaths(session.site, test.id);
   return { message: `Added ${questions.length} question${questions.length === 1 ? "" : "s"} from the file.`, success: true };
