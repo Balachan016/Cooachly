@@ -1,5 +1,4 @@
 import "server-only";
-import { PDFParse } from "pdf-parse";
 import type { ParsedQuestionDraft, TemplateParseResult } from "./test-template";
 
 // ---------------------------------------------------------------------------
@@ -35,6 +34,13 @@ function splitNumberedBlocks(text: string): { number: number; text: string }[] {
 export async function parseQuestionPaperPdf(buffer: Buffer): Promise<PdfParseResult> {
   let rawText: string;
   try {
+    // Loaded lazily, only when a PDF is actually being parsed — not at
+    // module load time. This file is imported from actions/tests.ts
+    // alongside plain, unrelated actions like createTest, so a static
+    // top-level import here would pull pdf-parse (and pdf.js) into every
+    // one of those too, and any failure to initialize it in a serverless
+    // environment would take all of them down together.
+    const { PDFParse } = await import("pdf-parse");
     const parser = new PDFParse({ data: buffer });
     const result = await parser.getText();
     await parser.destroy();
