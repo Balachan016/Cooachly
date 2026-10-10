@@ -119,19 +119,18 @@ export async function POST(request: Request) {
       const brandName = SITE_CONFIG[booking.professor.site].brandName;
       const summaryHtml = `<pre style="white-space:pre-wrap;font-family:inherit">${summary}</pre>`;
 
-      const adminEmails = getAdminCcEmails();
-
+      // Admins are CC'd on the student's copy only — one admin copy per
+      // session summary, not two duplicates.
       await Promise.all([
         sendEmail({
           to: booking.student.email,
-          cc: adminEmails,
+          cc: getAdminCcEmails(),
           site: booking.student.site,
           subject: `Your ${brandName} session summary`,
           html: `<p>Here's the AI-generated summary of your session with <strong>${booking.professor.name}</strong> on <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>:</p>${summaryHtml}`,
         }),
         sendEmail({
           to: booking.professor.email,
-          cc: adminEmails,
           site: booking.professor.site,
           subject: `Your ${brandName} session summary`,
           html: `<p>Here's the AI-generated summary of your session with <strong>${booking.student.name}</strong> on <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>:</p>${summaryHtml}`,
