@@ -51,8 +51,9 @@ function icsAttachment(bookings: BookingWithParties[], opts: { method?: "PUBLISH
  * Sent once one or more bookings for the same student/professor pair are
  * actually confirmed (immediately for free/subscription/no-Stripe bookings,
  * or from the Stripe webhook once payment clears). Both the student and
- * professor get one email covering every session confirmed in that pass,
- * each CC'd via getAdminCcEmails() so admins see every booking as it happens.
+ * professor get one email covering every session confirmed in that pass.
+ * Admins are CC'd on the student's copy only (not the professor's too) —
+ * one admin copy per event, covering both names, instead of two duplicates.
  */
 export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
   if (!isEmailConfigured || bookings.length === 0) return;
@@ -91,7 +92,6 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 
   const professorResult = await sendEmail({
     to: first.professor.email,
-    cc: adminEmails,
     site: first.professor.site,
     subject: `${countWord === "session" ? "New session" : `${sorted.length} new sessions`} booked with ${first.student.name}`,
     html: `
@@ -117,8 +117,9 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 /**
  * Sent when a student or professor reschedules a booking to a new time. Both
  * the student and professor get an email showing who requested it, the old
- * and new time, and their stated reason (if any) — each CC'd via
- * getAdminCcEmails(), same as a fresh booking confirmation.
+ * and new time, and their stated reason (if any). Admins are CC'd on the
+ * student's copy only, same as sendBookingConfirmation — one admin copy per
+ * event instead of two duplicates.
  */
 export async function sendBookingRescheduledEmail(
   booking: BookingWithParties,
@@ -171,7 +172,6 @@ export async function sendBookingRescheduledEmail(
 
   const professorResult = await sendEmail({
     to: booking.professor.email,
-    cc: adminEmails,
     site: booking.professor.site,
     subject: `Session with ${booking.student.name} was rescheduled`,
     html: `
@@ -266,8 +266,8 @@ export async function sendRescheduleDeclinedEmail(
 
 /**
  * Sent when a student or professor cancels a booking, with their stated
- * reason. Both parties get an email, CC'd via getAdminCcEmails(), same as
- * every other booking lifecycle notification.
+ * reason. Both parties get an email; admins are CC'd on the student's copy
+ * only, same as every other two-party booking lifecycle notification.
  */
 export async function sendBookingCancelledEmail(
   booking: BookingWithParties,
@@ -308,7 +308,6 @@ export async function sendBookingCancelledEmail(
   const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
   const professorResult = await sendEmail({
     to: booking.professor.email,
-    cc: adminEmails,
     site: booking.professor.site,
     subject: `Session with ${booking.student.name} on ${whenForProfessor} was cancelled`,
     html: `
@@ -368,7 +367,6 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
   const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
   const professorResult = await sendEmail({
     to: booking.professor.email,
-    cc: adminEmails,
     site: booking.professor.site,
     subject: `Session with ${booking.student.name} on ${whenForProfessor} was removed`,
     html: `

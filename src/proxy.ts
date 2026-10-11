@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { decrypt, encrypt, sessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/session";
+import { decrypt, decryptIfExpired, encrypt, sessionCookieOptions, SESSION_COOKIE_NAME } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath } from "@/lib/site";
+import { logAudit } from "@/lib/audit";
 import type { Role, Site } from "@prisma/client";
 
 const SITES: Site[] = ["COOACHLY", "ARTS"];
@@ -106,6 +107,27 @@ export async function proxy(req: NextRequest) {
   if (session) {
     const refreshed = await encrypt(session);
     response.cookies.set(SESSION_COOKIE_NAME, refreshed, sessionCookieOptions());
+  } else if (cookie) {
+    // The cookie failed to decrypt as a live session. If that's specifically
+    // because the idle timeout just lapsed (not a tampered/foreign token),
+    // jose has already verified the signature before rejecting it on
+    // expiry, so this payload is exactly who was logged in. The explicit
+    // logout() action never fires for a closed tab or an idle timeout, so
+    // without this, every one of those sessions ends with no LOGOUT audit
+    // row at all. Clear the cookie immediately so this fires once per
+    // session, not on every subsequent request.
+    const expiredPayload = await decryptIfExpired(cookie);
+    if (expiredPayload) {
+      await logAudit({
+        site: expiredPayload.site,
+        action: "LOGOUT",
+        actorId: expiredPayload.userId,
+        targetType: "User",
+        targetId: expiredPayload.userId,
+        detail: `${expiredPayload.role} logout (session timed out)`,
+      });
+      response.cookies.delete(SESSION_COOKIE_NAME);
+    }
   }
 
   return response;
