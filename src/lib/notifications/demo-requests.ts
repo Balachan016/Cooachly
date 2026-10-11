@@ -46,15 +46,17 @@ export async function sendDemoRequestScheduledEmail(
     `,
   });
 
+  // Deliberately leaves out demoRequest.email/phone — professors (and,
+  // symmetrically, students) never see the other side's direct contact
+  // details through any Cooachly notification; the join link above is the
+  // only way they connect.
   await sendEmail({
     to: demoRequest.professor.email,
     site: demoRequest.site,
     subject: `Demo call scheduled with ${demoRequest.name}`,
     html: `
       <p>Hi ${demoRequest.professor.name},</p>
-      <p>A demo call with <strong>${demoRequest.name}</strong> (${demoRequest.email}${
-        demoRequest.phone ? `, ${demoRequest.phone}` : ""
-      }) about <strong>${demoRequest.subject}</strong>${
+      <p>A demo call with <strong>${demoRequest.name}</strong> about <strong>${demoRequest.subject}</strong>${
         demoRequest.grade ? ` (Grade: ${demoRequest.grade})` : ""
       } is scheduled for <strong>${whenForProfessor}</strong>.</p>
       ${linkLine}

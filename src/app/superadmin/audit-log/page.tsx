@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, Select } from "@/components/ui";
-import type { AuditAction } from "@prisma/client";
+import type { AuditAction, Role } from "@prisma/client";
+
+const ACTOR_ROLES: Role[] = ["STUDENT", "PROFESSOR", "ADMIN", "SUPERADMIN"];
 
 const ACTION_LABEL: Record<string, string> = {
   LOGIN: "Login",
@@ -34,11 +36,17 @@ export default async function SuperadminAuditLogPage(props: PageProps<"/superadm
   const site = typeof searchParams.site === "string" ? searchParams.site : "";
   const rawAction = typeof searchParams.action === "string" ? searchParams.action : "";
   const action = rawAction in ACTION_LABEL ? (rawAction as AuditAction) : undefined;
+  const rawRole = typeof searchParams.role === "string" ? searchParams.role : "";
+  const role = (ACTOR_ROLES as string[]).includes(rawRole) ? (rawRole as Role) : undefined;
 
+  // No dedup/grouping on purpose — every login and logout is its own row, so
+  // a student or professor who signs in and out several times in one day
+  // shows every one of those events, not just the latest.
   const logs = await prisma.auditLog.findMany({
     where: {
       ...(site === "COOACHLY" || site === "ARTS" ? { site } : {}),
       ...(action ? { action } : {}),
+      ...(role ? { actor: { role } } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 300,
@@ -73,13 +81,23 @@ export default async function SuperadminAuditLogPage(props: PageProps<"/superadm
             ))}
           </Select>
         </div>
+        <div className="w-48">
+          <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">Role</label>
+          <Select name="role" defaultValue={role ?? ""}>
+            <option value="">All roles</option>
+            <option value="STUDENT">Student</option>
+            <option value="PROFESSOR">Professor</option>
+            <option value="ADMIN">Admin</option>
+            <option value="SUPERADMIN">Superadmin</option>
+          </Select>
+        </div>
         <button
           type="submit"
           className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
         >
           Filter
         </button>
-        {(site || action) && (
+        {(site || action || role) && (
           <a href="/superadmin/audit-log" className="text-sm font-medium text-black/50 hover:underline dark:text-white/50">
             Clear filters
           </a>

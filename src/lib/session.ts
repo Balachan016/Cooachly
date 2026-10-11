@@ -1,5 +1,5 @@
 import "server-only";
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, errors as joseErrors } from "jose";
 import { cookies } from "next/headers";
 import type { Role, Site } from "@prisma/client";
 
@@ -46,6 +46,23 @@ export async function decrypt(session: string | undefined = ""): Promise<Session
     return payload as unknown as SessionPayload;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Used only by proxy.ts to notice a session the moment its idle timeout
+ * lapses. jose verifies the signature before checking "exp", so a
+ * JWTExpired error's payload is just as trustworthy as decrypt()'s — it's
+ * not a guess about who it was. Returns null for anything else (no cookie,
+ * wrong key, tampered token, or a still-valid session).
+ */
+export async function decryptIfExpired(session: string | undefined = ""): Promise<SessionPayload | null> {
+  if (!session) return null;
+  try {
+    await jwtVerify(session, encodedKey, { algorithms: ["HS256"] });
+    return null;
+  } catch (err) {
+    return err instanceof joseErrors.JWTExpired ? (err.payload as unknown as SessionPayload) : null;
   }
 }
 
