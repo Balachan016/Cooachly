@@ -12,19 +12,20 @@ export default async function AvailabilityPage() {
 
   const availabilities = await prisma.availability.findMany({
     where: { professorId: user.id },
-    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+    orderBy: [{ dayOfWeek: "asc" }, { date: "asc" }, { startTime: "asc" }],
   });
 
   return (
     <div>
       <h1 className="text-2xl font-semibold">Availability</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        Set the weekly windows when students can book a 1-hour session with you. Times repeat every week.
+        Set the weekly windows when students can book a session with you, or open a single specific date for a
+        one-time window.
       </p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="font-semibold">Add a weekly window</h2>
+          <h2 className="font-semibold">Add a window</h2>
           <AvailabilityForm defaultTimezone={user.timezone} />
         </Card>
 
@@ -35,7 +36,11 @@ export default async function AvailabilityPage() {
               <AvailabilityRow
                 key={a.id}
                 id={a.id}
-                label={`${DAY_NAMES[a.dayOfWeek]} ${a.startTime}–${a.endTime}`}
+                label={
+                  a.date
+                    ? `One-time: ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(a.date)} ${a.startTime}–${a.endTime}`
+                    : `${DAY_NAMES[a.dayOfWeek!]} ${a.startTime}–${a.endTime}`
+                }
                 timezone={a.timezone}
                 sessionLengthMinutes={a.sessionLengthMinutes}
               />

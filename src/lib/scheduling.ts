@@ -64,10 +64,15 @@ export async function getSlotsWithStatus(
 
   for (let cursor = startOfDay(now); isBefore(cursor, windowEnd); cursor = addDays(cursor, 1)) {
     const dayOfWeek = cursor.getDay();
-    const dayAvailabilities = availabilities.filter((a) => a.dayOfWeek === dayOfWeek);
+    const dateStr = formatDateOnly(cursor);
+    // A one-off window (`date` set) only ever applies to that single
+    // calendar day; a recurring window (`dayOfWeek` set) applies to every
+    // matching weekday.
+    const dayAvailabilities = availabilities.filter((a) =>
+      a.date ? formatDateOnly(a.date) === dateStr : a.dayOfWeek === dayOfWeek
+    );
 
     for (const availability of dayAvailabilities) {
-      const dateStr = formatDateOnly(cursor);
       const rangeStart = fromZonedTime(`${dateStr}T${availability.startTime}:00`, availability.timezone);
       const rangeEnd = fromZonedTime(`${dateStr}T${availability.endTime}:00`, availability.timezone);
       const length = opts.sessionLengthOverride ?? availability.sessionLengthMinutes;

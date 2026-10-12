@@ -329,7 +329,13 @@ model Availability {
   id           String   @id @default(cuid())
   professorId  String
   professor    User     @relation("ProfessorAvailability", fields: [professorId], references: [id], onDelete: Cascade)
-  dayOfWeek    Int      // 0 (Sunday) - 6 (Saturday)
+  // Exactly one of dayOfWeek/date is set: dayOfWeek for a window that
+  // repeats every week, date for a one-off window open on that single
+  // calendar day only (e.g. an extra Saturday). date is stored as a plain
+  // UTC-midnight calendar date — compared as a date string, never as an
+  // instant — so it isn't affected by `timezone` below.
+  dayOfWeek    Int?     // 0 (Sunday) - 6 (Saturday)
+  date         DateTime?
   startTime    String   // "HH:mm" in the professor's timezone
   endTime      String   // "HH:mm" in the professor's timezone
   timezone     String   // IANA timezone name, e.g. "America/New_York"

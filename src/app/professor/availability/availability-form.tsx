@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { addAvailability } from "@/actions/availability";
 import { Button, Label, Select } from "@/components/ui";
 import { TIMEZONES } from "@/lib/roles";
@@ -21,8 +21,17 @@ const HOURS = Array.from({ length: 24 * 2 }, (_, i) => {
   return `${hours}:${minutes}`;
 });
 
+function todayDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function AvailabilityForm({ defaultTimezone }: { defaultTimezone: string }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [mode, setMode] = useState<"recurring" | "oneTime">("recurring");
 
   return (
     <form
@@ -30,19 +39,50 @@ export function AvailabilityForm({ defaultTimezone }: { defaultTimezone: string 
       action={async (formData) => {
         await addAvailability(formData);
         formRef.current?.reset();
+        setMode("recurring");
       }}
       className="mt-4 space-y-4"
     >
       <div>
-        <Label htmlFor="dayOfWeek">Day of week</Label>
-        <Select id="dayOfWeek" name="dayOfWeek" defaultValue="1" required>
-          {DAYS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
-            </option>
-          ))}
+        <Label htmlFor="mode">When</Label>
+        <Select
+          id="mode"
+          name="mode"
+          value={mode}
+          onChange={(e) => setMode(e.target.value as "recurring" | "oneTime")}
+        >
+          <option value="recurring">Every week, on a day</option>
+          <option value="oneTime">One-time, on a specific date</option>
         </Select>
       </div>
+
+      {mode === "recurring" ? (
+        <div>
+          <Label htmlFor="dayOfWeek">Day of week</Label>
+          <Select id="dayOfWeek" name="dayOfWeek" defaultValue="1" required>
+            {DAYS.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      ) : (
+        <div>
+          <Label htmlFor="date">Date</Label>
+          <input
+            id="date"
+            name="date"
+            type="date"
+            min={todayDateString()}
+            required
+            className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 dark:border-white/15 dark:bg-neutral-800"
+          />
+          <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+            Opens this single day only — doesn&apos;t repeat.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
