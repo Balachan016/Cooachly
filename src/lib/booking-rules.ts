@@ -3,7 +3,13 @@
 export const MIN_SLOTS_PER_BOOKING = 4;
 export const MAX_SLOTS_PER_BOOKING = 8;
 export const DEMO_SESSION_LENGTH_MINUTES = 30;
-export const MAX_RESCHEDULES_PER_MONTH = 1;
+
+// Per calendar month, per person — applies equally to students and
+// professors. An admin/superadmin acting on a booking (superadminCancelBooking,
+// etc.) goes through entirely separate actions that never check these, so
+// admin changes are never limited.
+export const MAX_RESCHEDULES_PER_MONTH: number = 2;
+export const MAX_CANCELLATIONS_PER_MONTH: number = 1;
 
 // A student can't cancel or (propose a) reschedule a session once it's this
 // close to starting — gives the professor a stable, final schedule for the

@@ -13,6 +13,7 @@ export function ProfessorBookingRow({
   booking,
   isPast,
   canJoin,
+  canCancel,
 }: {
   booking: Booking & {
     student: User & { studentProfile: StudentProfile | null };
@@ -21,6 +22,8 @@ export function ProfessorBookingRow({
   };
   isPast: boolean;
   canJoin: boolean;
+  /** False once this professor has used all their cancellations for the calendar month. */
+  canCancel: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [showDetails, setShowDetails] = useState(false);
@@ -54,7 +57,13 @@ export function ProfessorBookingRow({
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {canModify && (
             <>
-              <CancelBookingControl bookingId={booking.id} />
+              {canCancel ? (
+                <CancelBookingControl bookingId={booking.id} />
+              ) : (
+                <span className="text-xs text-black/40 dark:text-white/40">
+                  No cancellations left this month
+                </span>
+              )}
               <RescheduleControl
                 bookingId={booking.id}
                 viewerRole="PROFESSOR"

@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { isPastDate, isWithinJoinWindow } from "@/lib/time";
 import { bookingStatusFilter } from "@/lib/bookings";
+import { getCancellationsRemaining } from "@/actions/bookings";
 import { Card } from "@/components/ui";
 import { StudentBookingRow } from "./booking-row";
 
@@ -12,11 +13,14 @@ export default async function StudentBookingsPage(props: PageProps<"/arts/studen
   const searchParams = await props.searchParams;
   const view = searchParams.view === "completed" ? "completed" : "upcoming";
 
-  const bookings = await prisma.booking.findMany({
-    where: { studentId: user.id, ...bookingStatusFilter(view) },
-    orderBy: { startAt: view === "completed" ? "desc" : "asc" },
-    include: { professor: true, attachments: true, reviews: true },
-  });
+  const [bookings, cancellationsRemaining] = await Promise.all([
+    prisma.booking.findMany({
+      where: { studentId: user.id, ...bookingStatusFilter(view) },
+      orderBy: { startAt: view === "completed" ? "desc" : "asc" },
+      include: { professor: true, attachments: true, reviews: true },
+    }),
+    getCancellationsRemaining(user.id),
+  ]);
 
   return (
     <div>
@@ -46,6 +50,7 @@ export default async function StudentBookingsPage(props: PageProps<"/arts/studen
               booking={b}
               isPast={isPastDate(b.endAt)}
               canJoin={isWithinJoinWindow(b.startAt, b.endAt)}
+              canCancel={cancellationsRemaining > 0}
             />
           ))}
           {bookings.length === 0 && (
