@@ -8,10 +8,30 @@ import { sitePath } from "@/lib/site";
 import { Badge, Button, Select } from "@/components/ui";
 import { SwitchToUserButton } from "@/components/switch-to-user-button";
 
-export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) {
+export function UserRow({
+  user,
+  viewerRole,
+  currentUserId,
+}: {
+  user: User;
+  viewerRole: Role;
+  currentUserId: string;
+}) {
   const [isPending, startTransition] = useTransition();
   const isElevated = user.role === "ADMIN" || user.role === "SUPERADMIN";
-  const canDelete = viewerRole === "SUPERADMIN" && !isElevated;
+  const isSelf = user.id === currentUserId;
+  // A superadmin can manage admin/superadmin accounts too (the server
+  // actions already allow this) — only a plain admin is locked out of
+  // elevated rows, and nobody can act on their own row here (self-disable
+  // and self-delete are blocked server-side anyway).
+  const viewerCanManage = !isSelf && (!isElevated || viewerRole === "SUPERADMIN");
+  // deleteUserAccount refuses a SUPERADMIN target outright ("can't be
+  // deleted this way"), so the button isn't offered for one.
+  const canDelete = viewerRole === "SUPERADMIN" && !isSelf && user.role !== "SUPERADMIN";
+  // /admin/view-as and switch-to-user both only work for student/professor
+  // targets — showing them for an admin/superadmin row would just 404 or
+  // get rejected server-side.
+  const canViewOrSwitch = !isElevated;
 
   function handleDelete() {
     const confirmed = window.confirm(
@@ -51,14 +71,18 @@ export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) 
         {new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(user.createdAt)}
       </td>
       <td className="px-4 py-3">
-        {isElevated ? (
+        {isSelf ? (
+          <span className="text-xs text-black/40 dark:text-white/40">This is your own account.</span>
+        ) : !viewerCanManage ? (
           <span className="text-xs text-black/40 dark:text-white/40">Only a superadmin can manage this account.</span>
         ) : (
           <div className="flex flex-wrap gap-2">
-            <Link href={sitePath(user.site, `/admin/view-as/${user.id}`)}>
-              <Button variant="secondary">View</Button>
-            </Link>
-            {user.isActive && <SwitchToUserButton userId={user.id} />}
+            {canViewOrSwitch && (
+              <Link href={sitePath(user.site, `/admin/view-as/${user.id}`)}>
+                <Button variant="secondary">View</Button>
+              </Link>
+            )}
+            {canViewOrSwitch && user.isActive && <SwitchToUserButton userId={user.id} />}
             <Link href={sitePath(user.site, `/admin/users/${user.id}`)}>
               <Button variant="secondary">Edit</Button>
             </Link>

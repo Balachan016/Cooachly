@@ -54,7 +54,7 @@ export default async function AdminUsersPage() {
           </thead>
           <tbody>
             {users.map((user) => (
-              <UserRow key={user.id} user={user} viewerRole={session.role} />
+              <UserRow key={user.id} user={user} viewerRole={session.role} currentUserId={session.userId} />
             ))}
           </tbody>
         </table>
