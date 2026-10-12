@@ -360,6 +360,12 @@ model Booking {
   demoRequestId          String?       @unique
   demoRequest            DemoRequest?  @relation(fields: [demoRequestId], references: [id], onDelete: SetNull)
   rescheduledAt          DateTime?
+  // Who proposed the reschedule that actually took effect (set alongside
+  // rescheduledAt by acceptRescheduleProposal, and never cleared again,
+  // unlike rescheduleProposedBy below) — lets the monthly reschedule quota
+  // be charged to whichever party spent it, student or professor, even
+  // after the pending-proposal fields are cleared on acceptance.
+  rescheduledByRole      Role?
   // A pending reschedule proposal — set by proposeReschedule, cleared by
   // acceptRescheduleProposal (which also moves startAt/endAt) or
   // declineRescheduleProposal. startAt/endAt only change on acceptance, so a

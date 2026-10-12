@@ -12,6 +12,7 @@ import {
   MIN_SLOTS_PER_BOOKING,
   MAX_SLOTS_PER_BOOKING,
   MAX_RESCHEDULES_PER_MONTH,
+  MAX_CANCELLATIONS_PER_MONTH,
   STUDENT_CHANGE_CUTOFF_HOURS,
   isPastStudentChangeCutoff,
 } from "@/lib/booking-rules";
@@ -249,6 +250,12 @@ export async function cancelBooking(_state: CancelBookingState, formData: FormDa
       message: `This session starts in less than ${STUDENT_CHANGE_CUTOFF_HOURS} hours and can no longer be cancelled. Please get in touch with us if something's come up.`,
     };
   }
+  const cancellationsUsed = await monthlyCancellationsUsed(session.userId, new Date());
+  if (cancellationsUsed >= MAX_CANCELLATIONS_PER_MONTH) {
+    return {
+      message: `You've used your ${MAX_CANCELLATIONS_PER_MONTH} cancellation${MAX_CANCELLATIONS_PER_MONTH === 1 ? "" : "s"} for this calendar month. Please get in touch with us if something's come up.`,
+    };
+  }
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -371,10 +378,37 @@ export async function deleteBooking(bookingId: string) {
   revalidatePath("/superadmin/bookings");
 }
 
-async function monthlyReschedulesUsed(studentId: string, asOf: Date) {
+// rescheduleProposedBy is cleared back to null once a proposal is accepted
+// or declined, so it can't be used to attribute a *past* reschedule to
+// whoever spent their quota on it — that's what the permanent
+// rescheduledByRole field (set alongside rescheduledAt in
+// acceptRescheduleProposal) is for.
+async function monthlyReschedulesUsed(userId: string, role: "STUDENT" | "PROFESSOR", asOf: Date) {
   return prisma.booking.count({
-    where: { studentId, rescheduledAt: { gte: startOfMonth(asOf), lte: endOfMonth(asOf) } },
+    where: {
+      ...(role === "STUDENT" ? { studentId: userId } : { professorId: userId }),
+      rescheduledByRole: role,
+      rescheduledAt: { gte: startOfMonth(asOf), lte: endOfMonth(asOf) },
+    },
   });
+}
+
+// BOOKING_CANCELLED audit entries are always logged with the actual
+// canceller as actorId (no propose/accept split like reschedules have), so
+// counting them directly is accurate for both students and professors. An
+// admin/superadmin cancellation (superadminCancelBooking) logs its own
+// actorId — the admin's — so it's never counted against a student's or
+// professor's quota.
+async function monthlyCancellationsUsed(actorId: string, asOf: Date) {
+  return prisma.auditLog.count({
+    where: { actorId, action: "BOOKING_CANCELLED", createdAt: { gte: startOfMonth(asOf), lte: endOfMonth(asOf) } },
+  });
+}
+
+/** For bookings-list pages to decide whether to show the Cancel control at all. */
+export async function getCancellationsRemaining(userId: string): Promise<number> {
+  const used = await monthlyCancellationsUsed(userId, new Date());
+  return Math.max(0, MAX_CANCELLATIONS_PER_MONTH - used);
 }
 
 export type RescheduleOptions =
@@ -410,19 +444,15 @@ export async function getRescheduleOptions(bookingId: string): Promise<Reschedul
     };
   }
 
-  // The reschedule quota exists to bound how often a student can shuffle
-  // their own sessions — it doesn't apply when the professor is the one
-  // moving a session they're managing.
-  let remaining = MAX_RESCHEDULES_PER_MONTH;
-  if (session.role === "STUDENT") {
-    const used = await monthlyReschedulesUsed(session.userId, new Date());
-    remaining = Math.max(0, MAX_RESCHEDULES_PER_MONTH - used);
-    if (remaining <= 0) {
-      return {
-        eligible: false,
-        message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
-      };
-    }
+  // The reschedule quota bounds how often either party can shuffle a
+  // session — applies equally to the student and the professor.
+  const used = await monthlyReschedulesUsed(session.userId, session.role as "STUDENT" | "PROFESSOR", new Date());
+  const remaining = Math.max(0, MAX_RESCHEDULES_PER_MONTH - used);
+  if (remaining <= 0) {
+    return {
+      eligible: false,
+      message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
+    };
   }
 
   const viewerTimezone = session.role === "STUDENT" ? booking.student.timezone : booking.professor.timezone;
@@ -474,13 +504,11 @@ export async function proposeReschedule(_state: RescheduleFormState, formData: F
     };
   }
 
-  if (session.role === "STUDENT") {
-    const used = await monthlyReschedulesUsed(session.userId, new Date());
-    if (used >= MAX_RESCHEDULES_PER_MONTH) {
-      return {
-        message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
-      };
-    }
+  const used = await monthlyReschedulesUsed(session.userId, session.role as "STUDENT" | "PROFESSOR", new Date());
+  if (used >= MAX_RESCHEDULES_PER_MONTH) {
+    return {
+      message: `You've used your ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month. Try again next month.`,
+    };
   }
 
   const slots = await getAvailableSlots(booking.professorId);
@@ -522,9 +550,9 @@ export async function proposeReschedule(_state: RescheduleFormState, formData: F
 
 /**
  * Accepts a pending reschedule proposal — only the party who did NOT
- * propose it can accept. Moves the booking, consumes the student's monthly
- * quota when a student was the one who proposed it, and clears the
- * proposal fields.
+ * propose it can accept. Moves the booking, consumes the proposer's
+ * monthly reschedule quota (whether that's the student or the professor),
+ * and clears the proposal fields.
  */
 export async function acceptRescheduleProposal(bookingId: string): Promise<RescheduleFormState> {
   const session = await requireRole("STUDENT", "PROFESSOR");
@@ -546,13 +574,13 @@ export async function acceptRescheduleProposal(bookingId: string): Promise<Resch
     return { message: "This session has already started." };
   }
 
-  if (booking.rescheduleProposedBy === "STUDENT") {
-    const used = await monthlyReschedulesUsed(booking.studentId, new Date());
-    if (used >= MAX_RESCHEDULES_PER_MONTH) {
-      return {
-        message: `The student has used their ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month.`,
-      };
-    }
+  const proposerRole = booking.rescheduleProposedBy as "STUDENT" | "PROFESSOR";
+  const proposerId = proposerRole === "STUDENT" ? booking.studentId : booking.professorId;
+  const used = await monthlyReschedulesUsed(proposerId, proposerRole, new Date());
+  if (used >= MAX_RESCHEDULES_PER_MONTH) {
+    return {
+      message: `The ${proposerRole.toLowerCase()} has used their ${MAX_RESCHEDULES_PER_MONTH} reschedule${MAX_RESCHEDULES_PER_MONTH === 1 ? "" : "s"} for this calendar month.`,
+    };
   }
 
   const proposedStartAt = booking.rescheduleProposedStartAt;
@@ -584,6 +612,7 @@ export async function acceptRescheduleProposal(bookingId: string): Promise<Resch
       startAt: match.startAt,
       endAt: match.endAt,
       rescheduledAt: new Date(),
+      rescheduledByRole: proposerRole,
       rescheduleProposedStartAt: null,
       rescheduleProposedBy: null,
       rescheduleProposedReason: null,
