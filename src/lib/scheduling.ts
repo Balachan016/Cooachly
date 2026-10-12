@@ -1,10 +1,28 @@
 import "server-only";
-import { addDays, addMinutes, isBefore, startOfDay } from "date-fns";
+import { addDays, addMinutes, addMonths, differenceInCalendarDays, endOfMonth, isBefore, startOfDay } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
 
 export const SESSION_LENGTH_MINUTES = 60;
-export const BOOKING_WINDOW_DAYS = 14;
+// Fallback for call sites that only need to re-verify a slot the student was
+// already shown is still available (not to decide what to display) and so
+// don't thread a timezone through — generous enough to always cover
+// bookingWindowDaysFor's result for any timezone/date (worst case is under 62
+// days: today the 1st of a 31-day month, followed by another 31-day month).
+const DEFAULT_BOOKING_WINDOW_DAYS = 70;
+
+/**
+ * How many days from "today" (in the given timezone) through the end of next
+ * month (also in that timezone) a student should be able to book or
+ * reschedule into — e.g. booking on Oct 12 shows availability through Nov 30.
+ */
+export function bookingWindowDaysFor(timezone: string, from: Date = new Date()): number {
+  const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const [year, month, day] = dateKeyFormatter.format(from).split("-").map(Number);
+  const todayInZone = new Date(Date.UTC(year, month - 1, day));
+  const windowEnd = endOfMonth(addMonths(todayInZone, 1));
+  return differenceInCalendarDays(windowEnd, todayInZone) + 1;
+}
 
 export type AvailableSlot = {
   startAt: Date;
@@ -15,14 +33,16 @@ export type AvailableSlot = {
 
 /**
  * Expands a professor's recurring weekly availability into concrete UTC
- * slots over the next BOOKING_WINDOW_DAYS days. Unlike getAvailableSlots,
- * this keeps slots that overlap an existing booking (tagged `booked: true`)
- * instead of dropping them, so a calendar UI can still show — and disable —
- * a time another student already took.
+ * slots over the next `windowDays` days (defaults to a generous fallback —
+ * pass bookingWindowDaysFor(viewerTimezone) to match what a calendar UI
+ * actually displays). Unlike getAvailableSlots, this keeps slots that
+ * overlap an existing booking (tagged `booked: true`) instead of dropping
+ * them, so a calendar UI can still show — and disable — a time another
+ * student already took.
  */
 export async function getSlotsWithStatus(
   professorId: string,
-  opts: { sessionLengthOverride?: number } = {}
+  opts: { sessionLengthOverride?: number; windowDays?: number } = {}
 ): Promise<AvailableSlot[]> {
   const [availabilities, bookings] = await Promise.all([
     prisma.availability.findMany({
@@ -39,7 +59,7 @@ export async function getSlotsWithStatus(
   ]);
 
   const now = new Date();
-  const windowEnd = addDays(now, BOOKING_WINDOW_DAYS);
+  const windowEnd = addDays(now, opts.windowDays ?? DEFAULT_BOOKING_WINDOW_DAYS);
   const slots: AvailableSlot[] = [];
 
   for (let cursor = startOfDay(now); isBefore(cursor, windowEnd); cursor = addDays(cursor, 1)) {
@@ -74,7 +94,7 @@ export async function getSlotsWithStatus(
 /** Only the slots a student could actually book right now. */
 export async function getAvailableSlots(
   professorId: string,
-  opts: { sessionLengthOverride?: number } = {}
+  opts: { sessionLengthOverride?: number; windowDays?: number } = {}
 ): Promise<AvailableSlot[]> {
   const slots = await getSlotsWithStatus(professorId, opts);
   return slots.filter((s) => !s.booked);

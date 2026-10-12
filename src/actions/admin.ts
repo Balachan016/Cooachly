@@ -15,6 +15,7 @@ import { sitePath, SITE_CONFIG, DEFAULT_SITE } from "@/lib/site";
 import { getAppUrl } from "@/lib/url";
 import { createPasswordSetupLink } from "@/lib/tokens";
 import { OptionalPhoneSchema } from "@/lib/phone";
+import { nextUserCode } from "@/lib/user-code";
 import type { SimpleFormState } from "@/actions/auth";
 import type { Role, Site } from "@prisma/client";
 
@@ -240,7 +241,7 @@ export async function createAdminAccount(
   const passwordHash = await hashPassword(tempPassword);
 
   const admin = await prisma.user.create({
-    data: { site, name, email, phone: phone || null, passwordHash, role: "ADMIN", timezone: "UTC" },
+    data: { site, name, email, phone: phone || null, passwordHash, role: "ADMIN", code: await nextUserCode("ADMIN"), timezone: "UTC" },
   });
 
   await logAudit({

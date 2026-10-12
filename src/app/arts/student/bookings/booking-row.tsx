@@ -7,6 +7,7 @@ import { AttachmentPanel } from "@/components/attachment-panel";
 import { ReviewForm } from "@/components/review-form";
 import { RescheduleControl } from "@/components/reschedule-control";
 import { CancelBookingControl } from "@/components/cancel-booking-control";
+import { STUDENT_CHANGE_CUTOFF_HOURS, isPastStudentChangeCutoff } from "@/lib/booking-rules";
 
 export function StudentBookingRow({
   booking,
@@ -19,7 +20,8 @@ export function StudentBookingRow({
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const myReview = booking.reviews.find((r) => r.raterId === booking.studentId);
-  const canModify = !isPast && booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
+  const pastCutoff = isPastStudentChangeCutoff(booking.startAt);
+  const canModify = !isPast && !pastCutoff && booking.status !== "CANCELLED" && booking.status !== "COMPLETED";
   const hasDetails = booking.status !== "CANCELLED" || booking.attachments.length > 0;
 
   return (
@@ -55,6 +57,11 @@ export function StudentBookingRow({
                 proposedReason={booking.rescheduleProposedReason}
               />
             </>
+          )}
+          {!isPast && pastCutoff && booking.status !== "CANCELLED" && booking.status !== "COMPLETED" && (
+            <span className="text-xs text-black/40 dark:text-white/40">
+              Too close to start to cancel or reschedule (under {STUDENT_CHANGE_CUTOFF_HOURS}h)
+            </span>
           )}
           {hasDetails && (
             <button

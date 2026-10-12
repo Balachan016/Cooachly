@@ -122,6 +122,11 @@ model User {
   parentPhone          String?
   passwordHash         String
   role                 Role      @default(STUDENT)
+  // Human-friendly identifier assigned once at account creation: ST0001,
+  // PR0001, AD0001, sequential per role. Null for SUPERADMIN, which never
+  // gets one. A professor's code doubles as the referral code applicants
+  // enter on "Become a Coach" (see CoachApplication.referralCode).
+  code                 String?   @unique
   timezone             String    @default("UTC")
   isActive             Boolean   @default(true)
   stripeCustomerId     String?   @unique
@@ -259,6 +264,11 @@ model CoachApplication {
   qualifications  String
   availability    String?
   message         String?
+  // The referring professor's code (e.g. "PR0007"), as typed by the
+  // applicant — stored as free text rather than a relation so a code that's
+  // mistyped or later reassigned never blocks submission; resolved back to
+  // the matching professor for display when reviewing applications.
+  referralCode    String?
   status          CoachApplicationStatus @default(PENDING)
   createdAt       DateTime               @default(now())
 

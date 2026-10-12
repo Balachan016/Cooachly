@@ -18,6 +18,12 @@ export default async function AdminCoachApplicationsPage() {
     take: 200,
   });
 
+  const referralCodes = [...new Set(applications.map((a) => a.referralCode).filter((c): c is string => Boolean(c)))];
+  const referringProfessors = referralCodes.length
+    ? await prisma.user.findMany({ where: { code: { in: referralCodes }, role: "PROFESSOR" }, select: { code: true, name: true } })
+    : [];
+  const professorByCode = new Map(referringProfessors.map((p) => [p.code, p.name]));
+
   return (
     <div>
       <h1 className="text-2xl font-semibold">Coach applications</h1>
@@ -52,6 +58,18 @@ export default async function AdminCoachApplicationsPage() {
               <p className="mt-2 whitespace-pre-wrap text-sm text-black/80 dark:text-white/80">{a.qualifications}</p>
               {a.availability && (
                 <p className="mt-1 text-sm text-black/60 dark:text-white/60">Availability: {a.availability}</p>
+              )}
+              {a.referralCode && (
+                <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+                  Referred by:{" "}
+                  {professorByCode.has(a.referralCode) ? (
+                    <>
+                      {professorByCode.get(a.referralCode)} ({a.referralCode})
+                    </>
+                  ) : (
+                    <>{a.referralCode} (no matching professor found)</>
+                  )}
+                </p>
               )}
               {a.message && (
                 <p className="mt-1 whitespace-pre-wrap text-sm text-black/60 dark:text-white/60">{a.message}</p>

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
-import { getSlotsWithStatus, buildCalendarWeeks, BOOKING_WINDOW_DAYS } from "@/lib/scheduling";
+import { getSlotsWithStatus, buildCalendarWeeks, bookingWindowDaysFor } from "@/lib/scheduling";
 import { getProfessorRatingSummary } from "@/lib/reviews";
 import { subscribeToProfessor } from "@/actions/billing";
 import { Badge, Button, Card } from "@/components/ui";
@@ -22,15 +22,16 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
   });
   if (!professor || professor.site !== user.site) notFound();
 
+  const windowDays = bookingWindowDaysFor(user.timezone);
   const [slots, subscription, rating] = await Promise.all([
-    getSlotsWithStatus(professor.id),
+    getSlotsWithStatus(professor.id, { windowDays }),
     prisma.subscription.findFirst({
       where: { studentId: user.id, professorId: professor.id, status: "ACTIVE", currentPeriodEnd: { gt: new Date() } },
     }),
     getProfessorRatingSummary(professor.id),
   ]);
 
-  const weeks = buildCalendarWeeks(slots, user.timezone, BOOKING_WINDOW_DAYS);
+  const weeks = buildCalendarWeeks(slots, user.timezone, windowDays);
   const errorParam = typeof searchParams.error === "string" ? searchParams.error : null;
 
   return (

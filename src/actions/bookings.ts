@@ -7,8 +7,14 @@ import type { AvailableSlot, CalendarDay } from "@/lib/scheduling";
 import type { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
-import { getAvailableSlots, buildCalendarWeeks, SESSION_LENGTH_MINUTES, BOOKING_WINDOW_DAYS } from "@/lib/scheduling";
-import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING, MAX_RESCHEDULES_PER_MONTH } from "@/lib/booking-rules";
+import { getAvailableSlots, buildCalendarWeeks, bookingWindowDaysFor, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
+import {
+  MIN_SLOTS_PER_BOOKING,
+  MAX_SLOTS_PER_BOOKING,
+  MAX_RESCHEDULES_PER_MONTH,
+  STUDENT_CHANGE_CUTOFF_HOURS,
+  isPastStudentChangeCutoff,
+} from "@/lib/booking-rules";
 import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
@@ -238,6 +244,11 @@ export async function cancelBooking(_state: CancelBookingState, formData: FormDa
   if (booking.status === "CANCELLED" || booking.status === "COMPLETED") {
     return { message: "This booking can no longer be cancelled." };
   }
+  if (session.role === "STUDENT" && isPastStudentChangeCutoff(booking.startAt)) {
+    return {
+      message: `This session starts in less than ${STUDENT_CHANGE_CUTOFF_HOURS} hours and can no longer be cancelled. Please get in touch with us if something's come up.`,
+    };
+  }
 
   await prisma.booking.update({
     where: { id: bookingId },
@@ -392,6 +403,12 @@ export async function getRescheduleOptions(bookingId: string): Promise<Reschedul
   if (booking.rescheduleProposedStartAt) {
     return { eligible: false, message: "There's already a pending reschedule proposal on this session — resolve it first." };
   }
+  if (session.role === "STUDENT" && isPastStudentChangeCutoff(booking.startAt)) {
+    return {
+      eligible: false,
+      message: `This session starts in less than ${STUDENT_CHANGE_CUTOFF_HOURS} hours and can no longer be rescheduled. Please get in touch with us if something's come up.`,
+    };
+  }
 
   // The reschedule quota exists to bound how often a student can shuffle
   // their own sessions — it doesn't apply when the professor is the one
@@ -409,8 +426,9 @@ export async function getRescheduleOptions(bookingId: string): Promise<Reschedul
   }
 
   const viewerTimezone = session.role === "STUDENT" ? booking.student.timezone : booking.professor.timezone;
-  const slots = await getAvailableSlots(booking.professorId);
-  const weeks = buildCalendarWeeks(slots, viewerTimezone, BOOKING_WINDOW_DAYS);
+  const windowDays = bookingWindowDaysFor(viewerTimezone);
+  const slots = await getAvailableSlots(booking.professorId, { windowDays });
+  const weeks = buildCalendarWeeks(slots, viewerTimezone, windowDays);
   return { eligible: true, weeks, timezone: viewerTimezone, remaining, limit: MAX_RESCHEDULES_PER_MONTH };
 }
 
@@ -449,6 +467,11 @@ export async function proposeReschedule(_state: RescheduleFormState, formData: F
   }
   if (booking.rescheduleProposedStartAt) {
     return { message: "There's already a pending reschedule proposal on this session." };
+  }
+  if (session.role === "STUDENT" && isPastStudentChangeCutoff(booking.startAt)) {
+    return {
+      message: `This session starts in less than ${STUDENT_CHANGE_CUTOFF_HOURS} hours and can no longer be rescheduled. Please get in touch with us if something's come up.`,
+    };
   }
 
   if (session.role === "STUDENT") {

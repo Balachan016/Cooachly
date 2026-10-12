@@ -36,6 +36,7 @@ export default async function SuperadminAdminsPage() {
           <thead className="border-b border-black/10 text-xs uppercase text-black/50 dark:border-white/10 dark:text-white/50">
             <tr>
               <th className="px-4 py-3">Site</th>
+              <th className="px-4 py-3">Code</th>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Role</th>

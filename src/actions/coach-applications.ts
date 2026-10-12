@@ -25,6 +25,12 @@ const CoachApplicationSchema = z.object({
   qualifications: z.string().trim().min(10, "Please share a bit about your background and qualifications."),
   availability: z.string().trim().optional(),
   message: z.string().trim().optional(),
+  referralCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .optional()
+    .transform((value) => value || undefined),
 });
 
 export async function submitCoachApplication(
@@ -45,19 +51,32 @@ export async function submitCoachApplication(
     qualifications: formData.get("qualifications"),
     availability: formData.get("availability") || undefined,
     message: formData.get("message") || undefined,
+    referralCode: formData.get("referralCode") || undefined,
   });
 
   if (!parsed.success) {
     return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
   }
 
-  const { yearsExperience, age, ...rest } = parsed.data;
+  const { yearsExperience, age, referralCode, ...rest } = parsed.data;
   const site: Site = formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
+
+  let referringProfessor: { name: string } | null = null;
+  if (referralCode) {
+    referringProfessor = await prisma.user.findFirst({
+      where: { code: referralCode, role: "PROFESSOR", site },
+      select: { name: true },
+    });
+    if (!referringProfessor) {
+      return { message: `We couldn't find a professor with the referral code "${referralCode}". Please double-check it, or leave it blank.` };
+    }
+  }
 
   const application = await prisma.coachApplication.create({
     data: {
       ...rest,
       site,
+      referralCode,
       yearsExperience: Number.isNaN(yearsExperience) ? null : yearsExperience,
       age: age == null || Number.isNaN(age) ? null : age,
     },
@@ -69,6 +88,9 @@ export async function submitCoachApplication(
       select: { email: true },
     });
     if (admins.length > 0) {
+      const referralLine = referringProfessor
+        ? `<p>Referred by: <strong>${referringProfessor.name}</strong> (code ${referralCode})</p>`
+        : "";
       await Promise.all(
         admins.map((admin) =>
           sendEmail({
@@ -78,6 +100,7 @@ export async function submitCoachApplication(
             html: `
               <p>New coach application from <strong>${application.name}</strong> (${application.email}${application.phone ? `, ${application.phone}` : ""}):</p>
               <p>Subject: ${application.subject}${application.curricula.length ? ` · Curricula: ${application.curricula.join(", ")}` : ""}</p>
+              ${referralLine}
               <p style="white-space:pre-wrap">${application.qualifications}</p>
             `,
           })

@@ -88,6 +88,13 @@ export function CoachApplicationForm() {
         <Label htmlFor="message">Additional Information (optional)</Label>
         <Textarea id="message" name="message" rows={3} />
       </div>
+      <div>
+        <Label htmlFor="referralCode">Referral Code (optional)</Label>
+        <Input id="referralCode" name="referralCode" placeholder="e.g. PR0007" className="uppercase placeholder:normal-case" />
+        <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+          Were you referred by one of our professors? Enter their code here.
+        </p>
+      </div>
 
       {state?.message && <FormMessage>{state.message}</FormMessage>}
 
