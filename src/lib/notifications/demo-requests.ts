@@ -49,20 +49,22 @@ export async function sendDemoRequestScheduledEmail(
   // Deliberately leaves out demoRequest.email/phone — professors (and,
   // symmetrically, students) never see the other side's direct contact
   // details through any Cooachly notification; the join link above is the
-  // only way they connect.
-  await sendEmail({
-    to: demoRequest.professor.email,
-    site: demoRequest.site,
-    subject: `Demo call scheduled with ${demoRequest.name}`,
-    html: `
-      <p>Hi ${demoRequest.professor.name},</p>
-      <p>A demo call with <strong>${demoRequest.name}</strong> about <strong>${demoRequest.subject}</strong>${
-        demoRequest.grade ? ` (Grade: ${demoRequest.grade})` : ""
-      } is scheduled for <strong>${whenForProfessor}</strong>.</p>
-      ${linkLine}
-      <p>— ${brandName}</p>
-    `,
-  });
+  // only way they connect. A disabled professor account gets no mail at all.
+  if (demoRequest.professor.isActive) {
+    await sendEmail({
+      to: demoRequest.professor.email,
+      site: demoRequest.site,
+      subject: `Demo call scheduled with ${demoRequest.name}`,
+      html: `
+        <p>Hi ${demoRequest.professor.name},</p>
+        <p>A demo call with <strong>${demoRequest.name}</strong> about <strong>${demoRequest.subject}</strong>${
+          demoRequest.grade ? ` (Grade: ${demoRequest.grade})` : ""
+        } is scheduled for <strong>${whenForProfessor}</strong>.</p>
+        ${linkLine}
+        <p>— ${brandName}</p>
+      `,
+    });
+  }
 }
 
 /**
@@ -77,7 +79,7 @@ export async function sendDemoJoinedWelcomeEmail(demoRequest: DemoRequest) {
   const student = await prisma.user.findUnique({
     where: { site_email: { site: demoRequest.site, email: demoRequest.email } },
   });
-  if (!student) return;
+  if (!student || !student.isActive) return;
 
   const brandName = SITE_CONFIG[demoRequest.site].brandName;
   const setupUrl = await createPasswordSetupLink(demoRequest.site, student.id);

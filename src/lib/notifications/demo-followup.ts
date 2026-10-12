@@ -8,6 +8,8 @@ import { getAppUrl } from "@/lib/url";
 type BookingWithParties = Booking & { student: User; professor: User };
 
 export async function sendDemoFollowUpEmail(booking: BookingWithParties) {
+  if (!booking.student.isActive) return;
+
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const appUrl = await getAppUrl();
   const contactUrl = `${appUrl}${sitePath(booking.student.site, "/contact")}`;
