@@ -9,7 +9,7 @@ import { getAppUrl } from "@/lib/url";
 
 /** Sent to each student the moment a professor assigns a test to them. */
 export async function sendTestAssignedEmail(test: Test, assignment: TestAssignment, student: User, professor: User) {
-  if (!isEmailConfigured) return;
+  if (!isEmailConfigured || !student.isActive) return;
 
   const appUrl = await getAppUrl();
   const link = `${appUrl}${sitePath(student.site, `/student/tests/${assignment.id}`)}`;
@@ -35,7 +35,7 @@ export async function sendTestAssignedEmail(test: Test, assignment: TestAssignme
 
 /** Sent ~24h before a test's due date if the student hasn't submitted it yet. */
 export async function sendTestDueSoonEmail(test: Test, assignment: TestAssignment, student: User) {
-  if (!isEmailConfigured) return;
+  if (!isEmailConfigured || !student.isActive) return;
 
   const appUrl = await getAppUrl();
   const link = `${appUrl}${sitePath(student.site, `/student/tests/${assignment.id}`)}`;
@@ -59,7 +59,7 @@ export async function sendTestDueSoonEmail(test: Test, assignment: TestAssignmen
 
 /** Sent once the professor clicks "Share test score" — this is the only point the student learns their score. */
 export async function sendTestScoreSharedEmail(test: Test, assignment: TestAssignment, student: User, professor: User) {
-  if (!isEmailConfigured) return;
+  if (!isEmailConfigured || !student.isActive) return;
 
   const appUrl = await getAppUrl();
   const link = `${appUrl}${sitePath(student.site, `/student/tests/${assignment.id}`)}`;

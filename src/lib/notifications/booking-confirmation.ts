@@ -66,51 +66,57 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 
   const adminEmails = getAdminCcEmails();
 
-  const studentResult = await sendEmail({
-    to: first.student.email,
-    cc: adminEmails,
-    site: first.student.site,
-    subject: `Your ${countWord} with ${first.professor.name} ${verb} confirmed`,
-    html: `
-      <p>Hi ${first.student.name},</p>
-      <p>Your ${countWord} with <strong>${first.professor.name}</strong> ${verb} confirmed:</p>
-      ${sessionListHtml(sorted, first.student.timezone)}
-      <p>A calendar file is attached — open it to block the time, or use the "Add to Google Calendar" link above.</p>
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment(sorted),
-  });
-  for (const booking of sorted) {
-    await logNotification({
-      bookingId: booking.id,
-      userId: booking.student.id,
-      channel: "EMAIL",
-      kind: "booking_confirmation",
-      result: studentResult,
+  // Disabled accounts get no booking-lifecycle emails — only send to each
+  // side if their account is currently active.
+  if (first.student.isActive) {
+    const studentResult = await sendEmail({
+      to: first.student.email,
+      cc: adminEmails,
+      site: first.student.site,
+      subject: `Your ${countWord} with ${first.professor.name} ${verb} confirmed`,
+      html: `
+        <p>Hi ${first.student.name},</p>
+        <p>Your ${countWord} with <strong>${first.professor.name}</strong> ${verb} confirmed:</p>
+        ${sessionListHtml(sorted, first.student.timezone)}
+        <p>A calendar file is attached — open it to block the time, or use the "Add to Google Calendar" link above.</p>
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment(sorted),
     });
+    for (const booking of sorted) {
+      await logNotification({
+        bookingId: booking.id,
+        userId: booking.student.id,
+        channel: "EMAIL",
+        kind: "booking_confirmation",
+        result: studentResult,
+      });
+    }
   }
 
-  const professorResult = await sendEmail({
-    to: first.professor.email,
-    site: first.professor.site,
-    subject: `${countWord === "session" ? "New session" : `${sorted.length} new sessions`} booked with ${first.student.name}`,
-    html: `
-      <p>Hi ${first.professor.name},</p>
-      <p>Your ${countWord} with <strong>${first.student.name}</strong> ${verb} confirmed:</p>
-      ${sessionListHtml(sorted, first.professor.timezone)}
-      <p>A calendar file is attached — open it to block the time, or use the "Add to Google Calendar" link above.</p>
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment(sorted),
-  });
-  for (const booking of sorted) {
-    await logNotification({
-      bookingId: booking.id,
-      userId: booking.professor.id,
-      channel: "EMAIL",
-      kind: "booking_confirmation",
-      result: professorResult,
+  if (first.professor.isActive) {
+    const professorResult = await sendEmail({
+      to: first.professor.email,
+      site: first.professor.site,
+      subject: `${countWord === "session" ? "New session" : `${sorted.length} new sessions`} booked with ${first.student.name}`,
+      html: `
+        <p>Hi ${first.professor.name},</p>
+        <p>Your ${countWord} with <strong>${first.student.name}</strong> ${verb} confirmed:</p>
+        ${sessionListHtml(sorted, first.professor.timezone)}
+        <p>A calendar file is attached — open it to block the time, or use the "Add to Google Calendar" link above.</p>
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment(sorted),
     });
+    for (const booking of sorted) {
+      await logNotification({
+        bookingId: booking.id,
+        userId: booking.professor.id,
+        channel: "EMAIL",
+        kind: "booking_confirmation",
+        result: professorResult,
+      });
+    }
   }
 }
 
@@ -145,54 +151,58 @@ export async function sendBookingRescheduledEmail(
     ? `<p><strong>Reason given:</strong> ${opts.reason}</p>`
     : "";
 
-  const studentResult = await sendEmail({
-    to: booking.student.email,
-    cc: adminEmails,
-    site: booking.student.site,
-    subject: `Your session with ${booking.professor.name} was rescheduled`,
-    html: `
-      <p>Hi ${booking.student.name},</p>
-      <p>Your session with <strong>${booking.professor.name}</strong> was moved from
-      <strong>${formatWhenFor(previousStartAt, booking.student.timezone)}</strong> to
-      <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>, requested by ${requestedByName}.</p>
-      ${reasonLine}
-      ${joinLine}
-      ${calendarLine}
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment([booking], { sequence: 1 }),
-  });
-  await logNotification({
-    bookingId: booking.id,
-    userId: booking.student.id,
-    channel: "EMAIL",
-    kind: "booking_rescheduled",
-    result: studentResult,
-  });
+  if (booking.student.isActive) {
+    const studentResult = await sendEmail({
+      to: booking.student.email,
+      cc: adminEmails,
+      site: booking.student.site,
+      subject: `Your session with ${booking.professor.name} was rescheduled`,
+      html: `
+        <p>Hi ${booking.student.name},</p>
+        <p>Your session with <strong>${booking.professor.name}</strong> was moved from
+        <strong>${formatWhenFor(previousStartAt, booking.student.timezone)}</strong> to
+        <strong>${formatWhenFor(booking.startAt, booking.student.timezone)}</strong>, requested by ${requestedByName}.</p>
+        ${reasonLine}
+        ${joinLine}
+        ${calendarLine}
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment([booking], { sequence: 1 }),
+    });
+    await logNotification({
+      bookingId: booking.id,
+      userId: booking.student.id,
+      channel: "EMAIL",
+      kind: "booking_rescheduled",
+      result: studentResult,
+    });
+  }
 
-  const professorResult = await sendEmail({
-    to: booking.professor.email,
-    site: booking.professor.site,
-    subject: `Session with ${booking.student.name} was rescheduled`,
-    html: `
-      <p>Hi ${booking.professor.name},</p>
-      <p>Your session with <strong>${booking.student.name}</strong> was moved from
-      <strong>${formatWhenFor(previousStartAt, booking.professor.timezone)}</strong> to
-      <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>, requested by ${requestedByName}.</p>
-      ${reasonLine}
-      ${joinLine}
-      ${calendarLine}
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment([booking], { sequence: 1 }),
-  });
-  await logNotification({
-    bookingId: booking.id,
-    userId: booking.professor.id,
-    channel: "EMAIL",
-    kind: "booking_rescheduled",
-    result: professorResult,
-  });
+  if (booking.professor.isActive) {
+    const professorResult = await sendEmail({
+      to: booking.professor.email,
+      site: booking.professor.site,
+      subject: `Session with ${booking.student.name} was rescheduled`,
+      html: `
+        <p>Hi ${booking.professor.name},</p>
+        <p>Your session with <strong>${booking.student.name}</strong> was moved from
+        <strong>${formatWhenFor(previousStartAt, booking.professor.timezone)}</strong> to
+        <strong>${formatWhenFor(booking.startAt, booking.professor.timezone)}</strong>, requested by ${requestedByName}.</p>
+        ${reasonLine}
+        ${joinLine}
+        ${calendarLine}
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment([booking], { sequence: 1 }),
+    });
+    await logNotification({
+      bookingId: booking.id,
+      userId: booking.professor.id,
+      channel: "EMAIL",
+      kind: "booking_rescheduled",
+      result: professorResult,
+    });
+  }
 }
 
 /**
@@ -211,6 +221,7 @@ export async function sendRescheduleProposedEmail(
   const adminEmails = getAdminCcEmails();
   const proposerName = opts.proposedBy === "STUDENT" ? booking.student.name : booking.professor.name;
   const recipient = opts.proposedBy === "STUDENT" ? booking.professor : booking.student;
+  if (!recipient.isActive) return;
   const appUrl = await getAppUrl();
   const reviewUrl = `${appUrl}${sitePath(recipient.site, recipient.id === booking.studentId ? "/student/bookings" : "/professor/bookings")}`;
 
@@ -247,6 +258,7 @@ export async function sendRescheduleDeclinedEmail(
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const adminEmails = getAdminCcEmails();
   const proposer = opts.proposedBy === "STUDENT" ? booking.student : booking.professor;
+  if (!proposer.isActive) return;
 
   const result = await sendEmail({
     to: proposer.email,
@@ -280,54 +292,58 @@ export async function sendBookingCancelledEmail(
   const cancelledByName = opts.cancelledByName;
   const reasonLine = opts.reason ? `<p><strong>Reason given:</strong> ${opts.reason}</p>` : "";
 
-  const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
-  const studentResult = await sendEmail({
-    to: booking.student.email,
-    cc: adminEmails,
-    site: booking.student.site,
-    subject: `Your session with ${booking.professor.name} on ${whenForStudent} was cancelled`,
-    html: `
-      <p>Hi ${booking.student.name},</p>
-      <p>Your session with <strong>${booking.professor.name}</strong> on <strong>${whenForStudent}</strong>
-      has been cancelled by ${cancelledByName}.</p>
-      ${reasonLine}
-      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
-      <p>If you have questions about this, please get in touch with us.</p>
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment([booking], { method: "CANCEL" }),
-  });
-  await logNotification({
-    bookingId: booking.id,
-    userId: booking.student.id,
-    channel: "EMAIL",
-    kind: "booking_cancelled",
-    result: studentResult,
-  });
+  if (booking.student.isActive) {
+    const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
+    const studentResult = await sendEmail({
+      to: booking.student.email,
+      cc: adminEmails,
+      site: booking.student.site,
+      subject: `Your session with ${booking.professor.name} on ${whenForStudent} was cancelled`,
+      html: `
+        <p>Hi ${booking.student.name},</p>
+        <p>Your session with <strong>${booking.professor.name}</strong> on <strong>${whenForStudent}</strong>
+        has been cancelled by ${cancelledByName}.</p>
+        ${reasonLine}
+        <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
+        <p>If you have questions about this, please get in touch with us.</p>
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment([booking], { method: "CANCEL" }),
+    });
+    await logNotification({
+      bookingId: booking.id,
+      userId: booking.student.id,
+      channel: "EMAIL",
+      kind: "booking_cancelled",
+      result: studentResult,
+    });
+  }
 
-  const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
-  const professorResult = await sendEmail({
-    to: booking.professor.email,
-    site: booking.professor.site,
-    subject: `Session with ${booking.student.name} on ${whenForProfessor} was cancelled`,
-    html: `
-      <p>Hi ${booking.professor.name},</p>
-      <p>The session with <strong>${booking.student.name}</strong> on <strong>${whenForProfessor}</strong>
-      has been cancelled by ${cancelledByName}.</p>
-      ${reasonLine}
-      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
-      <p>If you have questions about this, please get in touch with us.</p>
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment([booking], { method: "CANCEL" }),
-  });
-  await logNotification({
-    bookingId: booking.id,
-    userId: booking.professor.id,
-    channel: "EMAIL",
-    kind: "booking_cancelled",
-    result: professorResult,
-  });
+  if (booking.professor.isActive) {
+    const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
+    const professorResult = await sendEmail({
+      to: booking.professor.email,
+      site: booking.professor.site,
+      subject: `Session with ${booking.student.name} on ${whenForProfessor} was cancelled`,
+      html: `
+        <p>Hi ${booking.professor.name},</p>
+        <p>The session with <strong>${booking.student.name}</strong> on <strong>${whenForProfessor}</strong>
+        has been cancelled by ${cancelledByName}.</p>
+        ${reasonLine}
+        <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
+        <p>If you have questions about this, please get in touch with us.</p>
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment([booking], { method: "CANCEL" }),
+    });
+    await logNotification({
+      bookingId: booking.id,
+      userId: booking.professor.id,
+      channel: "EMAIL",
+      kind: "booking_cancelled",
+      result: professorResult,
+    });
+  }
 }
 
 /**
@@ -341,48 +357,52 @@ export async function sendBookingDeletedEmail(booking: BookingWithParties) {
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const adminEmails = getAdminCcEmails();
 
-  const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
-  const studentResult = await sendEmail({
-    to: booking.student.email,
-    cc: adminEmails,
-    site: booking.student.site,
-    subject: `Your session with ${booking.professor.name} on ${whenForStudent} was removed`,
-    html: `
-      <p>Hi ${booking.student.name},</p>
-      <p>Your session with <strong>${booking.professor.name}</strong> scheduled for <strong>${whenForStudent}</strong>
-      has been removed by the ${brandName} team.</p>
-      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
-      <p>If you have questions about this, please get in touch with us.</p>
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment([booking], { method: "CANCEL" }),
-  });
-  await logNotification({
-    userId: booking.student.id,
-    channel: "EMAIL",
-    kind: "booking_deleted",
-    result: studentResult,
-  });
+  if (booking.student.isActive) {
+    const whenForStudent = formatWhenFor(booking.startAt, booking.student.timezone);
+    const studentResult = await sendEmail({
+      to: booking.student.email,
+      cc: adminEmails,
+      site: booking.student.site,
+      subject: `Your session with ${booking.professor.name} on ${whenForStudent} was removed`,
+      html: `
+        <p>Hi ${booking.student.name},</p>
+        <p>Your session with <strong>${booking.professor.name}</strong> scheduled for <strong>${whenForStudent}</strong>
+        has been removed by the ${brandName} team.</p>
+        <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
+        <p>If you have questions about this, please get in touch with us.</p>
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment([booking], { method: "CANCEL" }),
+    });
+    await logNotification({
+      userId: booking.student.id,
+      channel: "EMAIL",
+      kind: "booking_deleted",
+      result: studentResult,
+    });
+  }
 
-  const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
-  const professorResult = await sendEmail({
-    to: booking.professor.email,
-    site: booking.professor.site,
-    subject: `Session with ${booking.student.name} on ${whenForProfessor} was removed`,
-    html: `
-      <p>Hi ${booking.professor.name},</p>
-      <p>The session with <strong>${booking.student.name}</strong> scheduled for <strong>${whenForProfessor}</strong>
-      has been removed by the ${brandName} team.</p>
-      <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
-      <p>If you have questions about this, please get in touch with us.</p>
-      <p>— ${brandName}</p>
-    `,
-    attachments: icsAttachment([booking], { method: "CANCEL" }),
-  });
-  await logNotification({
-    userId: booking.professor.id,
-    channel: "EMAIL",
-    kind: "booking_deleted",
-    result: professorResult,
-  });
+  if (booking.professor.isActive) {
+    const whenForProfessor = formatWhenFor(booking.startAt, booking.professor.timezone);
+    const professorResult = await sendEmail({
+      to: booking.professor.email,
+      site: booking.professor.site,
+      subject: `Session with ${booking.student.name} on ${whenForProfessor} was removed`,
+      html: `
+        <p>Hi ${booking.professor.name},</p>
+        <p>The session with <strong>${booking.student.name}</strong> scheduled for <strong>${whenForProfessor}</strong>
+        has been removed by the ${brandName} team.</p>
+        <p>A calendar cancellation is attached — open it to remove the session from your calendar.</p>
+        <p>If you have questions about this, please get in touch with us.</p>
+        <p>— ${brandName}</p>
+      `,
+      attachments: icsAttachment([booking], { method: "CANCEL" }),
+    });
+    await logNotification({
+      userId: booking.professor.id,
+      channel: "EMAIL",
+      kind: "booking_deleted",
+      result: professorResult,
+    });
+  }
 }

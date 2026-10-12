@@ -64,6 +64,9 @@ async function notifyPerson(
   bookingId: string,
   kind: ReminderKind
 ) {
+  // Disabled accounts get no reminders on any channel.
+  if (!person.isActive) return;
+
   // Formatted in this specific person's own timezone — not the peer's, and
   // not the server's runtime default, which have no relation to what time
   // this person's clock actually shows.

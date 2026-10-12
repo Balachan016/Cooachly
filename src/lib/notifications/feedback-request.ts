@@ -21,45 +21,49 @@ export async function sendFeedbackRequestEmails(booking: BookingWithParties) {
   const brandName = SITE_CONFIG[booking.student.site].brandName;
   const appUrl = await getAppUrl();
 
-  const studentResult = await sendEmail({
-    to: booking.student.email,
-    site: booking.student.site,
-    subject: `How was your session with ${booking.professor.name}?`,
-    html: `
-      <p>Hi ${booking.student.name},</p>
-      <p>Thanks for attending your session with <strong>${booking.professor.name}</strong>! We'd love to hear how it went —
-      it only takes a moment and helps us keep every session great.</p>
-      <p><a href="${appUrl}${sitePath(booking.student.site, "/student/bookings")}">Share your feedback</a></p>
-      <p>— ${brandName}</p>
-    `,
-  });
-  await logNotification({
-    bookingId: booking.id,
-    userId: booking.student.id,
-    channel: "EMAIL",
-    kind: "feedback_request",
-    result: studentResult,
-  });
+  if (booking.student.isActive) {
+    const studentResult = await sendEmail({
+      to: booking.student.email,
+      site: booking.student.site,
+      subject: `How was your session with ${booking.professor.name}?`,
+      html: `
+        <p>Hi ${booking.student.name},</p>
+        <p>Thanks for attending your session with <strong>${booking.professor.name}</strong>! We'd love to hear how it went —
+        it only takes a moment and helps us keep every session great.</p>
+        <p><a href="${appUrl}${sitePath(booking.student.site, "/student/bookings")}">Share your feedback</a></p>
+        <p>— ${brandName}</p>
+      `,
+    });
+    await logNotification({
+      bookingId: booking.id,
+      userId: booking.student.id,
+      channel: "EMAIL",
+      kind: "feedback_request",
+      result: studentResult,
+    });
+  }
 
-  const professorResult = await sendEmail({
-    to: booking.professor.email,
-    site: booking.professor.site,
-    subject: `How was your session with ${booking.student.name}?`,
-    html: `
-      <p>Hi ${booking.professor.name},</p>
-      <p>Thanks for teaching your session with <strong>${booking.student.name}</strong>! Please share a quick bit of
-      feedback about how it went.</p>
-      <p><a href="${appUrl}${sitePath(booking.professor.site, "/professor/bookings")}">Share your feedback</a></p>
-      <p>— ${brandName}</p>
-    `,
-  });
-  await logNotification({
-    bookingId: booking.id,
-    userId: booking.professor.id,
-    channel: "EMAIL",
-    kind: "feedback_request",
-    result: professorResult,
-  });
+  if (booking.professor.isActive) {
+    const professorResult = await sendEmail({
+      to: booking.professor.email,
+      site: booking.professor.site,
+      subject: `How was your session with ${booking.student.name}?`,
+      html: `
+        <p>Hi ${booking.professor.name},</p>
+        <p>Thanks for teaching your session with <strong>${booking.student.name}</strong>! Please share a quick bit of
+        feedback about how it went.</p>
+        <p><a href="${appUrl}${sitePath(booking.professor.site, "/professor/bookings")}">Share your feedback</a></p>
+        <p>— ${brandName}</p>
+      `,
+    });
+    await logNotification({
+      bookingId: booking.id,
+      userId: booking.professor.id,
+      channel: "EMAIL",
+      kind: "feedback_request",
+      result: professorResult,
+    });
+  }
 
   await prisma.booking.update({ where: { id: booking.id }, data: { feedbackRequestSentAt: new Date() } });
 }

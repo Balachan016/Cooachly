@@ -342,6 +342,7 @@ export async function sendPasswordResetEmail(userId: string): Promise<SimpleForm
   if (ELEVATED_ROLES.includes(user.role) && session.role !== "SUPERADMIN") {
     return { message: "Only a superadmin can email an admin a password reset link." };
   }
+  if (!user.isActive) return { message: "This account is disabled — enable it first to email a password reset link." };
   if (!isEmailConfigured) return { message: "Email isn't configured — use \"Reset password\" to set one directly instead." };
 
   const brandName = SITE_CONFIG[user.site].brandName;
