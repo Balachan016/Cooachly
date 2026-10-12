@@ -25,6 +25,7 @@ export function UserRow({ user, viewerRole }: { user: User; viewerRole: Role }) 
 
   return (
     <tr className="border-b border-black/5 last:border-0 dark:border-white/5">
+      <td className="px-4 py-3 font-mono text-xs text-black/60 dark:text-white/60">{user.code ?? "—"}</td>
       <td className="px-4 py-3 font-medium">{user.name}</td>
       <td className="px-4 py-3 text-black/60 dark:text-white/60">{user.email}</td>
       <td className="px-4 py-3">

@@ -28,6 +28,12 @@ export default async function StudentDashboardPage() {
       <h1 className="text-2xl font-semibold">Welcome back, {user.name.split(" ")[0]}</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
         Times shown in your timezone: {user.timezone}.
+        {user.code && (
+          <>
+            {" "}
+            Your student code: <span className="font-mono">{user.code}</span>.
+          </>
+        )}
       </p>
 
       <Card className="mt-6">

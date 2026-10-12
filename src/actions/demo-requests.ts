@@ -9,6 +9,7 @@ import { generateTempPassword, hashPassword } from "@/lib/password";
 import { DEMO_SESSION_LENGTH_MINUTES } from "@/lib/booking-rules";
 import { sendDemoRequestScheduledEmail, sendDemoJoinedWelcomeEmail } from "@/lib/notifications/demo-requests";
 import { sitePath } from "@/lib/site";
+import { nextUserCode } from "@/lib/user-code";
 import type { DemoRequestStatus } from "@prisma/client";
 
 const ScheduleDemoCallSchema = z.object({
@@ -76,6 +77,7 @@ export async function scheduleDemoCall(
           phone: demoRequest.phone,
           passwordHash: await hashPassword(newAccountTempPassword),
           role: "STUDENT",
+          code: await nextUserCode("STUDENT"),
           timezone: demoRequest.timezone || "UTC",
         },
       });

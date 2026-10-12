@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/dal";
+import { formatWhenFor } from "@/lib/notifications/format";
 import { Badge, Card, Select } from "@/components/ui";
 import type { AuditAction, Role } from "@prisma/client";
 
@@ -32,6 +34,8 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 export default async function SuperadminAuditLogPage(props: PageProps<"/superadmin/audit-log">) {
+  const viewer = await getCurrentUser();
+  const viewerTimezone = viewer?.timezone ?? "UTC";
   const searchParams = await props.searchParams;
   const site = typeof searchParams.site === "string" ? searchParams.site : "";
   const rawAction = typeof searchParams.action === "string" ? searchParams.action : "";
@@ -58,7 +62,7 @@ export default async function SuperadminAuditLogPage(props: PageProps<"/superadm
       <h1 className="text-2xl font-semibold">Audit log</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
         Logins/logouts, admin approvals, booking cancellations, and account management events
-        across both sites. Most recent 300 shown.
+        across both sites. Most recent 300 shown, times in your own timezone ({viewerTimezone}).
       </p>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
@@ -121,7 +125,7 @@ export default async function SuperadminAuditLogPage(props: PageProps<"/superadm
               )}
               {log.detail && <span className="text-black/50 dark:text-white/50">— {log.detail}</span>}
               <span className="ml-auto whitespace-nowrap text-xs text-black/40 dark:text-white/40">
-                {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(log.createdAt)}
+                {formatWhenFor(log.createdAt, viewerTimezone)}
               </span>
             </div>
           ))}

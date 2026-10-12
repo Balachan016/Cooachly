@@ -16,6 +16,7 @@ import { sendWhatsAppInvite } from "@/lib/notifications/sms";
 import { getAdminCcEmails } from "@/lib/notifications/admin-recipients";
 import { logAudit } from "@/lib/audit";
 import { OptionalPhoneSchema } from "@/lib/phone";
+import { nextUserCode } from "@/lib/user-code";
 import type { Site } from "@prisma/client";
 
 const INVITE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -197,6 +198,7 @@ export async function redeemAccountInvite(
   const passwordHash = await hashPassword(password);
 
   const user = await prisma.$transaction(async (tx) => {
+    const code = await nextUserCode(invite.role, tx);
     const created = await tx.user.create({
       data: {
         site: invite.site,
@@ -205,6 +207,7 @@ export async function redeemAccountInvite(
         phone: phone || invite.phone || null,
         passwordHash,
         role: invite.role,
+        code,
         timezone,
         professorProfile: invite.role === "PROFESSOR" ? { create: { headline: "", bio: "", subject: "" } } : undefined,
       },

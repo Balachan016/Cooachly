@@ -27,6 +27,16 @@ export default async function ProfessorDashboardPage() {
     <div>
       <h1 className="text-2xl font-semibold">Welcome back, {user.name.split(" ")[0]}</h1>
 
+      {user.code && (
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm dark:border-brand-900 dark:bg-brand-950">
+          <span className="text-black/70 dark:text-white/70">Your referral code:</span>
+          <span className="font-mono text-base font-semibold text-brand-700 dark:text-brand-400">{user.code}</span>
+          <span className="text-black/50 dark:text-white/50">
+            — share it with anyone applying under &quot;Become a Coach&quot; so we know they came from you.
+          </span>
+        </div>
+      )}
+
       {!isStripeConfigured && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
           Stripe isn&apos;t configured yet — sessions are auto-confirmed without collecting payment. Add your Stripe keys to enable billing.

@@ -41,6 +41,7 @@ export function AdminRow({ admin, currentUserId }: { admin: User; currentUserId:
         <td className="px-4 py-3">
           <Badge>{admin.site}</Badge>
         </td>
+        <td className="px-4 py-3 font-mono text-xs text-black/60 dark:text-white/60">{admin.code ?? "—"}</td>
         <td className="px-4 py-3 font-medium">
           {admin.name}
           {isSelf && <span className="ml-2 text-xs font-normal text-black/40 dark:text-white/40">(you)</span>}

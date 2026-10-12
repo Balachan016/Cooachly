@@ -122,6 +122,11 @@ model User {
   parentPhone          String?
   passwordHash         String
   role                 Role      @default(STUDENT)
+  // Human-friendly identifier assigned once at account creation: ST0001,
+  // PR0001, AD0001, sequential per role. Null for SUPERADMIN, which never
+  // gets one. A professor's code doubles as the referral code applicants
+  // enter on "Become a Coach" (see CoachApplication.referralCode).
+  code                 String?   @unique
   timezone             String    @default("UTC")
   isActive             Boolean   @default(true)
   stripeCustomerId     String?   @unique
@@ -259,6 +264,11 @@ model CoachApplication {
   qualifications  String
   availability    String?
   message         String?
+  // The referring professor's code (e.g. "PR0007"), as typed by the
+  // applicant — stored as free text rather than a relation so a code that's
+  // mistyped or later reassigned never blocks submission; resolved back to
+  // the matching professor for display when reviewing applications.
+  referralCode    String?
   status          CoachApplicationStatus @default(PENDING)
   createdAt       DateTime               @default(now())
 
@@ -319,7 +329,13 @@ model Availability {
   id           String   @id @default(cuid())
   professorId  String
   professor    User     @relation("ProfessorAvailability", fields: [professorId], references: [id], onDelete: Cascade)
-  dayOfWeek    Int      // 0 (Sunday) - 6 (Saturday)
+  // Exactly one of dayOfWeek/date is set: dayOfWeek for a window that
+  // repeats every week, date for a one-off window open on that single
+  // calendar day only (e.g. an extra Saturday). date is stored as a plain
+  // UTC-midnight calendar date — compared as a date string, never as an
+  // instant — so it isn't affected by `timezone` below.
+  dayOfWeek    Int?     // 0 (Sunday) - 6 (Saturday)
+  date         DateTime?
   startTime    String   // "HH:mm" in the professor's timezone
   endTime      String   // "HH:mm" in the professor's timezone
   timezone     String   // IANA timezone name, e.g. "America/New_York"

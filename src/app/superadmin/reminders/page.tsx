@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/dal";
+import { formatWhenFor } from "@/lib/notifications/format";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 import { Badge, Card, Select } from "@/components/ui";
 import { whatsAppConfigStatus } from "@/lib/notifications/sms";
@@ -17,6 +19,8 @@ function ConfigRow({ label, value }: { label: string; value: string | null }) {
 }
 
 export default async function SuperadminRemindersPage(props: PageProps<"/superadmin/reminders">) {
+  const viewer = await getCurrentUser();
+  const viewerTimezone = viewer?.timezone ?? "UTC";
   const searchParams = await props.searchParams;
   const status = typeof searchParams.status === "string" ? searchParams.status : "";
 
@@ -32,7 +36,7 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
       <h1 className="text-2xl font-semibold">Reminder &amp; notification log</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
         Every email/WhatsApp reminder, manual send, instant call, and test notification across
-        both sites. Most recent 300 shown.
+        both sites. Most recent 300 shown, times in your own timezone ({viewerTimezone}).
       </p>
 
       <Card className="mt-4 p-0">
@@ -95,7 +99,7 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
               </span>
               {log.error && <span className="text-red-600 dark:text-red-400">— {log.error}</span>}
               <span className="ml-auto whitespace-nowrap text-xs text-black/40 dark:text-white/40">
-                {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(log.createdAt)}
+                {formatWhenFor(log.createdAt, viewerTimezone)}
               </span>
             </div>
           ))}

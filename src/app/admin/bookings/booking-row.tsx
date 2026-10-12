@@ -22,6 +22,7 @@ const KIND_LABEL: Record<string, string> = {
 export function AdminBookingRow({
   booking,
   viewerRole,
+  viewerTimezone,
 }: {
   booking: Booking & {
     student: User;
@@ -30,6 +31,7 @@ export function AdminBookingRow({
     notificationLogs: NotificationLog[];
   };
   viewerRole: Role;
+  viewerTimezone: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [showDetails, setShowDetails] = useState(false);
@@ -206,7 +208,9 @@ export function AdminBookingRow({
                       <NotificationAddresses log={log} />
                       <DeliveryStatusBadge log={log} />
                       <span className="text-black/40 dark:text-white/40">
-                        {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(log.createdAt)}
+                        {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: viewerTimezone }).format(
+                          log.createdAt
+                        )}
                       </span>
                       {log.error && <span className="text-red-600 dark:text-red-400">— {log.error}</span>}
                     </div>

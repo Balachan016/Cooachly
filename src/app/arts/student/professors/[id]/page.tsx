@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
-import { getSlotsWithStatus, buildCalendarWeeks, BOOKING_WINDOW_DAYS } from "@/lib/scheduling";
+import { getSlotsWithStatus, buildCalendarWeeks, bookingWindowDaysFor } from "@/lib/scheduling";
 import { getProfessorRatingSummary } from "@/lib/reviews";
 import { Badge, Card } from "@/components/ui";
 import { BookingCalendar } from "@/components/booking-calendar";
@@ -20,12 +20,13 @@ export default async function ProfessorDetailPage(props: PageProps<"/arts/studen
   });
   if (!professor || professor.site !== user.site) notFound();
 
+  const windowDays = bookingWindowDaysFor(user.timezone);
   const [slots, rating] = await Promise.all([
-    getSlotsWithStatus(professor.id),
+    getSlotsWithStatus(professor.id, { windowDays }),
     getProfessorRatingSummary(professor.id),
   ]);
 
-  const weeks = buildCalendarWeeks(slots, user.timezone, BOOKING_WINDOW_DAYS);
+  const weeks = buildCalendarWeeks(slots, user.timezone, windowDays);
 
   return (
     <div>

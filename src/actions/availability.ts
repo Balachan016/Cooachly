@@ -6,15 +6,24 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 
-const AvailabilitySchema = z.object({
-  dayOfWeek: z.coerce.number().int().min(0).max(6),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/),
-  timezone: z.string().min(1),
-  sessionLengthMinutes: z.coerce.number().int().refine((v) => [30, 45, 60, 75, 90].includes(v), {
-    message: "Session length must be 30, 45, 60, 75, or 90 minutes.",
-  }),
-});
+const AvailabilitySchema = z
+  .object({
+    mode: z.enum(["recurring", "oneTime"]).default("recurring"),
+    dayOfWeek: z.coerce.number().int().min(0).max(6).optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/),
+    timezone: z.string().min(1),
+    sessionLengthMinutes: z.coerce.number().int().refine((v) => [30, 45, 60, 75, 90].includes(v), {
+      message: "Session length must be 30, 45, 60, 75, or 90 minutes.",
+    }),
+  })
+  .refine((data) => (data.mode === "recurring" ? data.dayOfWeek !== undefined : Boolean(data.date)), {
+    message: "Pick a day of week (weekly) or a date (one-time).",
+  });
 
 // Cooachly Arts classes are fixed at 30 minutes — enforced here (not just in
 // the Arts availability form) so a crafted request can't set another length.
@@ -24,7 +33,9 @@ export async function addAvailability(formData: FormData) {
   const session = await requireRole("PROFESSOR");
 
   const parsed = AvailabilitySchema.safeParse({
-    dayOfWeek: formData.get("dayOfWeek"),
+    mode: formData.get("mode") || undefined,
+    dayOfWeek: formData.get("dayOfWeek") || undefined,
+    date: formData.get("date") || undefined,
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     timezone: formData.get("timezone"),
@@ -32,12 +43,23 @@ export async function addAvailability(formData: FormData) {
   });
 
   if (!parsed.success) return;
-  const { dayOfWeek, startTime, endTime, timezone } = parsed.data;
+  const { mode, dayOfWeek, date, startTime, endTime, timezone } = parsed.data;
   const sessionLengthMinutes = session.site === "ARTS" ? ARTS_SESSION_LENGTH_MINUTES : parsed.data.sessionLengthMinutes;
   if (startTime >= endTime) return;
 
   await prisma.availability.create({
-    data: { professorId: session.userId, dayOfWeek, startTime, endTime, timezone, sessionLengthMinutes },
+    data: {
+      professorId: session.userId,
+      // Stored as plain UTC-midnight calendar dates, compared as date
+      // strings in getSlotsWithStatus — never treated as an instant, so this
+      // isn't affected by `timezone`.
+      dayOfWeek: mode === "recurring" ? (dayOfWeek ?? null) : null,
+      date: mode === "oneTime" && date ? new Date(`${date}T00:00:00.000Z`) : null,
+      startTime,
+      endTime,
+      timezone,
+      sessionLengthMinutes,
+    },
   });
 
   revalidatePath(sitePath(session.site, "/professor/availability"));
