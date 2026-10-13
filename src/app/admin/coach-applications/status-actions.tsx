@@ -45,7 +45,7 @@ export function CoachApplicationStatusActions({
               })
             }
           >
-            Send login invite
+            Create login
           </Button>
         )}
       </div>

@@ -135,16 +135,17 @@ export async function updateCoachApplicationStatus(id: string, status: CoachAppl
 export type SendCoachInviteState = { message?: string; success?: true } | undefined;
 
 /**
- * Lets an admin invite an approved applicant to create their professor
- * login — reuses the same AccountInviteToken flow as "Invite a user" on the
- * Users page, pre-filled from the application instead of a blank form.
+ * Lets an admin create a login for an approved applicant directly — reuses
+ * the same direct-account-creation flow as "Invite a user" on the Users
+ * page (createAccountInvite), pre-filled from the application instead of a
+ * blank form.
  */
 export async function sendCoachInvite(id: string): Promise<SendCoachInviteState> {
   const session = await requireRole("ADMIN");
   const application = await prisma.coachApplication.findUnique({ where: { id } });
   if (!application || application.site !== session.site) return { message: "Application not found." };
   if (application.status !== "APPROVED") {
-    return { message: "Approve this application before sending a login invite." };
+    return { message: "Approve this application before creating a login for them." };
   }
 
   const invite = await createAccountInvite({
@@ -159,11 +160,18 @@ export async function sendCoachInvite(id: string): Promise<SendCoachInviteState>
 
   revalidatePath(sitePath(session.site, "/admin/coach-applications"));
 
-  if (invite.result.skipped) {
-    return { message: `Email isn't configured — share this link with them directly: ${invite.inviteUrl}`, success: true };
+  const { loginUrl, tempPassword, result } = invite;
+  if (result.skipped) {
+    return {
+      message: `Account created. Email isn't configured — share these directly: ${loginUrl} · ${application.email} / ${tempPassword}`,
+      success: true,
+    };
   }
-  if (invite.result.error) {
-    return { message: `Invite created, but the email failed to send: ${invite.result.error}.`, success: true };
+  if (result.error) {
+    return {
+      message: `Account created, but the email failed to send (${result.error}) — share these directly: ${loginUrl} · ${application.email} / ${tempPassword}`,
+      success: true,
+    };
   }
-  return { message: `Invite sent to ${application.email}.`, success: true };
+  return { message: `Account created and login details emailed to ${application.email}.`, success: true };
 }

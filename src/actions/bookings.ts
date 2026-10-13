@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { startOfMonth, endOfMonth } from "date-fns";
+import { fromZonedTime } from "date-fns-tz";
 import type { AvailableSlot, CalendarDay } from "@/lib/scheduling";
 import type { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -282,18 +283,18 @@ export async function cancelBooking(_state: CancelBookingState, formData: FormDa
 }
 
 /**
- * Superadmin-only: cancels any scheduled (PENDING/CONFIRMED) booking on
- * either site, with a required reason — unlike deleteBooking, this keeps
- * the row (just flips status) and, since getAvailableSlots only counts
- * PENDING/CONFIRMED bookings as occupying a slot, immediately frees that
- * time for someone else to book. Emails the student, professor, and admins,
- * same as a self-service cancellation.
+ * Admin/superadmin: cancels any scheduled (PENDING/CONFIRMED) booking, with
+ * a required reason — unlike deleteBooking, this keeps the row (just flips
+ * status) and, since getAvailableSlots only counts PENDING/CONFIRMED
+ * bookings as occupying a slot, immediately frees that time for someone
+ * else to book. Unlike the student/professor-facing cancelBooking, this
+ * never checks the 23h cutoff or the monthly cancellation quota — an admin
+ * can act on any booking at any time. A plain ADMIN is confined to their own
+ * site; a SUPERADMIN can reach either site. Emails the student, professor,
+ * and admins, same as a self-service cancellation.
  */
-export async function superadminCancelBooking(
-  _state: CancelBookingState,
-  formData: FormData
-): Promise<CancelBookingState> {
-  const session = await requireRole("SUPERADMIN");
+export async function adminCancelBooking(_state: CancelBookingState, formData: FormData): Promise<CancelBookingState> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
 
   const bookingId = String(formData.get("bookingId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
@@ -305,6 +306,9 @@ export async function superadminCancelBooking(
     include: { student: true, professor: true },
   });
   if (!booking) return { message: "Booking not found." };
+  if (session.role !== "SUPERADMIN" && booking.professor.site !== session.site) {
+    return { message: "Booking not found." };
+  }
   if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
     return { message: "Only scheduled (pending or confirmed) bookings can be cancelled this way." };
   }
@@ -324,7 +328,7 @@ export async function superadminCancelBooking(
     actorId: session.userId,
     targetType: "Booking",
     targetId: bookingId,
-    detail: `Cancelled by superadmin ${session.name}: ${reason}`,
+    detail: `Cancelled by admin ${session.name}: ${reason}`,
   });
 
   revalidatePath(sitePath(bookingSite, "/student/bookings"));
@@ -333,6 +337,92 @@ export async function superadminCancelBooking(
   revalidatePath("/superadmin/bookings");
 
   return { message: "Session cancelled — the slot is now open for others to book.", success: true };
+}
+
+/**
+ * Admin/superadmin: moves any booking to a new start time, preserving its
+ * original duration. Unlike proposeReschedule/acceptRescheduleProposal
+ * (student/professor), this never checks the 23h cutoff, the monthly
+ * reschedule quota, or even that the new time matches one of the
+ * professor's open slots — an admin can move any booking to any time. A
+ * plain ADMIN is confined to their own site; a SUPERADMIN can reach either
+ * site. Emails the student, professor, and admins, same as every other
+ * reschedule.
+ */
+export async function adminRescheduleBooking(_state: RescheduleFormState, formData: FormData): Promise<RescheduleFormState> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const newStartAt = String(formData.get("newStartAt") ?? "");
+  const timezone = String(formData.get("timezone") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!bookingId || !newStartAt || !timezone) return { message: "Invalid reschedule request." };
+
+  let newStartDate: Date;
+  try {
+    // newStartAt is a plain "YYYY-MM-DDTHH:mm:ss" wall-clock string with no
+    // zone of its own — interpret it in the zone the admin picked, not the
+    // server's runtime zone.
+    newStartDate = fromZonedTime(newStartAt, timezone);
+  } catch {
+    return { message: "Invalid time or timezone." };
+  }
+  if (Number.isNaN(newStartDate.getTime())) return { message: "Invalid time selected." };
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { student: true, professor: true },
+  });
+  if (!booking) return { message: "Booking not found." };
+  if (session.role !== "SUPERADMIN" && booking.professor.site !== session.site) {
+    return { message: "Booking not found." };
+  }
+  if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {
+    return { message: "Only scheduled (pending or confirmed) bookings can be rescheduled this way." };
+  }
+
+  const durationMs = booking.endAt.getTime() - booking.startAt.getTime();
+  const newEndDate = new Date(newStartDate.getTime() + durationMs);
+  const previousStartAt = booking.startAt;
+
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      startAt: newStartDate,
+      endAt: newEndDate,
+      rescheduledAt: new Date(),
+      rescheduledByRole: session.role,
+    },
+    include: { student: true, professor: true },
+  });
+
+  if (updated.dailyRoomName) {
+    const newExp = Math.floor(updated.endAt.getTime() / 1000) + 2 * 60 * 60; // same 2h wrap-up buffer as room creation
+    await updateDailyRoomExpiry(updated.dailyRoomName, newExp);
+  }
+
+  await sendBookingRescheduledEmail(updated, previousStartAt, {
+    requestedBy: "ADMIN",
+    requestedByName: `${session.name} (admin)`,
+    reason: reason || undefined,
+  });
+
+  const bookingSite = booking.professor.site;
+  await logAudit({
+    site: bookingSite,
+    action: "BOOKING_RESCHEDULED",
+    actorId: session.userId,
+    targetType: "Booking",
+    targetId: booking.id,
+    detail: `${previousStartAt.toISOString()} → ${newStartDate.toISOString()} moved by admin ${session.name}${reason ? `: ${reason}` : ""}`,
+  });
+
+  revalidatePath(sitePath(bookingSite, "/student/bookings"));
+  revalidatePath(sitePath(bookingSite, "/professor/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/bookings"));
+  revalidatePath("/superadmin/bookings");
+
+  return { message: "Session rescheduled.", success: true };
 }
 
 /**
@@ -396,9 +486,9 @@ async function monthlyReschedulesUsed(userId: string, role: "STUDENT" | "PROFESS
 // BOOKING_CANCELLED audit entries are always logged with the actual
 // canceller as actorId (no propose/accept split like reschedules have), so
 // counting them directly is accurate for both students and professors. An
-// admin/superadmin cancellation (superadminCancelBooking) logs its own
-// actorId — the admin's — so it's never counted against a student's or
-// professor's quota.
+// admin/superadmin cancellation (adminCancelBooking) logs its own actorId —
+// the admin's — so it's never counted against a student's or professor's
+// quota.
 async function monthlyCancellationsUsed(actorId: string, asOf: Date) {
   return prisma.auditLog.count({
     where: { actorId, action: "BOOKING_CANCELLED", createdAt: { gte: startOfMonth(asOf), lte: endOfMonth(asOf) } },

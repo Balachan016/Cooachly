@@ -2,9 +2,10 @@
 
 import { useTransition } from "react";
 import type { Booking, User } from "@prisma/client";
-import { deleteBooking, superadminCancelBooking } from "@/actions/bookings";
+import { deleteBooking, adminCancelBooking } from "@/actions/bookings";
 import { Badge, Button } from "@/components/ui";
 import { CancelBookingControl } from "@/components/cancel-booking-control";
+import { AdminRescheduleControl } from "@/components/admin-reschedule-control";
 
 export function SuperadminBookingRow({ booking }: { booking: Booking & { student: User; professor: User } }) {
   const [isPending, startTransition] = useTransition();
@@ -43,8 +44,9 @@ export function SuperadminBookingRow({ booking }: { booking: Booking & { student
       <td className="px-4 py-3">
         <div className="flex flex-wrap items-start gap-2">
           {canCancel && (
-            <CancelBookingControl bookingId={booking.id} action={superadminCancelBooking} label="Cancel" />
+            <CancelBookingControl bookingId={booking.id} action={adminCancelBooking} label="Cancel" />
           )}
+          {canCancel && <AdminRescheduleControl bookingId={booking.id} defaultTimezone={booking.student.timezone} />}
           {canDelete && (
             <Button variant="danger" disabled={isPending} onClick={handleDelete}>
               Delete
