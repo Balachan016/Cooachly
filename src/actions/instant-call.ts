@@ -22,15 +22,16 @@ const InstantCallSchema = z.object({
 });
 
 /**
- * Admin-only: creates a confirmed session directly, with no availability or
- * slot-matching check — either starting right now (leave startAt blank, the
- * original "instant call" behavior) or at any admin-picked future date/time,
- * same as adminRescheduleBooking's no-restrictions approach to moving a
- * booking. A scheduled (non-instant) session gets the normal booking
- * confirmation email instead of the "starting now" instant reminder.
+ * Admin/superadmin: creates a confirmed session directly, with no
+ * availability or slot-matching check — either starting right now (leave
+ * startAt blank, the original "instant call" behavior) or at any
+ * admin-picked future date/time, same as adminRescheduleBooking's
+ * no-restrictions approach to moving a booking. A scheduled (non-instant)
+ * session gets the normal booking confirmation email instead of the
+ * "starting now" instant reminder.
  */
 export async function startInstantCall(_state: InstantCallState, formData: FormData): Promise<InstantCallState> {
-  const session = await requireRole("ADMIN");
+  const session = await requireRole("ADMIN", "SUPERADMIN");
 
   const parsed = InstantCallSchema.safeParse({
     studentId: formData.get("studentId"),
@@ -91,6 +92,8 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
   });
 
   revalidatePath(sitePath(session.site, "/admin/bookings"));
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
 
   if (!isInstant) {
     if (fullBooking) await sendBookingConfirmation([fullBooking]);
