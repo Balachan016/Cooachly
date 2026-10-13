@@ -67,6 +67,10 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
     if (Number.isNaN(startAt.getTime())) return { message: "Invalid date/time." };
   }
   const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
+  // Falls back to the student's own timezone if the admin didn't pick one
+  // (shouldn't happen now that the field is always shown, but the schema
+  // still allows it blank) — just for displaying the time back to the admin.
+  const displayTimezone = timezone || student.timezone;
 
   const booking = await prisma.booking.create({
     data: {
@@ -98,7 +102,7 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
   if (!isInstant) {
     if (fullBooking) await sendBookingConfirmation([fullBooking]);
     return {
-      message: `Session scheduled for ${formatWhenFor(startAt, student.timezone)} — confirmation emailed to ${student.name} and ${professor.name}.`,
+      message: `Session scheduled for ${formatWhenFor(startAt, displayTimezone)} — confirmation emailed to ${student.name} and ${professor.name}.`,
       success: true,
     };
   }
@@ -114,7 +118,7 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
   await sendBookingReminder(fullBooking, "instant");
 
   return {
-    message: `Call started — the join link was emailed${student.phone || professor.phone ? " and sent via WhatsApp" : ""} to ${student.name} and ${professor.name}.`,
+    message: `Call started at ${formatWhenFor(startAt, displayTimezone)} — the join link was emailed${student.phone || professor.phone ? " and sent via WhatsApp" : ""} to ${student.name} and ${professor.name}.`,
     success: true,
   };
 }
