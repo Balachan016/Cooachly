@@ -49,7 +49,7 @@ export function InviteUserForm() {
       )}
 
       <Button type="submit" disabled={pending}>
-        {pending ? "Sending…" : "Send invite"}
+        {pending ? "Creating…" : "Create account"}
       </Button>
     </form>
   );

@@ -2,14 +2,19 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { InviteUserForm } from "@/components/invite-user-form";
+import { ProcessPendingInvitesButton } from "@/components/process-pending-invites-button";
+import { getPendingInviteCount } from "@/actions/invites";
 import { UserRow } from "./user-row";
 
 export default async function AdminUsersPage() {
   const session = await requireRole("ADMIN", "SUPERADMIN");
-  const users = await prisma.user.findMany({
-    where: { site: session.site },
-    orderBy: { createdAt: "desc" },
-  });
+  const [users, pendingInviteCount] = await Promise.all([
+    prisma.user.findMany({
+      where: { site: session.site },
+      orderBy: { createdAt: "desc" },
+    }),
+    getPendingInviteCount(session.site, session.role),
+  ]);
 
   return (
     <div>
@@ -29,14 +34,15 @@ export default async function AdminUsersPage() {
       </div>
 
       <Card className="mt-6">
-        <h2 className="font-semibold">Invite a new user</h2>
+        <h2 className="font-semibold">Create a new user</h2>
         <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-          Sends a personal link (with an optional welcome message) so they can create their own
-          login — typically once they&apos;ve confirmed they&apos;d like to continue after a free demo.
+          Creates their account right away and emails them their login (with an optional welcome
+          message) — typically once they&apos;ve confirmed they&apos;d like to continue after a free demo.
         </p>
         <div className="mt-4">
           <InviteUserForm />
         </div>
+        <ProcessPendingInvitesButton count={pendingInviteCount} />
       </Card>
 
       <Card className="mt-6 overflow-x-auto p-0">

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, generateTempPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { roleHomePath } from "@/lib/roles";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
@@ -17,9 +17,7 @@ import { getAdminCcEmails } from "@/lib/notifications/admin-recipients";
 import { logAudit } from "@/lib/audit";
 import { OptionalPhoneSchema } from "@/lib/phone";
 import { nextUserCode } from "@/lib/user-code";
-import type { Site } from "@prisma/client";
-
-const INVITE_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+import type { Role, Site } from "@prisma/client";
 
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -46,10 +44,13 @@ type CreateInviteOpts = {
 };
 
 /**
- * Core of the invite flow, shared by the admin-facing "invite a user" form
- * and any other place that needs to offer someone a login (an approved
- * coach application, a demo that converted) without re-deriving the token/
- * email/audit-log plumbing each time.
+ * Creates the account directly — no invite-and-redeem step. Shared by the
+ * admin-facing "invite a user" form and any other place that needs to give
+ * someone a login (an approved coach application, a demo that converted)
+ * without re-deriving the password/code/email/audit-log plumbing each time.
+ * Same pattern as createAdminAccount: a temp password is generated and
+ * emailed straight to them, so they can log in immediately instead of
+ * waiting on them to click a link and set one up themselves.
  */
 export async function createAccountInvite(opts: CreateInviteOpts) {
   const { site, name, email, role, phone, message, actorId } = opts;
@@ -59,45 +60,52 @@ export async function createAccountInvite(opts: CreateInviteOpts) {
     return { ok: false as const, message: "This email already has an account on this platform." };
   }
 
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  await prisma.accountInviteToken.create({
-    data: {
-      site,
-      name,
-      email,
-      role,
-      phone: phone || null,
-      message: message || null,
-      tokenHash: hashToken(rawToken),
-      expiresAt: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
-    },
+  const tempPassword = generateTempPassword();
+  const passwordHash = await hashPassword(tempPassword);
+
+  const user = await prisma.$transaction(async (tx) => {
+    const code = await nextUserCode(role, tx);
+    return tx.user.create({
+      data: {
+        site,
+        name,
+        email,
+        phone: phone || null,
+        passwordHash,
+        role,
+        code,
+        timezone: "UTC",
+        professorProfile: role === "PROFESSOR" ? { create: { headline: "", bio: "", subject: "" } } : undefined,
+      },
+    });
   });
 
   await logAudit({
     site,
-    action: "ACCOUNT_INVITE_SENT",
+    action: "ACCOUNT_CREATED_BY_ADMIN",
     actorId,
-    targetType: "AccountInviteToken",
-    detail: `${email} invited as ${role}`,
+    targetType: "User",
+    targetId: user.id,
+    detail: `${name} (${email}) created directly as ${role}`,
   });
 
   const appUrl = await getAppUrl();
-  const inviteUrl = `${appUrl}${sitePath(site, `/register/${rawToken}`)}`;
+  const loginUrl = `${appUrl}${sitePath(site, "/login")}`;
   const brandName = SITE_CONFIG[site].brandName;
-
   const adminEmails = getAdminCcEmails();
 
   const result = await sendEmail({
     to: email,
     cc: adminEmails,
     site,
-    subject: `Welcome to ${brandName} — create your login`,
+    subject: `Welcome to ${brandName} — your login is ready`,
     html: `
       <p>Hi ${name},</p>
       ${message ? `<p style="white-space:pre-wrap">${message}</p>` : ""}
-      <p>You've been invited to create your ${brandName} account. Click below to set your password and get started:</p>
-      <p><a href="${inviteUrl}">Create your login</a></p>
-      <p>This link expires in 7 days.</p>
+      <p>Your ${brandName} account has been created. Here's how to log in:</p>
+      <p><a href="${loginUrl}">${loginUrl}</a></p>
+      <p>Email: <strong>${email}</strong><br/>Temporary password: <strong>${tempPassword}</strong></p>
+      <p>For security, please change your password after you log in (under Settings).</p>
       <p>— ${brandName}</p>
     `,
   });
@@ -105,12 +113,12 @@ export async function createAccountInvite(opts: CreateInviteOpts) {
   if (phone) {
     await sendWhatsAppInvite({
       to: phone,
-      body: `Hi ${name}, you've been invited to create your ${brandName} account. Create your login here: ${inviteUrl} (link expires in 7 days).`,
-      variables: { name, brandName, inviteUrl },
+      body: `Hi ${name}, your ${brandName} account is ready. Log in here: ${loginUrl} — Email: ${email}, Temporary password: ${tempPassword}`,
+      variables: { name, brandName, inviteUrl: loginUrl },
     });
   }
 
-  return { ok: true as const, inviteUrl, result };
+  return { ok: true as const, loginUrl, tempPassword, result, userId: user.id };
 }
 
 export async function sendAccountInvite(_state: InviteFormState, formData: FormData): Promise<InviteFormState> {
@@ -131,7 +139,7 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
 
   // Invites always stay on the sender's own site — admin accounts are
   // created directly by a superadmin (see createAdminAccount) rather than
-  // through this invite-and-redeem flow, so there's no ADMIN branch here.
+  // through this flow, so there's no ADMIN branch here.
   const site: Site = session.site;
 
   const invite = await createAccountInvite({ site, name, email, role, phone, message, actorId: session.userId });
@@ -139,14 +147,72 @@ export async function sendAccountInvite(_state: InviteFormState, formData: FormD
 
   revalidatePath(sitePath(site, "/admin/users"));
 
-  const { inviteUrl, result } = invite;
+  const { loginUrl, tempPassword, result } = invite;
   if (result.skipped) {
-    return { message: `Email isn't configured — share this link with them directly: ${inviteUrl}`, success: true };
+    return {
+      message: `Account created. Email isn't configured — share these directly: ${loginUrl} · ${email} / ${tempPassword}`,
+      success: true,
+    };
   }
   if (result.error) {
-    return { message: `Invite created, but the email failed to send: ${result.error}. Link: ${inviteUrl}`, success: true };
+    return {
+      message: `Account created, but the email failed to send (${result.error}) — share these directly: ${loginUrl} · ${email} / ${tempPassword}`,
+      success: true,
+    };
   }
-  return { message: `Invite sent to ${email}.`, success: true };
+  return { message: `Account created and login details emailed to ${email}.`, success: true };
+}
+
+export type ProcessPendingInvitesState = { message?: string; success?: true } | undefined;
+
+/**
+ * Catch-up for invites sent before direct account creation shipped (see
+ * createAccountInvite above) — creates a real account right now for every
+ * not-yet-redeemed invite token, regardless of whether its 7-day link
+ * already expired, instead of leaving it to the recipient to click. Each
+ * processed token is marked used so it can't also be redeemed the old way.
+ */
+export async function createPendingInviteAccounts(): Promise<ProcessPendingInvitesState> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+
+  const pending = await prisma.accountInviteToken.findMany({
+    where: { usedAt: null, ...(session.role === "SUPERADMIN" ? {} : { site: session.site }) },
+    orderBy: { createdAt: "asc" },
+  });
+  if (pending.length === 0) return { message: "No pending invites to process.", success: true };
+
+  let created = 0;
+  let skipped = 0;
+  for (const invite of pending) {
+    const result = await createAccountInvite({
+      site: invite.site,
+      name: invite.name,
+      email: invite.email,
+      role: invite.role === "PROFESSOR" ? "PROFESSOR" : "STUDENT",
+      phone: invite.phone,
+      message: invite.message,
+      actorId: session.userId,
+    });
+    // Either way this invite is resolved now — mark it used so it stops
+    // showing up as pending (an "already has an account" skip just means
+    // someone else created or redeemed it in the meantime).
+    await prisma.accountInviteToken.update({ where: { id: invite.id }, data: { usedAt: new Date() } });
+    if (result.ok) created++;
+    else skipped++;
+  }
+
+  revalidatePath(sitePath(session.site, "/admin/users"));
+  return {
+    message: `Created ${created} account${created === 1 ? "" : "s"}${skipped > 0 ? ` (${skipped} skipped — already had an account)` : ""}.`,
+    success: true,
+  };
+}
+
+/** For the admin Users page to show how many invites are still waiting to be processed. */
+export async function getPendingInviteCount(site: Site, role: Role): Promise<number> {
+  return prisma.accountInviteToken.count({
+    where: { usedAt: null, ...(role === "SUPERADMIN" ? {} : { site }) },
+  });
 }
 
 export async function getInvitePreview(token: string) {

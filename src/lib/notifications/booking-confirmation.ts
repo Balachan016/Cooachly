@@ -130,7 +130,9 @@ export async function sendBookingConfirmation(bookings: BookingWithParties[]) {
 export async function sendBookingRescheduledEmail(
   booking: BookingWithParties,
   previousStartAt: Date,
-  opts: { requestedBy: "STUDENT" | "PROFESSOR"; reason?: string } = { requestedBy: "STUDENT" }
+  opts: { requestedBy: "STUDENT" | "PROFESSOR" | "ADMIN"; requestedByName?: string; reason?: string } = {
+    requestedBy: "STUDENT",
+  }
 ) {
   if (!isEmailConfigured) return;
 
@@ -146,7 +148,8 @@ export async function sendBookingRescheduledEmail(
   });
   const calendarLine = `<p>Calendar updated — a new .ics is attached, or <a href="${calendarLink}">add the new time to Google Calendar</a>.</p>`;
   const adminEmails = getAdminCcEmails();
-  const requestedByName = opts.requestedBy === "STUDENT" ? booking.student.name : booking.professor.name;
+  const requestedByName =
+    opts.requestedByName ?? (opts.requestedBy === "STUDENT" ? booking.student.name : booking.professor.name);
   const reasonLine = opts.reason
     ? `<p><strong>Reason given:</strong> ${opts.reason}</p>`
     : "";
