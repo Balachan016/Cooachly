@@ -117,12 +117,19 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
       </div>
 
       <Card className="mt-6">
-        <h2 className="font-semibold">Start an instant call</h2>
+        <h2 className="font-semibold">Create a session</h2>
         <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-          Creates a session starting right now and emails/WhatsApps the join link to both the student and professor automatically.
+          Creates a confirmed session directly, with no availability check — leave the date/time blank to start a
+          call right now (emails/WhatsApps the join link immediately), or pick any date, time, and timezone to book
+          a session for later instead (emails the normal booking confirmation).
         </p>
         <div className="mt-4">
-          <InstantCallForm students={allStudents} professors={allProfessors} isDailyConfigured={isDailyConfigured} />
+          <InstantCallForm
+            students={allStudents}
+            professors={allProfessors}
+            isDailyConfigured={isDailyConfigured}
+            viewerTimezone={viewerTimezone}
+          />
         </div>
       </Card>
 
