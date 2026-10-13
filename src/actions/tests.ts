@@ -270,12 +270,20 @@ export async function assignTest(_state: TestFormState, formData: FormData): Pro
   return { message: `Assigned to ${assignments.length} student${assignments.length === 1 ? "" : "s"}.`, success: true };
 }
 
-const ExtendDueDateSchema = z.object({ testId: z.string().min(1), dueAt: z.string().min(1) });
+const ExtendDueDateSchema = z.object({
+  testId: z.string().min(1),
+  dueAt: z.string().min(1),
+  durationMinutes: z.coerce.number().int().min(1, "Duration must be at least 1 minute.").max(600),
+});
 
 export async function extendTestDueDate(_state: TestFormState, formData: FormData): Promise<TestFormState> {
   const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
-  const parsed = ExtendDueDateSchema.safeParse({ testId: formData.get("testId"), dueAt: formData.get("dueAt") });
-  if (!parsed.success) return { message: "Please choose a date." };
+  const parsed = ExtendDueDateSchema.safeParse({
+    testId: formData.get("testId"),
+    dueAt: formData.get("dueAt"),
+    durationMinutes: formData.get("durationMinutes"),
+  });
+  if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please check the due date and time limit." };
 
   const test = await prisma.test.findUnique({ where: { id: parsed.data.testId } });
   if (!test || test.professorId !== session.userId) return { message: "Test not found." };
@@ -291,10 +299,13 @@ export async function extendTestDueDate(_state: TestFormState, formData: FormDat
   }
   if (Number.isNaN(dueAt.getTime())) return { message: "Invalid date." };
 
-  await prisma.test.update({ where: { id: test.id }, data: { dueAt } });
+  await prisma.test.update({
+    where: { id: test.id },
+    data: { dueAt, durationMinutes: parsed.data.durationMinutes },
+  });
 
   revalidateTestPaths(session.site, test.id);
-  return { message: "Due date updated.", success: true };
+  return { message: "Due date and time limit updated.", success: true };
 }
 
 const LOCKED_STATUSES = ["SUBMITTED", "GRADED", "SCORE_SHARED"] as const;

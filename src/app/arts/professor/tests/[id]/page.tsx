@@ -51,7 +51,7 @@ export default async function ProfessorTestDetailPage(props: PageProps<"/arts/pr
               min time limit
             </p>
           </div>
-          <ExtendDueDateForm testId={test.id} currentDueAt={test.dueAt.toISOString()} />
+          <ExtendDueDateForm testId={test.id} currentDueAt={test.dueAt.toISOString()} currentDurationMinutes={test.durationMinutes} />
         </div>
       </Card>
 

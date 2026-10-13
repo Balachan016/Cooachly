@@ -10,14 +10,22 @@ function toLocalInputValue(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function ExtendDueDateForm({ testId, currentDueAt }: { testId: string; currentDueAt: string }) {
+export function ExtendDueDateForm({
+  testId,
+  currentDueAt,
+  currentDurationMinutes,
+}: {
+  testId: string;
+  currentDueAt: string;
+  currentDurationMinutes: number;
+}) {
   const [state, action, pending] = useActionState(extendTestDueDate, undefined);
   const [open, setOpen] = useState(false);
 
   if (!open) {
     return (
       <Button variant="secondary" onClick={() => setOpen(true)}>
-        Change due date
+        Change due date / time limit
       </Button>
     );
   }
@@ -25,9 +33,16 @@ export function ExtendDueDateForm({ testId, currentDueAt }: { testId: string; cu
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <input type="hidden" name="testId" value={testId} />
-      <Input name="dueAt" type="datetime-local" defaultValue={toLocalInputValue(currentDueAt)} required />
+      <div>
+        <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">Due date</label>
+        <Input name="dueAt" type="datetime-local" defaultValue={toLocalInputValue(currentDueAt)} required />
+      </div>
+      <div className="w-32">
+        <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">Time limit (min)</label>
+        <Input name="durationMinutes" type="number" min={1} max={600} defaultValue={currentDurationMinutes} required />
+      </div>
       {state?.message && (
-        <p className={`text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
+        <p className={`w-full text-sm ${state.success ? "text-brand-700 dark:text-brand-400" : "text-red-600 dark:text-red-400"}`}>
           {state.message}
         </p>
       )}
