@@ -60,19 +60,20 @@ export function InstantCallForm({
         />
         <p className="mt-1 text-xs text-black/50 dark:text-white/50">Leave blank to start right now instead.</p>
       </div>
-      {isScheduled && (
-        <div className="w-56">
-          <Label htmlFor="ic-timezone">In this timezone</Label>
-          <Select id="ic-timezone" name="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-            {!TIMEZONES.includes(timezone) && <option value={timezone}>{timezone}</option>}
-            {TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </Select>
-        </div>
-      )}
+      <div className="w-56">
+        <Label htmlFor="ic-timezone">Timezone</Label>
+        <Select id="ic-timezone" name="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+          {!TIMEZONES.includes(timezone) && <option value={timezone}>{timezone}</option>}
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>
+              {tz}
+            </option>
+          ))}
+        </Select>
+        <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+          {isScheduled ? "The date/time above is in this timezone." : "Shown back to you once the call starts."}
+        </p>
+      </div>
       {!isDailyConfigured && (
         <div className="w-64">
           <Label htmlFor="ic-link">Meeting link</Label>
