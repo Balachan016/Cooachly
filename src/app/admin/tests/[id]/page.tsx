@@ -128,7 +128,7 @@ export default async function AdminTestDetailPage(props: PageProps<"/admin/tests
               min time limit
             </p>
           </div>
-          <ExtendDueDateForm testId={test.id} currentDueAt={test.dueAt.toISOString()} />
+          <ExtendDueDateForm testId={test.id} currentDueAt={test.dueAt.toISOString()} currentDurationMinutes={test.durationMinutes} />
         </div>
       </Card>
 
