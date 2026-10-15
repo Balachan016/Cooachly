@@ -10,6 +10,7 @@ import { ImportQuestionsForm } from "@/components/tests/import-questions-form";
 import { DeleteQuestionButton } from "@/components/tests/delete-question-button";
 import { AssignTestForm } from "@/components/tests/assign-test-form";
 import { ExtendDueDateForm } from "@/components/tests/extend-due-date-form";
+import { TestInstructionsForm } from "@/components/tests/test-instructions-form";
 
 export default async function ProfessorTestDetailPage(props: PageProps<"/professor/tests/[id]">) {
   const { id } = await props.params;
@@ -52,6 +53,24 @@ export default async function ProfessorTestDetailPage(props: PageProps<"/profess
             </p>
           </div>
           <ExtendDueDateForm testId={test.id} currentDueAt={test.dueAt.toISOString()} currentDurationMinutes={test.durationMinutes} />
+        </div>
+      </Card>
+
+      <Card className="mt-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-medium">Instructions &amp; formula sheet</p>
+            <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+              Shown to the student before they start the test, before the timer begins.
+            </p>
+            {test.instructions && (
+              <p className="mt-2 whitespace-pre-wrap text-sm text-black/80 dark:text-white/80">{test.instructions}</p>
+            )}
+            {test.formulaSheet && (
+              <p className="mt-2 whitespace-pre-wrap text-sm text-black/80 dark:text-white/80">{test.formulaSheet}</p>
+            )}
+          </div>
+          <TestInstructionsForm testId={test.id} currentInstructions={test.instructions} currentFormulaSheet={test.formulaSheet} />
         </div>
       </Card>
 

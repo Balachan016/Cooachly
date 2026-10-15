@@ -12,9 +12,21 @@ export function ImportQuestionsForm({ testId }: { testId: string }) {
       <p className="text-sm font-medium">Or add questions in bulk from a file</p>
       <p className="text-xs text-black/60 dark:text-white/60">
         Download the Word template, fill in one table per question, then upload it here — every question in the file
-        gets added at once. You can also upload a PDF question paper instead: numbered questions each ending in
-        &quot;[N points]&quot;, followed by a numbered &quot;ANSWER KEY &amp; SOLUTION GUIDE&quot; section — every
-        question imports as Long Answer, with the matching answer-key entry filled in as its model answer.
+        gets added at once. You can also upload a free-text question paper instead, as a Word doc or a PDF.
+      </p>
+      <p className="text-xs text-black/60 dark:text-white/60">
+        <strong>Word question paper:</strong> numbered questions like &quot;1. Title (10 points)&quot; (optionally
+        grouped under section headings), each followed by its prompt text, then an &quot;Answer Key&quot; heading
+        with matching numbered entries. An &quot;Instructions&quot; section and a &quot;Formula Sheet&quot; table
+        before the questions are picked up too, and shown to the student before they start the test.
+      </p>
+      <p className="text-xs text-black/60 dark:text-white/60">
+        <strong>PDF question paper:</strong> numbered questions each ending in &quot;[N points]&quot;, followed by a
+        numbered &quot;ANSWER KEY &amp; SOLUTION GUIDE&quot; section.
+      </p>
+      <p className="text-xs text-black/60 dark:text-white/60">
+        Either free-text format imports every question as Long Answer, with the matching answer-key entry filled in
+        as its model answer.
       </p>
       <a href="/api/tests/template" download className="inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
         Download the question template (.docx)

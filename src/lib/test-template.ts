@@ -326,7 +326,10 @@ export async function parseQuestionTemplateDocx(buffer: Buffer): Promise<Templat
     return { questions: [], errors: ["Couldn't open this file — please upload the .docx file as downloaded, without converting or re-saving it."] };
   }
 
-  const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, textNodeName: "#text" });
+  // parseTagValue defaults to true, which would coerce a numeric-looking
+  // cell value (e.g. a model answer that's just "42") into the JS number 42
+  // instead of the string — keep every cell's text as-is.
+  const parser = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true, textNodeName: "#text", parseTagValue: false });
   let body: Record<string, unknown>;
   try {
     const parsed = parser.parse(xml) as Record<string, unknown>;

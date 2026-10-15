@@ -567,6 +567,10 @@ model Test {
   professor   User      @relation("TestsCreated", fields: [professorId], references: [id], onDelete: Cascade)
   title       String
   description String?
+  // Shown to the student on a one-time intro screen before the questions
+  // (and before the timer starts) — not graded content.
+  instructions String?
+  formulaSheet String?
   dueAt       DateTime
   // How long a student gets to actively work on the test once they open it
   // (see TestAssignment.timeSpentSeconds) — independent of dueAt, which is
