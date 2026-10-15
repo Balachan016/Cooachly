@@ -11,6 +11,7 @@ import { uploadFile, isBlobConfigured } from "@/lib/blob";
 import { autoGradeMultipleChoice, sumAwardedMarks } from "@/lib/tests";
 import { parseQuestionTemplateDocx, type ParsedQuestionDraft } from "@/lib/test-template";
 import { parseQuestionPaperPdf } from "@/lib/test-paper-pdf";
+import { parseQuestionPaperDocx } from "@/lib/test-paper-docx";
 import { sendTestAssignedEmail, sendTestScoreSharedEmail } from "@/lib/notifications/tests";
 import { logAudit } from "@/lib/audit";
 import type { Site } from "@prisma/client";
@@ -153,15 +154,31 @@ export async function importQuestionsFromTemplate(_state: TestFormState, formDat
   let questions: ParsedQuestionDraft[];
   let errors: string[];
   let suggestedDurationMinutes: number | undefined;
+  let instructions: string | null | undefined;
+  let formulaSheet: string | null | undefined;
   if (isPdf) {
     const result = await parseQuestionPaperPdf(buffer);
     questions = result.questions;
     errors = result.errors;
     suggestedDurationMinutes = result.suggestedDurationMinutes;
   } else {
-    const result = await parseQuestionTemplateDocx(buffer);
-    questions = result.questions;
-    errors = result.errors;
+    const tableResult = await parseQuestionTemplateDocx(buffer);
+    // The table template and the free-text "question paper" doc are two
+    // different shapes of the same .docx upload field — only fall back to
+    // the prose parser when the table one found no question tables at all
+    // (i.e. this clearly isn't the table format), not on every other error,
+    // so a genuinely malformed table template still reports its real errors.
+    if (tableResult.questions.length === 0 && tableResult.errors.length === 1 && tableResult.errors[0].startsWith("No question tables found")) {
+      const proseResult = await parseQuestionPaperDocx(buffer);
+      questions = proseResult.questions;
+      errors = proseResult.errors;
+      suggestedDurationMinutes = proseResult.suggestedDurationMinutes;
+      instructions = proseResult.instructions;
+      formulaSheet = proseResult.formulaSheet;
+    } else {
+      questions = tableResult.questions;
+      errors = tableResult.errors;
+    }
   }
 
   if (errors.length > 0) {
@@ -194,11 +211,19 @@ export async function importQuestionsFromTemplate(_state: TestFormState, formDat
     )
   );
 
-  // A PDF question paper's "Recommended Time" is a strong signal of intended
-  // duration — apply it, but only on the test's very first import, so a
-  // later file added to an already-set-up test never silently overrides it.
+  // A question paper's "Suggested/Recommended Time" is a strong signal of
+  // intended duration — apply it, but only on the test's very first import,
+  // so a later file added to an already-set-up test never silently
+  // overrides it. Instructions/formula sheet use their own, looser guard
+  // (only when not already set) since they aren't tied to question order.
+  const testUpdate: { durationMinutes?: number; instructions?: string; formulaSheet?: string } = {};
   if (isFirstImport && suggestedDurationMinutes && suggestedDurationMinutes > 0) {
-    await prisma.test.update({ where: { id: test.id }, data: { durationMinutes: suggestedDurationMinutes } });
+    testUpdate.durationMinutes = suggestedDurationMinutes;
+  }
+  if (!test.instructions && instructions) testUpdate.instructions = instructions;
+  if (!test.formulaSheet && formulaSheet) testUpdate.formulaSheet = formulaSheet;
+  if (Object.keys(testUpdate).length > 0) {
+    await prisma.test.update({ where: { id: test.id }, data: testUpdate });
   }
 
   revalidateTestPaths(session.site, test.id);
@@ -306,6 +331,39 @@ export async function extendTestDueDate(_state: TestFormState, formData: FormDat
 
   revalidateTestPaths(session.site, test.id);
   return { message: "Due date and time limit updated.", success: true };
+}
+
+const UpdateInstructionsSchema = z.object({
+  testId: z.string().min(1),
+  instructions: z.string().trim().max(5000).optional(),
+  formulaSheet: z.string().trim().max(5000).optional(),
+});
+
+/**
+ * Lets a test's owner add or edit the instructions/formula sheet shown to
+ * students on the one-time intro screen before they start the test (see
+ * TestIntroGate) — either typed in directly or, more commonly, already
+ * filled in by importQuestionsFromTemplate from an uploaded question paper.
+ */
+export async function updateTestInstructions(_state: TestFormState, formData: FormData): Promise<TestFormState> {
+  const session = await requireRole("PROFESSOR", "ADMIN", "SUPERADMIN");
+  const parsed = UpdateInstructionsSchema.safeParse({
+    testId: formData.get("testId"),
+    instructions: formData.get("instructions") || undefined,
+    formulaSheet: formData.get("formulaSheet") || undefined,
+  });
+  if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please check the fields." };
+
+  const test = await prisma.test.findUnique({ where: { id: parsed.data.testId } });
+  if (!test || test.professorId !== session.userId) return { message: "Test not found." };
+
+  await prisma.test.update({
+    where: { id: test.id },
+    data: { instructions: parsed.data.instructions || null, formulaSheet: parsed.data.formulaSheet || null },
+  });
+
+  revalidateTestPaths(session.site, test.id);
+  return { message: "Instructions saved.", success: true };
 }
 
 const LOCKED_STATUSES = ["SUBMITTED", "GRADED", "SCORE_SHARED"] as const;

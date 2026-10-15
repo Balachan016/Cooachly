@@ -7,6 +7,7 @@ import { Badge, Card } from "@/components/ui";
 import { TakeTestForm } from "@/components/tests/take-test-form";
 import { TestTimer } from "@/components/tests/test-timer";
 import { TestResultView } from "@/components/tests/test-result-view";
+import { TestIntroGate } from "@/components/tests/test-intro-gate";
 import { ASSIGNMENT_STATUS_LABEL, ASSIGNMENT_STATUS_TONE, isAssignmentLate } from "@/lib/tests";
 
 export default async function StudentTestPage(props: PageProps<"/arts/student/tests/[assignmentId]">) {
@@ -84,13 +85,18 @@ export default async function StudentTestPage(props: PageProps<"/arts/student/te
             </p>
           </Card>
         ) : (
-          <>
+          <TestIntroGate
+            instructions={assignment.test.instructions}
+            formulaSheet={assignment.test.formulaSheet}
+            durationMinutes={assignment.test.durationMinutes}
+            alreadyStarted={assignment.status !== "ASSIGNED"}
+          >
             <TestTimer
               assignmentId={assignment.id}
               initialRemainingSeconds={Math.max(0, assignment.test.durationMinutes * 60 - assignment.timeSpentSeconds)}
             />
             <TakeTestForm assignmentId={assignment.id} disabled={false} questions={questions} />
-          </>
+          </TestIntroGate>
         )}
       </div>
     </div>
