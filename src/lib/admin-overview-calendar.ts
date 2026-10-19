@@ -8,12 +8,20 @@ export type OverviewEntry = {
   startAt: Date;
   timeLabel: string;
   status: "booked" | "available";
+  professorId: string;
   professorName: string;
+  studentId?: string;
   studentName?: string;
 };
 
 export type OverviewDay = { dateKey: string; dayNumber: number; entries: OverviewEntry[] };
 export type OverviewMonth = { monthLabel: string; weeks: (OverviewDay | null)[][] };
+
+export type OverviewFilters = {
+  professorId?: string;
+  studentId?: string;
+  status?: "booked" | "available";
+};
 
 function dateKeyInZone(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
@@ -42,7 +50,12 @@ function localDateOnly(date: Date): string {
  * bucketed and displayed in the viewer's own timezone, consistent with every
  * other admin-facing time display in this app.
  */
-export async function buildAdminMonthOverview(site: Site, viewerTimezone: string, reference: Date = new Date()): Promise<OverviewMonth> {
+export async function buildAdminMonthOverview(
+  site: Site,
+  viewerTimezone: string,
+  reference: Date = new Date(),
+  filters: OverviewFilters = {}
+): Promise<OverviewMonth> {
   const zonedToday = new Intl.DateTimeFormat("en-CA", { timeZone: viewerTimezone, year: "numeric", month: "2-digit" }).format(reference);
   const [zonedYear, zonedMonth] = zonedToday.split("-").map(Number);
   const year = zonedYear;
@@ -63,7 +76,7 @@ export async function buildAdminMonthOverview(site: Site, viewerTimezone: string
     prisma.availability.findMany({ where: { professorId: { in: professorIds }, isActive: true } }),
     prisma.booking.findMany({
       where: { professorId: { in: professorIds }, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: monthStart, lt: monthEndExclusive } },
-      select: { startAt: true, endAt: true, professorId: true, student: { select: { name: true } } },
+      select: { startAt: true, endAt: true, professorId: true, student: { select: { id: true, name: true } } },
     }),
   ]);
 
@@ -71,7 +84,9 @@ export async function buildAdminMonthOverview(site: Site, viewerTimezone: string
     startAt: b.startAt,
     timeLabel: timeLabelInZone(b.startAt, viewerTimezone),
     status: "booked" as const,
+    professorId: b.professorId,
     professorName: professorById.get(b.professorId)?.name ?? "—",
+    studentId: b.student.id,
     studentName: b.student.name,
   }));
 
@@ -106,6 +121,7 @@ export async function buildAdminMonthOverview(site: Site, viewerTimezone: string
             startAt: slotStart,
             timeLabel: timeLabelInZone(slotStart, viewerTimezone),
             status: "available",
+            professorId: professor.id,
             professorName: professor.name,
           });
         }
@@ -113,8 +129,15 @@ export async function buildAdminMonthOverview(site: Site, viewerTimezone: string
     }
   }
 
+  const allEntries = [...bookedEntries, ...availableEntries].filter(
+    (entry) =>
+      (!filters.professorId || entry.professorId === filters.professorId) &&
+      (!filters.studentId || entry.studentId === filters.studentId) &&
+      (!filters.status || entry.status === filters.status)
+  );
+
   const entriesByDate = new Map<string, OverviewEntry[]>();
-  for (const entry of [...bookedEntries, ...availableEntries]) {
+  for (const entry of allEntries) {
     const key = dateKeyInZone(entry.startAt, viewerTimezone);
     const list = entriesByDate.get(key) ?? [];
     list.push(entry);
