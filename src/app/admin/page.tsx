@@ -38,7 +38,7 @@ export default async function AdminOverviewPage() {
           Every booking and every still-open availability window this month, across all professors, by name.
         </p>
         <div className="mt-4">
-          <MonthOverviewCalendar month={monthOverview} />
+          <MonthOverviewCalendar month={monthOverview} viewerTimezone={viewerTimezone} />
         </div>
       </Card>
 
