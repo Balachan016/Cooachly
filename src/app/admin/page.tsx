@@ -1,16 +1,21 @@
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireRole, getCurrentUser } from "@/lib/dal";
 import { Card } from "@/components/ui";
+import { buildAdminMonthOverview } from "@/lib/admin-overview-calendar";
 import { TestNotificationButton } from "./test-notification-button";
+import { MonthOverviewCalendar } from "./month-overview-calendar";
 
 export default async function AdminOverviewPage() {
   const session = await requireRole("ADMIN");
+  const viewer = await getCurrentUser();
+  const viewerTimezone = viewer?.timezone ?? "UTC";
 
-  const [userCount, professorCount, studentCount, bookingCount] = await Promise.all([
+  const [userCount, professorCount, studentCount, bookingCount, monthOverview] = await Promise.all([
     prisma.user.count({ where: { site: session.site } }),
     prisma.user.count({ where: { role: "PROFESSOR", site: session.site } }),
     prisma.user.count({ where: { role: "STUDENT", site: session.site } }),
     prisma.booking.count({ where: { professor: { site: session.site } } }),
+    buildAdminMonthOverview(session.site, viewerTimezone),
   ]);
 
   return (
@@ -26,6 +31,16 @@ export default async function AdminOverviewPage() {
         <Stat label="Students" value={studentCount} />
         <Stat label="Total bookings" value={bookingCount} />
       </div>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">{monthOverview.monthLabel} — bookings &amp; availability</h2>
+        <p className="mt-1 text-sm text-black/50 dark:text-white/50">
+          Every booking and every still-open availability window this month, across all professors, by name.
+        </p>
+        <div className="mt-4">
+          <MonthOverviewCalendar month={monthOverview} />
+        </div>
+      </Card>
 
       <Card className="mt-6">
         <h2 className="font-semibold">Test notifications</h2>
