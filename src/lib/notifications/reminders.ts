@@ -114,12 +114,12 @@ async function notifyPerson(
 
   if (person.phone) {
     const waResult = await sendWhatsAppReminder({ to: person.phone, body: textBody, variables });
-    await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: waResult });
+    await logNotification({ bookingId, userId: person.id, channel: waResult.channel, kind, result: waResult });
   }
 
-  // Also notify a parent/guardian's WhatsApp number, if one is on file.
+  // Also notify a parent/guardian's number, if one is on file (WhatsApp or SMS depending on country).
   if (person.parentPhone) {
     const parentResult = await sendWhatsAppReminder({ to: person.parentPhone, body: textBody, variables });
-    await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: parentResult });
+    await logNotification({ bookingId, userId: person.id, channel: parentResult.channel, kind, result: parentResult });
   }
 }

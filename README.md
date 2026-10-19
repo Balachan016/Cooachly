@@ -149,9 +149,13 @@ Open [http://localhost:3000](http://localhost:3000).
    `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` to the number Twilio gives you, e.g.
    `whatsapp:+14155238886`.
 
-   Reminders are sent by WhatsApp only, not SMS — WhatsApp already reaches the same phone number
-   at a fraction of the cost, and plain SMS to Indian numbers additionally requires separate DLT
-   template pre-registration with Indian telecom regulators before Twilio will even deliver it.
+   Reminders, invites, and demo confirmations go out by WhatsApp by default — WhatsApp already
+   reaches the same phone number at a fraction of SMS's cost, and plain SMS to Indian numbers
+   additionally requires separate DLT template pre-registration with Indian telecom regulators
+   before Twilio will even deliver it. **A US/Canada (+1) recipient is routed to plain SMS
+   instead** (see `TWILIO_SMS_FROM` below) — US carriers don't require a pre-approved Content
+   Template for SMS the way Meta does for WhatsApp, only a one-time A2P 10DLC registration on the
+   sending number itself.
 
    **Before going live**, submit each WhatsApp message type below as its own template for Meta's
    approval in the Twilio console (Messaging → Content Editor). Meta requires an approved template
@@ -180,9 +184,19 @@ Open [http://localhost:3000](http://localhost:3000).
    env var above. Until an env var is set, that message type sends free-form text, which only
    works on the sandbox and will keep failing with 21654 on a real WhatsApp sender.
 
-   **Delivery status**: Twilio's API only confirms it *accepted* a message, not that WhatsApp
+   **US/Canada SMS**: buy (or already have) a US/Canada Twilio number, complete **A2P 10DLC
+   registration** for it (Console → Messaging → Regulatory Compliance, or the "Complete A2P
+   registration" prompt shown next to the number under Numbers & Senders — this registers your
+   business and the type of messages you send with the carriers; it's a one-time process, not a
+   per-template approval like WhatsApp's), then set `TWILIO_SMS_FROM` to that number, e.g.
+   `+14155550100` (no `whatsapp:` prefix). Once set, any recipient with a `+1` phone number
+   automatically gets plain SMS instead of WhatsApp for reminders, invites, and demo
+   confirmations — the same free-text body each message type already builds, no content template
+   needed. Until `TWILIO_SMS_FROM` is set, +1 recipients keep getting WhatsApp like everyone else.
+
+   **Delivery status**: Twilio's API only confirms it *accepted* a message, not that WhatsApp/SMS
    actually delivered it — a "SENT" row in the reminder log can still silently fail to arrive.
-   Every WhatsApp send now registers a per-message `statusCallback` to `/api/twilio/status`
+   Every WhatsApp/SMS send now registers a per-message `statusCallback` to `/api/twilio/status`
    (nothing to configure in the Twilio console — it's passed automatically), which records the
    real outcome (queued/sent/delivered/read/undelivered/failed, plus Twilio's error code if any)
    back onto that row. Check Admin → Bookings' expanded "Reminder log" or Superadmin → Reminders

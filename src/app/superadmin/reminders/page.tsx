@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { formatWhenFor } from "@/lib/notifications/format";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 import { Badge, Card, Select } from "@/components/ui";
-import { whatsAppConfigStatus } from "@/lib/notifications/sms";
+import { whatsAppConfigStatus, smsConfigStatus } from "@/lib/notifications/sms";
 
 function ConfigRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -56,6 +56,23 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
           <ConfigRow label="Reminder template SID" value={whatsAppConfigStatus.reminderTemplateSid} />
           <ConfigRow label="Invite template SID" value={whatsAppConfigStatus.inviteTemplateSid} />
           <ConfigRow label="Demo confirmation template SID" value={whatsAppConfigStatus.demoTemplateSid} />
+        </div>
+      </Card>
+
+      <Card className="mt-4 p-0">
+        <h2 className="flex items-center gap-2 p-4 pb-0 font-semibold">
+          SMS configuration (US/Canada recipients)
+          <Badge tone={smsConfigStatus.configured ? "success" : "danger"}>
+            {smsConfigStatus.configured ? "Configured" : "Not configured"}
+          </Badge>
+        </h2>
+        <p className="px-4 pt-1 text-xs text-black/50 dark:text-white/50">
+          Any recipient with a +1 (US/Canada) phone number gets plain SMS instead of WhatsApp — no
+          content template needed, but the sending number must have completed A2P 10DLC
+          registration in Twilio or sends will fail.
+        </p>
+        <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+          <ConfigRow label="Sender number" value={smsConfigStatus.from} />
         </div>
       </Card>
 
