@@ -92,6 +92,12 @@ export default async function AdminBookingsPage(props: PageProps<"/admin/booking
             Export CSV
           </a>
           <a
+            href={sitePath(session.site, "/admin/bookings/bulk")}
+            className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            Bulk booking
+          </a>
+          <a
             href={sitePath(session.site, "/admin/bookings/import")}
             className="rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
           >
