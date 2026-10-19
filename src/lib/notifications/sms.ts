@@ -31,8 +31,18 @@ function getSmsFrom(to: string): string | undefined {
   return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
 }
 
+// Unlinked for now — every SMS send was failing in production (Twilio
+// geo-permissions not enabled for India, A2P 10DLC not yet approved for the
+// US number), so it was pure noise with no actual delivery. Flip back to
+// false once both are properly set up; everything else below (per-country
+// sender config, sendWhatsApp*'s dual-send calls, the webhook status
+// callback, the superadmin config card) is left in place so turning it back
+// on later is just this one flag.
+const SMS_SENDING_DISABLED = true;
+
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
 export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
+export const isSmsSendingDisabled = SMS_SENDING_DISABLED;
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
 // SID actually deployed?" can be checked by loading a page instead of
@@ -132,6 +142,11 @@ async function createMessage(
 async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
   const from = getSmsFrom(to);
   const addresses = { from, to, channel: "SMS" as const };
+
+  if (SMS_SENDING_DISABLED) {
+    console.log(`[sms:skipped, disabled] to=${to}`);
+    return { skipped: true as const, ...addresses };
+  }
 
   if (!client || !from) {
     console.log(`[sms:skipped, not configured] to=${to}`);
