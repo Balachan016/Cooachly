@@ -27,15 +27,13 @@ export const whatsAppConfigStatus = {
 
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
 
-// TEMPORARY: WhatsApp delivery is unreliable for regular students/professors
-// right now (see the ongoing Twilio/WhatsApp-sender troubleshooting). Until
-// that's confirmed fixed, every outgoing WhatsApp message — reminders,
-// invites, demo confirmations, everything — is restricted to admins and
-// superadmins, so the team can keep verifying delivery without spamming
-// everyone else with messages that might not arrive. Email still goes out to
-// everyone as normal; this only gates the WhatsApp channel. Flip this back
-// to false once WhatsApp is working for everyone again.
-const RESTRICT_WHATSAPP_TO_ADMINS_ONLY = true;
+// Was true while the reminder content template was pending Meta's approval
+// (every outgoing WhatsApp message was restricted to admins/superadmins so
+// the team could verify delivery without spamming everyone else with
+// messages that might fail). The template is now approved — flip this back
+// to true if WhatsApp delivery needs to be locked down to admins again for
+// any reason (e.g. troubleshooting a newly submitted template).
+const RESTRICT_WHATSAPP_TO_ADMINS_ONLY = false;
 
 export type WhatsAppSendResult = { skipped: boolean; error?: string; from?: string; to: string; sid?: string };
 
