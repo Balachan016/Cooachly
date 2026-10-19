@@ -9,16 +9,30 @@ const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+141552
 const reminderContentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
 const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
-// A2P 10DLC-registered US/Canada number, e.g. "+15512776677" (no "whatsapp:"
-// prefix — this sends plain SMS, not WhatsApp). Used only for +1 recipients;
-// see isNorthAmericanNumber below. Indian WhatsApp numbers don't need this —
-// WhatsApp already reaches them at a fraction of SMS's cost, and plain SMS to
-// Indian numbers needs its own separate DLT registration with Indian telecom
-// regulators (see README).
-const smsFrom = process.env.TWILIO_SMS_FROM;
+
+/**
+ * Every outgoing message now goes out on BOTH WhatsApp and plain SMS — a
+ * recipient who misses one (app not installed, WhatsApp delivery silently
+ * rejected) still gets the other. Each country's SMS leg needs its own
+ * locally-registered sender number, since neither Twilio nor local carriers
+ * let a single number send compliant SMS everywhere:
+ *   - US/Canada: needs A2P 10DLC registration (TWILIO_SMS_FROM_US)
+ *   - India: needs DLT registration with Indian telecom regulators
+ *     (TWILIO_SMS_FROM_INDIA) — see README
+ * Leave either one unset to skip that country's SMS leg (WhatsApp still
+ * goes out) until it's registered.
+ */
+const smsSenders: { prefix: string; from: string | undefined }[] = [
+  { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
+  { prefix: "+91", from: process.env.TWILIO_SMS_FROM_INDIA },
+];
+
+function getSmsFrom(to: string): string | undefined {
+  return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
+}
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
-export const isSmsConfigured = Boolean(accountSid && authToken && smsFrom);
+export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
 // SID actually deployed?" can be checked by loading a page instead of
@@ -34,21 +48,17 @@ export const whatsAppConfigStatus = {
 };
 
 export const smsConfigStatus = {
-  configured: isSmsConfigured,
-  from: smsFrom ?? null,
+  us: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_US),
+    from: process.env.TWILIO_SMS_FROM_US ?? null,
+  },
+  india: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_INDIA),
+    from: process.env.TWILIO_SMS_FROM_INDIA ?? null,
+  },
 };
 
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
-
-/**
- * US/Canada (NANP) numbers are routed to plain SMS instead of WhatsApp — see
- * each sendWhatsApp* function below. Every stored phone number is already
- * normalized to strict E.164 (see lib/phone.ts), so a "+1" prefix reliably
- * means NANP.
- */
-function isNorthAmericanNumber(phone: string): boolean {
-  return phone.startsWith("+1");
-}
 
 // Was true while the reminder content template was pending Meta's approval
 // (every outgoing WhatsApp message was restricted to admins/superadmins so
@@ -113,17 +123,17 @@ async function createMessage(
 }
 
 /**
- * Plain SMS for US/Canada (+1) recipients, used instead of createMessage's
- * WhatsApp path — see isNorthAmericanNumber. Unlike WhatsApp, Twilio/carrier
- * rules don't require a pre-approved Content Template for US SMS bodies
- * (once the sending number has completed A2P 10DLC registration — see
- * README), so this always sends the plain free-text body no matter which
- * sendWhatsApp* function called it.
+ * Plain SMS, sent alongside every WhatsApp message below — see the
+ * smsSenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
+ * require a pre-approved Content Template for SMS bodies (once the sending
+ * number has completed its local registration), so this always sends the
+ * plain free-text body no matter which sendWhatsApp* function called it.
  */
 async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
-  const addresses = { from: smsFrom ?? undefined, to, channel: "SMS" as const };
+  const from = getSmsFrom(to);
+  const addresses = { from, to, channel: "SMS" as const };
 
-  if (!client || !smsFrom) {
+  if (!client || !from) {
     console.log(`[sms:skipped, not configured] to=${to}`);
     return { skipped: true as const, ...addresses };
   }
@@ -131,7 +141,7 @@ async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
   try {
     const appUrl = await getAppUrl();
     const message = await client.messages.create({
-      from: smsFrom,
+      from,
       to,
       statusCallback: `${appUrl}/api/twilio/status`,
       body,
@@ -145,59 +155,59 @@ async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
   }
 }
 
-export async function sendWhatsApp(opts: { to: string; body: string }) {
-  if (isNorthAmericanNumber(opts.to)) return sendSms(opts.to, opts.body);
-  return createMessage(opts.to, { body: opts.body });
+export async function sendWhatsApp(opts: { to: string; body: string }): Promise<WhatsAppSendResult[]> {
+  return Promise.all([createMessage(opts.to, { body: opts.body }), sendSms(opts.to, opts.body)]);
 }
 
 /**
  * Account invites are "business-initiated" WhatsApp messages too, so the same
  * 24h-window template requirement applies (see sendWhatsAppReminder below).
  * Set TWILIO_INVITE_CONTENT_SID once a template is approved; until then this
- * falls back to a free-form body, which only works on the sandbox. A US/
- * Canada recipient (+1) is routed to plain SMS instead — see
- * isNorthAmericanNumber.
+ * falls back to a free-form body, which only works on the sandbox. The SMS
+ * leg always sends the plain body — no template needed.
  */
 export async function sendWhatsAppInvite(opts: {
   to: string;
   body: string;
   variables: { name: string; brandName: string; inviteUrl: string };
-}) {
-  if (isNorthAmericanNumber(opts.to)) return sendSms(opts.to, opts.body);
-  if (!inviteContentSid) return createMessage(opts.to, { body: opts.body });
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = inviteContentSid
+    ? createMessage(opts.to, {
+        contentSid: inviteContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.name,
+          "2": opts.variables.brandName,
+          "3": opts.variables.inviteUrl,
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
 
-  return createMessage(opts.to, {
-    contentSid: inviteContentSid,
-    contentVariables: JSON.stringify({
-      "1": opts.variables.name,
-      "2": opts.variables.brandName,
-      "3": opts.variables.inviteUrl,
-    }),
-  });
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
 }
 
 /**
  * Same 24h-window template requirement as sendWhatsAppReminder. Set
  * TWILIO_DEMO_CONTENT_SID once a template is approved; until then this falls
- * back to a free-form body, which only works on the sandbox. A US/Canada
- * recipient (+1) is routed to plain SMS instead — see isNorthAmericanNumber.
+ * back to a free-form body, which only works on the sandbox. The SMS leg
+ * always sends the plain body — no template needed.
  */
 export async function sendWhatsAppDemoConfirmation(opts: {
   to: string;
   body: string;
   variables: { name: string; brandName: string; subject: string };
-}) {
-  if (isNorthAmericanNumber(opts.to)) return sendSms(opts.to, opts.body);
-  if (!demoContentSid) return createMessage(opts.to, { body: opts.body });
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = demoContentSid
+    ? createMessage(opts.to, {
+        contentSid: demoContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.name,
+          "2": opts.variables.brandName,
+          "3": opts.variables.subject,
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
 
-  return createMessage(opts.to, {
-    contentSid: demoContentSid,
-    contentVariables: JSON.stringify({
-      "1": opts.variables.name,
-      "2": opts.variables.brandName,
-      "3": opts.variables.subject,
-    }),
-  });
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
 }
 
 /**
@@ -207,25 +217,25 @@ export async function sendWhatsAppDemoConfirmation(opts: {
  * and require a pre-approved Content Template instead. Set
  * TWILIO_REMINDER_CONTENT_SID once you have one approved (see README); until
  * then this falls back to a free-form body, which only works on the sandbox.
- * A US/Canada recipient (+1) is routed to plain SMS instead — see
- * isNorthAmericanNumber.
+ * The SMS leg always sends the plain body — no template needed.
  */
 export async function sendWhatsAppReminder(opts: {
   to: string;
   body: string;
   variables: { recipientName: string; peerName: string; label: string; when: string; joinLink: string };
-}) {
-  if (isNorthAmericanNumber(opts.to)) return sendSms(opts.to, opts.body);
-  if (!reminderContentSid) return createMessage(opts.to, { body: opts.body });
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = reminderContentSid
+    ? createMessage(opts.to, {
+        contentSid: reminderContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.recipientName,
+          "2": opts.variables.peerName,
+          "3": opts.variables.label,
+          "4": opts.variables.when,
+          "5": opts.variables.joinLink || "(link not available yet)",
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
 
-  return createMessage(opts.to, {
-    contentSid: reminderContentSid,
-    contentVariables: JSON.stringify({
-      "1": opts.variables.recipientName,
-      "2": opts.variables.peerName,
-      "3": opts.variables.label,
-      "4": opts.variables.when,
-      "5": opts.variables.joinLink || "(link not available yet)",
-    }),
-  });
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
 }

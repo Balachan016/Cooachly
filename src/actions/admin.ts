@@ -449,15 +449,19 @@ export async function sendTestNotification(): Promise<{ message: string }> {
   await logNotification({ userId: admin.id, channel: "EMAIL", kind: "test", result: emailResult });
   const emailStatus = emailResult.skipped ? "not configured" : emailResult.error ? `failed — ${emailResult.error}` : "sent";
 
-  let textChannelLabel = "WhatsApp";
   let textChannelStatus: string;
   if (!admin.phone) {
     textChannelStatus = "skipped — no phone number on your account (add one under Settings)";
   } else {
-    const waResult = await sendWhatsApp({ to: admin.phone, body: textBody });
-    await logNotification({ userId: admin.id, channel: waResult.channel, kind: "test", result: waResult });
-    textChannelLabel = waResult.channel === "SMS" ? "SMS" : "WhatsApp";
-    textChannelStatus = waResult.skipped ? "not configured" : waResult.error ? `failed — ${waResult.error}` : "sent";
+    const results = await sendWhatsApp({ to: admin.phone, body: textBody });
+    await Promise.all(results.map((result) => logNotification({ userId: admin.id, channel: result.channel, kind: "test", result })));
+    textChannelStatus = results
+      .map((result) => {
+        const label = result.channel === "SMS" ? "SMS" : "WhatsApp";
+        const status = result.skipped ? "not configured" : result.error ? `failed — ${result.error}` : "sent";
+        return `${label}: ${status}`;
+      })
+      .join(". ");
   }
 
   const pushResult = await sendPushToUser(admin.id, {
@@ -482,5 +486,5 @@ export async function sendTestNotification(): Promise<{ message: string }> {
       : "video room creation failed"
     : "Daily.co not configured, no link generated";
 
-  return { message: `Email: ${emailStatus}. ${textChannelLabel}: ${textChannelStatus}. Push: ${pushStatus}. Video: ${videoStatus}.` };
+  return { message: `Email: ${emailStatus}. ${textChannelStatus}. Push: ${pushStatus}. Video: ${videoStatus}.` };
 }

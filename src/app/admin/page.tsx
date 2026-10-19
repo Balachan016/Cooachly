@@ -30,7 +30,7 @@ export default async function AdminOverviewPage() {
       <Card className="mt-6">
         <h2 className="font-semibold">Test notifications</h2>
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-          Sends a test email and WhatsApp/SMS message (with a video call join link) to your own
+          Sends a test email, WhatsApp message, and SMS (with a video call join link) to your own
           account, so you can confirm Resend, Twilio, and Daily.co are wired up correctly.
         </p>
         <div className="mt-4">

@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { formatWhenFor } from "@/lib/notifications/format";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 import { Badge, Card, Select } from "@/components/ui";
-import { whatsAppConfigStatus, smsConfigStatus } from "@/lib/notifications/sms";
+import { whatsAppConfigStatus, smsConfigStatus, isSmsConfigured } from "@/lib/notifications/sms";
 
 function ConfigRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -35,7 +35,7 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
     <div>
       <h1 className="text-2xl font-semibold">Reminder &amp; notification log</h1>
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-        Every email/WhatsApp reminder, manual send, instant call, and test notification across
+        Every email/WhatsApp/SMS reminder, manual send, instant call, and test notification across
         both sites. Most recent 300 shown, times in your own timezone ({viewerTimezone}).
       </p>
 
@@ -61,18 +61,20 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
 
       <Card className="mt-4 p-0">
         <h2 className="flex items-center gap-2 p-4 pb-0 font-semibold">
-          SMS configuration (US/Canada recipients)
-          <Badge tone={smsConfigStatus.configured ? "success" : "danger"}>
-            {smsConfigStatus.configured ? "Configured" : "Not configured"}
+          SMS configuration
+          <Badge tone={isSmsConfigured ? "success" : "danger"}>
+            {isSmsConfigured ? "Configured" : "Not configured"}
           </Badge>
         </h2>
         <p className="px-4 pt-1 text-xs text-black/50 dark:text-white/50">
-          Any recipient with a +1 (US/Canada) phone number gets plain SMS instead of WhatsApp — no
-          content template needed, but the sending number must have completed A2P 10DLC
-          registration in Twilio or sends will fail.
+          Every message now goes out on WhatsApp <em>and</em> SMS, so a recipient who misses one
+          channel still gets the other. No content template is needed for SMS, but each
+          country&apos;s sender number needs its own local registration first, or sends to that
+          country will fail — A2P 10DLC for US/Canada, DLT for India (see README).
         </p>
         <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
-          <ConfigRow label="Sender number" value={smsConfigStatus.from} />
+          <ConfigRow label="US/Canada sender number" value={smsConfigStatus.us.from} />
+          <ConfigRow label="India sender number" value={smsConfigStatus.india.from} />
         </div>
       </Card>
 
