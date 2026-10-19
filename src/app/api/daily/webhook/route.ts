@@ -10,9 +10,11 @@ import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request"
 import { SITE_CONFIG } from "@/lib/site";
 
 // Configure this URL as a webhook in your Daily.co dashboard, subscribed to
-// "meeting.started" and "transcript.ready-to-download". When a call begins,
-// this starts live transcription; when the transcript finishes, it downloads
-// it, asks AI for a summary, and emails that summary to both the student and
+// "meeting.started", "participant.joined", "participant.left", and
+// "transcript.ready-to-download". When a call begins, this starts live
+// transcription; every join/leave is logged as a CallAttendanceEvent for
+// that booking's class log; when the transcript finishes, it downloads it,
+// asks AI for a summary, and emails that summary to both the student and
 // professor.
 
 async function findBookingByRoomName(roomName: string) {
@@ -45,13 +47,19 @@ export async function POST(request: Request) {
 
   const event = JSON.parse(body) as {
     type: string;
+    event_ts?: number;
     // Daily's actual field names, confirmed against their webhook docs:
-    // meeting.started carries the room under "room"; transcript.ready-to-
-    // download carries it under "room_name" and the transcript's own ID
-    // under "id" — neither event uses "room_name"+"transcript_id" together,
-    // which is what this used to (incorrectly) assume, causing every single
-    // webhook delivery to 400 since the pipeline was first set up.
-    payload?: { room?: string; room_name?: string; id?: string };
+    // meeting.started/participant.* carry the room under "room"; transcript.
+    // ready-to-download carries it under "room_name" and the transcript's
+    // own ID under "id" — neither event uses "room_name"+"transcript_id"
+    // together, which is what this used to (incorrectly) assume, causing
+    // every single webhook delivery to 400 since the pipeline was first set up.
+    payload?: {
+      room?: string;
+      room_name?: string;
+      id?: string;
+      participant?: { user_id?: string; user_name?: string };
+    };
   };
 
   if (event.type === "meeting.started") {
@@ -60,6 +68,35 @@ export async function POST(request: Request) {
 
     const started = await startTranscription(roomName);
     return NextResponse.json({ ok: true, transcriptionStarted: started });
+  }
+
+  if (event.type === "participant.joined" || event.type === "participant.left") {
+    const roomName = event.payload?.room;
+    const participant = event.payload?.participant;
+    if (!roomName) return NextResponse.json({ ok: false, error: "Missing room" }, { status: 400 });
+
+    const booking = await findBookingByRoomName(roomName);
+    if (!booking) return NextResponse.json({ ok: false, error: "Booking not found" }, { status: 404 });
+
+    // Only trust a participant's user_id if it's actually one of our own
+    // user ids — set via /api/daily/join/[bookingId]'s meeting token. A join
+    // straight off the bare room link has Daily's own random anonymous id
+    // instead, which would otherwise violate the userId foreign key.
+    const matchedUser = participant?.user_id
+      ? await prisma.user.findUnique({ where: { id: participant.user_id }, select: { id: true } })
+      : null;
+
+    await prisma.callAttendanceEvent.create({
+      data: {
+        bookingId: booking.id,
+        userId: matchedUser?.id ?? null,
+        participantName: participant?.user_name ?? null,
+        eventType: event.type === "participant.joined" ? "JOINED" : "LEFT",
+        occurredAt: event.event_ts ? new Date(event.event_ts * 1000) : new Date(),
+      },
+    });
+
+    return NextResponse.json({ ok: true });
   }
 
   if (event.type === "transcript.ready-to-download") {

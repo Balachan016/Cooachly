@@ -46,7 +46,7 @@ export function ProfessorBookingRow({
         {booking.isDemo && <Badge tone="default">Free demo</Badge>}
         {canJoin && booking.meetingLink && (
           <a
-            href={booking.meetingLink}
+            href={`/api/daily/join/${booking.id}`}
             target="_blank"
             rel="noreferrer"
             className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
