@@ -74,6 +74,7 @@ enum DemoRequestStatus {
 enum NotificationChannel {
   EMAIL
   WHATSAPP
+  SMS
   PUSH
 }
 

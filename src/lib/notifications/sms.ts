@@ -10,7 +10,29 @@ const reminderContentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
 const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
+/**
+ * Every outgoing message now goes out on BOTH WhatsApp and plain SMS — a
+ * recipient who misses one (app not installed, WhatsApp delivery silently
+ * rejected) still gets the other. Each country's SMS leg needs its own
+ * locally-registered sender number, since neither Twilio nor local carriers
+ * let a single number send compliant SMS everywhere:
+ *   - US/Canada: needs A2P 10DLC registration (TWILIO_SMS_FROM_US)
+ *   - India: needs DLT registration with Indian telecom regulators
+ *     (TWILIO_SMS_FROM_INDIA) — see README
+ * Leave either one unset to skip that country's SMS leg (WhatsApp still
+ * goes out) until it's registered.
+ */
+const smsSenders: { prefix: string; from: string | undefined }[] = [
+  { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
+  { prefix: "+91", from: process.env.TWILIO_SMS_FROM_INDIA },
+];
+
+function getSmsFrom(to: string): string | undefined {
+  return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
+}
+
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
+export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
 // SID actually deployed?" can be checked by loading a page instead of
@@ -25,6 +47,17 @@ export const whatsAppConfigStatus = {
   demoTemplateSid: demoContentSid ?? null,
 };
 
+export const smsConfigStatus = {
+  us: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_US),
+    from: process.env.TWILIO_SMS_FROM_US ?? null,
+  },
+  india: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_INDIA),
+    from: process.env.TWILIO_SMS_FROM_INDIA ?? null,
+  },
+};
+
 const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null;
 
 // Was true while the reminder content template was pending Meta's approval
@@ -35,7 +68,14 @@ const client = accountSid && authToken ? twilioLib(accountSid, authToken) : null
 // any reason (e.g. troubleshooting a newly submitted template).
 const RESTRICT_WHATSAPP_TO_ADMINS_ONLY = false;
 
-export type WhatsAppSendResult = { skipped: boolean; error?: string; from?: string; to: string; sid?: string };
+export type WhatsAppSendResult = {
+  skipped: boolean;
+  error?: string;
+  from?: string;
+  to: string;
+  sid?: string;
+  channel: "WHATSAPP" | "SMS";
+};
 
 async function createMessage(
   to: string,
@@ -43,7 +83,7 @@ async function createMessage(
 ): Promise<WhatsAppSendResult> {
   // Echoed back on every result so callers can log exactly which numbers it
   // went from/to (without Twilio's "whatsapp:" channel prefix).
-  const addresses = { from: whatsappFrom?.replace(/^whatsapp:/, ""), to };
+  const addresses = { from: whatsappFrom?.replace(/^whatsapp:/, ""), to, channel: "WHATSAPP" as const };
 
   if (!client || !whatsappFrom) {
     console.log(`[whatsapp:skipped, not configured] to=${to}`);
@@ -82,53 +122,92 @@ async function createMessage(
   }
 }
 
-export async function sendWhatsApp(opts: { to: string; body: string }) {
-  return createMessage(opts.to, { body: opts.body });
+/**
+ * Plain SMS, sent alongside every WhatsApp message below — see the
+ * smsSenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
+ * require a pre-approved Content Template for SMS bodies (once the sending
+ * number has completed its local registration), so this always sends the
+ * plain free-text body no matter which sendWhatsApp* function called it.
+ */
+async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
+  const from = getSmsFrom(to);
+  const addresses = { from, to, channel: "SMS" as const };
+
+  if (!client || !from) {
+    console.log(`[sms:skipped, not configured] to=${to}`);
+    return { skipped: true as const, ...addresses };
+  }
+
+  try {
+    const appUrl = await getAppUrl();
+    const message = await client.messages.create({
+      from,
+      to,
+      statusCallback: `${appUrl}/api/twilio/status`,
+      body,
+    });
+    return { skipped: false as const, sid: message.sid, ...addresses };
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to send SMS message", err);
+    return { skipped: false as const, error: `${message}${code}`, ...addresses };
+  }
+}
+
+export async function sendWhatsApp(opts: { to: string; body: string }): Promise<WhatsAppSendResult[]> {
+  return Promise.all([createMessage(opts.to, { body: opts.body }), sendSms(opts.to, opts.body)]);
 }
 
 /**
  * Account invites are "business-initiated" WhatsApp messages too, so the same
  * 24h-window template requirement applies (see sendWhatsAppReminder below).
  * Set TWILIO_INVITE_CONTENT_SID once a template is approved; until then this
- * falls back to a free-form body, which only works on the sandbox.
+ * falls back to a free-form body, which only works on the sandbox. The SMS
+ * leg always sends the plain body — no template needed.
  */
 export async function sendWhatsAppInvite(opts: {
   to: string;
   body: string;
   variables: { name: string; brandName: string; inviteUrl: string };
-}) {
-  if (!inviteContentSid) return createMessage(opts.to, { body: opts.body });
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = inviteContentSid
+    ? createMessage(opts.to, {
+        contentSid: inviteContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.name,
+          "2": opts.variables.brandName,
+          "3": opts.variables.inviteUrl,
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
 
-  return createMessage(opts.to, {
-    contentSid: inviteContentSid,
-    contentVariables: JSON.stringify({
-      "1": opts.variables.name,
-      "2": opts.variables.brandName,
-      "3": opts.variables.inviteUrl,
-    }),
-  });
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
 }
 
 /**
  * Same 24h-window template requirement as sendWhatsAppReminder. Set
  * TWILIO_DEMO_CONTENT_SID once a template is approved; until then this falls
- * back to a free-form body, which only works on the sandbox.
+ * back to a free-form body, which only works on the sandbox. The SMS leg
+ * always sends the plain body — no template needed.
  */
 export async function sendWhatsAppDemoConfirmation(opts: {
   to: string;
   body: string;
   variables: { name: string; brandName: string; subject: string };
-}) {
-  if (!demoContentSid) return createMessage(opts.to, { body: opts.body });
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = demoContentSid
+    ? createMessage(opts.to, {
+        contentSid: demoContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.name,
+          "2": opts.variables.brandName,
+          "3": opts.variables.subject,
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
 
-  return createMessage(opts.to, {
-    contentSid: demoContentSid,
-    contentVariables: JSON.stringify({
-      "1": opts.variables.name,
-      "2": opts.variables.brandName,
-      "3": opts.variables.subject,
-    }),
-  });
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
 }
 
 /**
@@ -138,22 +217,25 @@ export async function sendWhatsAppDemoConfirmation(opts: {
  * and require a pre-approved Content Template instead. Set
  * TWILIO_REMINDER_CONTENT_SID once you have one approved (see README); until
  * then this falls back to a free-form body, which only works on the sandbox.
+ * The SMS leg always sends the plain body — no template needed.
  */
 export async function sendWhatsAppReminder(opts: {
   to: string;
   body: string;
   variables: { recipientName: string; peerName: string; label: string; when: string; joinLink: string };
-}) {
-  if (!reminderContentSid) return createMessage(opts.to, { body: opts.body });
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = reminderContentSid
+    ? createMessage(opts.to, {
+        contentSid: reminderContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.recipientName,
+          "2": opts.variables.peerName,
+          "3": opts.variables.label,
+          "4": opts.variables.when,
+          "5": opts.variables.joinLink || "(link not available yet)",
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
 
-  return createMessage(opts.to, {
-    contentSid: reminderContentSid,
-    contentVariables: JSON.stringify({
-      "1": opts.variables.recipientName,
-      "2": opts.variables.peerName,
-      "3": opts.variables.label,
-      "4": opts.variables.when,
-      "5": opts.variables.joinLink || "(link not available yet)",
-    }),
-  });
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
 }

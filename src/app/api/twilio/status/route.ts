@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import twilioLib from "twilio";
 import { prisma } from "@/lib/prisma";
 
-// Twilio calls this automatically for every WhatsApp message we send (the
-// exact URL is passed per-message as `statusCallback` in sms.ts — nothing to
-// configure in the Twilio console). It reports the message's real lifecycle
-// (queued → sent → delivered/read, or undelivered/failed) asynchronously,
-// which is the only way to tell "Twilio accepted it" apart from "WhatsApp
-// actually delivered it" — the synchronous API response only ever confirms
-// the former.
+// Twilio calls this automatically for every WhatsApp or SMS message we send
+// (the exact URL is passed per-message as `statusCallback` in sms.ts —
+// nothing to configure in the Twilio console). It reports the message's real
+// lifecycle (queued → sent → delivered/read, or undelivered/failed)
+// asynchronously, which is the only way to tell "Twilio accepted it" apart
+// from "it actually delivered it" — the synchronous API response only ever
+// confirms the former.
 export async function POST(request: Request) {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const signature = request.headers.get("x-twilio-signature");

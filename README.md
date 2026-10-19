@@ -27,8 +27,8 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Admin class log** — admins can browse every past session with its transcript and AI summary.
 - **Test files & answers** — professors and admins can share a test file on a booking; students
   upload their answer back, both stored via Vercel Blob.
-- **Reminders** — automatic email (Resend) and WhatsApp (Twilio) reminders 1 day, 1 hour, and
-  5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
+- **Reminders** — automatic email (Resend), WhatsApp, and SMS (Twilio) reminders 1 day, 1 hour,
+  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
 - **Installable mobile app (PWA)** — Cooachly and Cooachly Arts can each be installed to an iPhone or
   Android home screen from the browser, with their own icon and name, and send push notifications
   for session reminders and new messages. Turned on per device under **Settings → Mobile app &
@@ -46,7 +46,7 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - [Stripe](https://stripe.com) for payments and subscriptions
 - [Daily.co](https://daily.co) for video rooms + live transcription
 - [OpenAI](https://platform.openai.com) (GPT) for session and monthly AI summaries
-- [Resend](https://resend.com) for email, [Twilio](https://twilio.com) for WhatsApp reminders
+- [Resend](https://resend.com) for email, [Twilio](https://twilio.com) for WhatsApp + SMS reminders
 - [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) for test-file and answer uploads
 
 Every third-party integration above is optional at the code level — if its API key isn't set,
@@ -138,7 +138,7 @@ Open [http://localhost:3000](http://localhost:3000).
    `https://your-domain.com/api/stripe/webhook`, subscribed to at least:
    `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`.
 
-## Setting up reminders (email, WhatsApp)
+## Setting up reminders (email, WhatsApp, SMS)
 
 1. **Email — Resend**: sign up at [resend.com](https://resend.com), verify a sending domain (or
    use their `onboarding@resend.dev` test address to start), create an API key at
@@ -149,9 +149,12 @@ Open [http://localhost:3000](http://localhost:3000).
    `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` to the number Twilio gives you, e.g.
    `whatsapp:+14155238886`.
 
-   Reminders are sent by WhatsApp only, not SMS — WhatsApp already reaches the same phone number
-   at a fraction of the cost, and plain SMS to Indian numbers additionally requires separate DLT
-   template pre-registration with Indian telecom regulators before Twilio will even deliver it.
+   Reminders, invites, and demo confirmations go out by **both WhatsApp and SMS** — a recipient
+   who misses one channel (no WhatsApp installed, a silent WhatsApp-side rejection) still gets the
+   other. SMS doesn't need a pre-approved Content Template the way WhatsApp does, but each
+   country's SMS leg needs its own locally-registered sender number first (see **US/Canada &
+   India SMS** below) — leave a country's sender unset to keep sending WhatsApp-only to that
+   country until it's registered.
 
    **Before going live**, submit each WhatsApp message type below as its own template for Meta's
    approval in the Twilio console (Messaging → Content Editor). Meta requires an approved template
@@ -180,9 +183,29 @@ Open [http://localhost:3000](http://localhost:3000).
    env var above. Until an env var is set, that message type sends free-form text, which only
    works on the sandbox and will keep failing with 21654 on a real WhatsApp sender.
 
-   **Delivery status**: Twilio's API only confirms it *accepted* a message, not that WhatsApp
+   **US/Canada & India SMS**: each country needs its own locally-registered sender number before
+   Twilio/local carriers will deliver SMS to it:
+
+   - **US/Canada**: buy (or already have) a US/Canada Twilio number, complete **A2P 10DLC
+     registration** for it (Console → Messaging → Regulatory Compliance, or the "Complete A2P
+     registration" prompt shown next to the number under Numbers & Senders — this registers your
+     business and the type of messages you send with the carriers; it's a one-time process, not a
+     per-template approval like WhatsApp's), then set `TWILIO_SMS_FROM_US` to that number, e.g.
+     `+14155550100` (no `whatsapp:` prefix).
+   - **India**: buy (or already have) an Indian Twilio number and complete **DLT registration**
+     with Indian telecom regulators (register your entity and message templates at one of the DLT
+     portals the carriers use, e.g. Jio/Airtel/Vodafone's — Twilio's
+     [India SMS guide](https://www.twilio.com/docs/sms/send-messages/india) walks through it), then
+     set `TWILIO_SMS_FROM_INDIA` to that number, e.g. `+910000000000`.
+
+   Once a country's sender is set, every recipient with that country's phone number automatically
+   gets both the SMS and the WhatsApp send — the same free-text body each message type already
+   builds, no content template needed for SMS. Until a country's env var is set, its recipients
+   keep getting WhatsApp-only, same as before this was added.
+
+   **Delivery status**: Twilio's API only confirms it *accepted* a message, not that WhatsApp/SMS
    actually delivered it — a "SENT" row in the reminder log can still silently fail to arrive.
-   Every WhatsApp send now registers a per-message `statusCallback` to `/api/twilio/status`
+   Every WhatsApp/SMS send now registers a per-message `statusCallback` to `/api/twilio/status`
    (nothing to configure in the Twilio console — it's passed automatically), which records the
    real outcome (queued/sent/delivered/read/undelivered/failed, plus Twilio's error code if any)
    back onto that row. Check Admin → Bookings' expanded "Reminder log" or Superadmin → Reminders
@@ -203,7 +226,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
-job frequently is safe. WhatsApp is skipped for anyone without a phone number on file.
+job frequently is safe. WhatsApp and SMS are both skipped for anyone without a phone number on file.
 
 ## Setting up the mobile app & push notifications
 
@@ -348,7 +371,7 @@ prisma/schema.prisma        Database schema (User, ProfessorProfile, Availabilit
 prisma/seed.ts              Seed script for sample admin/professor/student accounts
 src/proxy.ts                Route protection (Next.js 16's replacement for middleware.ts)
 src/lib/                    Session/auth, Prisma client, scheduling, Stripe, Daily.co, AI summary, blob storage, DAL helpers
-src/lib/notifications/      Email (Resend) + WhatsApp (Twilio) senders
+src/lib/notifications/      Email (Resend) + WhatsApp/SMS (Twilio) senders
 src/actions/                Server Actions (auth, bookings, availability, messages, billing, admin, profile, attachments, monthly-summary)
 src/app/(admin|professor|student)/   Role-specific dashboards
 src/app/admin/class-logs    Admin view of every past session's transcript/AI summary + monthly recaps

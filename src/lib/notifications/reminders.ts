@@ -113,13 +113,17 @@ async function notifyPerson(
   };
 
   if (person.phone) {
-    const waResult = await sendWhatsAppReminder({ to: person.phone, body: textBody, variables });
-    await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: waResult });
+    const results = await sendWhatsAppReminder({ to: person.phone, body: textBody, variables });
+    await Promise.all(
+      results.map((result) => logNotification({ bookingId, userId: person.id, channel: result.channel, kind, result }))
+    );
   }
 
-  // Also notify a parent/guardian's WhatsApp number, if one is on file.
+  // Also notify a parent/guardian's number, if one is on file (WhatsApp and SMS).
   if (person.parentPhone) {
-    const parentResult = await sendWhatsAppReminder({ to: person.parentPhone, body: textBody, variables });
-    await logNotification({ bookingId, userId: person.id, channel: "WHATSAPP", kind, result: parentResult });
+    const results = await sendWhatsAppReminder({ to: person.parentPhone, body: textBody, variables });
+    await Promise.all(
+      results.map((result) => logNotification({ bookingId, userId: person.id, channel: result.channel, kind, result }))
+    );
   }
 }
