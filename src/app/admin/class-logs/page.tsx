@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireRole, getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { Card, Select } from "@/components/ui";
 import { ClassLogRow } from "./class-log-row";
@@ -8,6 +8,8 @@ import { GenerateForPairButton } from "./generate-for-pair-button";
 
 export default async function ClassLogsPage(props: PageProps<"/admin/class-logs">) {
   const session = await requireRole("ADMIN");
+  const viewer = await getCurrentUser();
+  const viewerTimezone = viewer?.timezone ?? "UTC";
   const searchParams = await props.searchParams;
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const subject = typeof searchParams.subject === "string" ? searchParams.subject : "";
@@ -17,7 +19,11 @@ export default async function ClassLogsPage(props: PageProps<"/admin/class-logs"
       where: { status: "COMPLETED", professor: { site: session.site } },
       orderBy: { startAt: "desc" },
       take: 200,
-      include: { student: true, professor: true },
+      include: {
+        student: true,
+        professor: true,
+        callAttendanceEvents: { include: { user: true }, orderBy: { occurredAt: "asc" } },
+      },
     }),
     prisma.monthlySummary.findMany({
       where: {
@@ -142,7 +148,7 @@ export default async function ClassLogsPage(props: PageProps<"/admin/class-logs"
         </div>
         <div className="divide-y divide-black/5 px-4 dark:divide-white/5">
           {bookings.map((b) => (
-            <ClassLogRow key={b.id} booking={b} />
+            <ClassLogRow key={b.id} booking={b} viewerTimezone={viewerTimezone} />
           ))}
           {bookings.length === 0 && (
             <p className="pb-4 text-sm text-black/50 dark:text-white/50">No completed sessions yet.</p>

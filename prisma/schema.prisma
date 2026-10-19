@@ -161,6 +161,7 @@ model User {
   reviewsReceived      Review[] @relation("ReviewsReceived")
 
   notificationLogs     NotificationLog[]
+  callAttendanceEvents CallAttendanceEvent[]
   pushSubscriptions    PushSubscription[]
 
   auditLogsAsActor     AuditLog[] @relation("AuditActor")
@@ -403,6 +404,7 @@ model Booking {
   attachments            Attachment[]
   reviews                Review[]
   notificationLogs       NotificationLog[]
+  callAttendanceEvents   CallAttendanceEvent[]
 
   @@index([professorId, startAt])
   @@index([studentId, startAt])
@@ -438,6 +440,32 @@ model NotificationLog {
 
   @@index([bookingId])
   @@index([providerMessageSid])
+}
+
+enum CallEventType {
+  JOINED
+  LEFT
+}
+
+// One row per Daily.co "participant.joined"/"participant.left" webhook
+// delivery for a booking's video call — the full join/leave history behind
+// the attendance list shown on that booking's class log. userId is only set
+// when the participant joined through /api/daily/join/[bookingId] (which
+// tags the Daily meeting token with our own user id); a join via the bare
+// room link instead (no token) leaves userId null and keeps whatever name
+// Daily's own join screen collected in participantName.
+model CallAttendanceEvent {
+  id              String        @id @default(cuid())
+  bookingId       String
+  booking         Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  participantName String?
+  eventType       CallEventType
+  occurredAt      DateTime
+  createdAt       DateTime      @default(now())
+
+  @@index([bookingId])
 }
 
 // A browser/device the user has allowed to receive Web Push notifications

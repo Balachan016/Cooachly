@@ -264,17 +264,26 @@ nobody sees stale bookings); it only shows an offline page when there's no conne
    [dashboard.daily.co/developers](https://dashboard.daily.co/developers). Set `DAILY_API_KEY`.
    Once set, every confirmed booking automatically gets a video room — no code changes needed.
    Without it, professors fall back to pasting a manual meeting link.
-2. **Live transcription + AI summaries are opt-in**, since Daily bills transcription per
+2. **Attendance (join/leave) tracking** — free, unlike transcription below, and independent of
+   whether you turn transcription on. In the Daily.co dashboard, add a webhook pointing at
+   `https://your-domain.com/api/daily/webhook`, subscribed to `participant.joined` and
+   `participant.left`. Every "Join video call" link in the app already routes through
+   `/api/daily/join/[bookingId]`, which tags the join with the signed-in user's own account before
+   sending them to the room, so each join/leave is correctly attributed to that student or
+   professor — not just an anonymous Daily participant. The full join/leave history (count and
+   every timestamp, per person) shows on that booking's row under Admin → Class logs.
+3. **Live transcription + AI summaries are opt-in**, since Daily bills transcription per
    participant-minute. By default (`DAILY_ENABLE_TRANSCRIPTION` unset or `false`), video calls
    work but aren't transcribed, and no summary is generated. To turn transcription + summaries on:
    - In the Daily.co dashboard, go to **Settings → Transcription** and add a Deepgram API key
      (sign up free at [deepgram.com](https://deepgram.com) — this is a separate prerequisite from
      `DAILY_API_KEY` and is required before transcription will work at all).
    - Set `DAILY_ENABLE_TRANSCRIPTION="true"`.
-   - In the Daily.co dashboard, add a webhook pointing at `https://your-domain.com/api/daily/webhook`,
-     subscribed to both the `meeting.started` event (starts transcription when a call begins) and
-     the `transcript.ready-to-download` event (fetches the finished transcript). (Optional: enable
-     webhook signing and set `DAILY_WEBHOOK_SECRET` to verify requests.)
+   - In the Daily.co dashboard, add (or extend the one from step 2 with) a webhook pointing at
+     `https://your-domain.com/api/daily/webhook`, subscribed to both the `meeting.started` event
+     (starts transcription when a call begins) and the `transcript.ready-to-download` event
+     (fetches the finished transcript). (Optional: enable webhook signing and set
+     `DAILY_WEBHOOK_SECRET` to verify requests.)
    - Sign up at [platform.openai.com](https://platform.openai.com), create an API key, and set
      `OPENAI_API_KEY`. This powers the GPT-generated summary that gets emailed to both parties
      after each session, and the monthly student recaps admins can generate from Class Logs.
@@ -377,6 +386,7 @@ src/app/(admin|professor|student)/   Role-specific dashboards
 src/app/admin/class-logs    Admin view of every past session's transcript/AI summary + monthly recaps
 src/app/about               Public "About Cooachly" page
 src/app/api/stripe/webhook  Stripe webhook handler
-src/app/api/daily/webhook   Daily.co webhook → starts transcription, then summarizes + emails when ready
+src/app/api/daily/webhook   Daily.co webhook → attendance events, transcription, summarize + email
+src/app/api/daily/join      Tags a join with the signed-in user before sending them to the room
 src/app/api/cron/reminders  Scheduled job: sends 24h/1h/5m reminders for upcoming sessions
 ```

@@ -150,6 +150,53 @@ export async function startTranscription(roomName: string): Promise<boolean> {
   }
 }
 
+/**
+ * Creates a signed Daily.co meeting token tagging the joining participant
+ * with our own user id and display name. Used by /api/daily/join/[bookingId]
+ * so every real join through our own "Join video call" links is reliably
+ * attributable in the participant.joined/participant.left webhooks (see
+ * /api/daily/webhook) — unlike opening the bare public room URL, where Daily
+ * just assigns a random anonymous id and whatever name the user types into
+ * its own join screen.
+ */
+export async function createDailyMeetingToken(opts: {
+  roomName: string;
+  userId: string;
+  userName: string;
+  isOwner?: boolean;
+}): Promise<string | null> {
+  if (!apiKey) return null;
+
+  try {
+    const res = await fetch(`${DAILY_API_BASE}/meeting-tokens`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        properties: {
+          room_name: opts.roomName,
+          user_id: opts.userId,
+          user_name: opts.userName,
+          is_owner: Boolean(opts.isOwner),
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Failed to create Daily meeting token", await res.text());
+      return null;
+    }
+
+    const data = (await res.json()) as { token: string };
+    return data.token;
+  } catch (err) {
+    console.error("Failed to reach Daily API to create meeting token", err);
+    return null;
+  }
+}
+
 export async function getTranscriptDownloadLink(transcriptId: string): Promise<string | null> {
   if (!apiKey) return null;
 
