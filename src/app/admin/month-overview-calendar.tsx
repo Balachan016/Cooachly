@@ -2,7 +2,7 @@ import type { OverviewMonth } from "@/lib/admin-overview-calendar";
 
 const WEEKDAY_HEADERS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export function MonthOverviewCalendar({ month }: { month: OverviewMonth }) {
+export function MonthOverviewCalendar({ month, viewerTimezone }: { month: OverviewMonth; viewerTimezone: string }) {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-black/60 dark:text-white/60">
@@ -11,6 +11,10 @@ export function MonthOverviewCalendar({ month }: { month: OverviewMonth }) {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-brand-600" /> Booked
+        </span>
+        <span>
+          All times shown in <strong>your</strong> timezone ({viewerTimezone}) — a professor&apos;s own window may be
+          set in a different one. Change yours under Settings if this doesn&apos;t match where you are.
         </span>
       </div>
       <div className="overflow-x-auto">
