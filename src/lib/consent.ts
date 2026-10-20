@@ -56,23 +56,57 @@ I understand that {{brandName}} may communicate updates to its policies and term
 
 ☐ **I hereby confirm that I have read, understood, and voluntarily agree to all the above terms and conditions as a {{roleLabelLower}} registering on {{brandName}}. I understand that my registration and participation are subject to the applicable {{brandName}} policies and agreements.**`;
 
-// Placeholder only — the real Student Consent & Agreement text hasn't been
-// supplied yet. Replace this from Superadmin → Settings → Consent
-// agreements (no code change needed) as soon as it is.
-const DEFAULT_STUDENT_CONSENT = `# {{brandName}} – {{roleLabel}} Consent & Agreement
+const DEFAULT_STUDENT_CONSENT = `# {{brandName}} – {{roleLabel}} & Parent/Guardian Consent
 
-**Please read and acknowledge the following terms before continuing.**
+**Please read and acknowledge the following terms before completing {{roleLabelLower}} registration.**
 
-By using {{brandName}} as a {{roleLabelLower}}, I confirm that I have read, understood, and agreed to the following terms and conditions.
+By registering on {{brandName}}, I, as the {{roleLabelLower}} and/or parent/guardian, acknowledge and agree to the following terms and conditions.
 
-### {{roleLabel}} Consent Checklist
+### {{roleLabel}} & Parent/Guardian Consent Checklist
 
-☐ **1. Placeholder — awaiting official text**
-This is a placeholder clause. An admin should replace this template's content from Superadmin → Settings → Consent agreements with the official Student Consent & Agreement text.
+☐ **1. Accuracy of Information**
+
+I confirm that the information provided during registration, including the student's name, grade, subjects, and contact details, is accurate and complete.
+
+☐ **2. Class Schedule and Timings**
+
+I acknowledge that classes will be conducted according to the mutually agreed schedule. I agree to ensure the student's availability and punctual attendance for scheduled sessions.
+
+☐ **3. Attendance and Participation**
+
+I understand that regular attendance, active participation, completion of assigned work, and consistent practice are important for the student's academic progress.
+
+☐ **4. Rescheduling and Cancellation Policy**
+
+I acknowledge that rescheduling is permitted twice per month, provided at least 24 hours' prior notice is given. Any exceptional circumstances will be handled in coordination with the {{brandName}} team and the assigned faculty.
+
+☐ **5. Fee and Payment Terms**
+
+I agree to the course fees, payment schedule, and other applicable financial terms communicated before enrolment. I understand that any refund, cancellation, or missed-class arrangements will be governed by the applicable {{brandName}} policies.
+
+☐ **6. Student Safety and Privacy**
+
+I understand the importance of protecting the student's personal information, contact details, academic records, and other sensitive information. I agree not to misuse the personal information of faculty members or other participants.
+
+☐ **7. Learning Materials and Intellectual Property**
+
+I understand that worksheets, notes, presentations, recordings, and other learning materials provided through {{brandName}} may be subject to intellectual property rights. I agree not to reproduce, distribute, publish, or commercially use such materials without appropriate permission.
+
+☐ **8. Academic Progress and Expectations**
+
+I understand that academic progress depends on several factors, including attendance, effort, practice, and individual learning needs. I acknowledge that specific academic results or examination scores cannot be guaranteed.
+
+☐ **9. Online Platform and Technical Requirements**
+
+I agree to arrange a suitable device, stable internet connection, and an appropriate learning environment for attending online classes. I understand that technical issues may occasionally affect sessions and should be reported promptly.
+
+☐ **10. Class Recording and Media Consent**
+
+I understand that any recording of classes, use of photographs, or publication of student-related content requires appropriate consent and must comply with applicable privacy requirements and {{brandName}} policies.
 
 ### Final Declaration
 
-☐ **I hereby confirm that I have read, understood, and voluntarily agree to all the above terms and conditions as a {{roleLabelLower}} using {{brandName}}.**`;
+☐ **I confirm that I have read, understood, and agreed to the above terms and conditions. If I am registering a minor, I confirm that I am the student's parent or legally authorised guardian and am providing this consent on the student's behalf. I understand that enrolment and participation are subject to the applicable {{brandName}} policies and agreements.**`;
 
 function defaultTemplateFor(role: "STUDENT" | "PROFESSOR"): string {
   return role === "PROFESSOR" ? DEFAULT_PROFESSOR_CONSENT : DEFAULT_STUDENT_CONSENT;
