@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { getSlotsWithStatus, buildCalendarWeeks, bookingWindowDaysFor } from "@/lib/scheduling";
 import { getProfessorRatingSummary } from "@/lib/reviews";
+import { checkSlotAccess } from "@/lib/enrollment";
 import { subscribeToProfessor } from "@/actions/billing";
 import { Badge, Button, Card } from "@/components/ui";
 import { BookingCalendar } from "@/components/booking-calendar";
@@ -23,12 +24,13 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
   if (!professor || professor.site !== user.site) notFound();
 
   const windowDays = bookingWindowDaysFor(user.timezone);
-  const [slots, subscription, rating] = await Promise.all([
+  const [slots, subscription, rating, slotAccess] = await Promise.all([
     getSlotsWithStatus(professor.id, { windowDays }),
     prisma.subscription.findFirst({
       where: { studentId: user.id, professorId: professor.id, status: "ACTIVE", currentPeriodEnd: { gt: new Date() } },
     }),
     getProfessorRatingSummary(professor.id),
+    checkSlotAccess({ studentId: user.id, professorId: professor.id, viewerTimezone: user.timezone }),
   ]);
 
   const weeks = buildCalendarWeeks(slots, user.timezone, windowDays);
@@ -116,7 +118,19 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
         <Card className="w-full">
           <h2 className="font-semibold">Book a session</h2>
           <div className="mt-4">
-            <BookingCalendar professorId={professor.id} weeks={weeks} timezone={user.timezone} />
+            {slotAccess.allowed ? (
+              <BookingCalendar professorId={professor.id} weeks={weeks} timezone={user.timezone} />
+            ) : (
+              <div className="rounded-lg bg-black/5 px-6 py-8 text-center dark:bg-white/5">
+                <Badge tone="warning">Payment needed</Badge>
+                <h3 className="mt-3 font-semibold">This month&apos;s classes with {professor.name} aren&apos;t booked yet</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm text-black/60 dark:text-white/60">
+                  Your package for {professor.professorProfile?.subject || "this subject"} hasn&apos;t been recorded
+                  as paid yet. Once it is, open slots will appear here automatically — reach out if you&apos;ve
+                  already paid.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
       </div>

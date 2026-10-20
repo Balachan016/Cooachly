@@ -6,12 +6,14 @@ import { sitePath } from "@/lib/site";
 import { Badge, Button, Card } from "@/components/ui";
 import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
 import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
+import { QuotaWidget } from "@/components/quota-widget";
+import { getProfessorQuotaProgress } from "@/lib/enrollment";
 
 export default async function ProfessorDashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [upcoming, earnings, availabilityCount, monthOverview] = await Promise.all([
+  const [upcoming, earnings, availabilityCount, monthOverview, quotaProgress] = await Promise.all([
     prisma.booking.findMany({
       where: { professorId: user.id, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: new Date() } },
       orderBy: { startAt: "asc" },
@@ -24,6 +26,7 @@ export default async function ProfessorDashboardPage() {
     }),
     prisma.availability.count({ where: { professorId: user.id, isActive: true } }),
     buildPersonMonthOverview({ role: "PROFESSOR", userId: user.id, viewerTimezone: user.timezone }),
+    getProfessorQuotaProgress(user.id, user.timezone),
   ]);
 
   return (
@@ -70,6 +73,24 @@ export default async function ProfessorDashboardPage() {
           <PersonOverviewCalendar month={monthOverview} />
         </div>
       </Card>
+
+      {quotaProgress.length > 0 && (
+        <Card className="mt-6">
+          <h2 className="font-semibold">This month&apos;s classes</h2>
+          <div className="mt-4">
+            <QuotaWidget
+              items={quotaProgress.map((q) => ({
+                key: q.studentId,
+                peerName: q.studentName,
+                subject: q.subject,
+                monthlyClassQuota: q.monthlyClassQuota,
+                scheduledCount: q.scheduledCount,
+                attendedCount: q.attendedCount,
+              }))}
+            />
+          </div>
+        </Card>
+      )}
 
       {availabilityCount === 0 && (
         <Card className="mt-6">

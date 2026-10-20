@@ -6,12 +6,14 @@ import { Badge, Button, Card } from "@/components/ui";
 import { ContactInfoForm } from "@/components/contact-info-form";
 import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
 import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
+import { QuotaWidget } from "@/components/quota-widget";
+import { getStudentQuotaProgress } from "@/lib/enrollment";
 
 export default async function StudentDashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [upcoming, pendingTests, monthOverview] = await Promise.all([
+  const [upcoming, pendingTests, monthOverview, quotaProgress] = await Promise.all([
     prisma.booking.findMany({
       where: { studentId: user.id, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: new Date() } },
       orderBy: { startAt: "asc" },
@@ -24,6 +26,7 @@ export default async function StudentDashboardPage() {
       include: { test: true },
     }),
     buildPersonMonthOverview({ role: "STUDENT", userId: user.id, viewerTimezone: user.timezone }),
+    getStudentQuotaProgress(user.id, user.timezone),
   ]);
 
   return (
@@ -48,6 +51,24 @@ export default async function StudentDashboardPage() {
           <PersonOverviewCalendar month={monthOverview} />
         </div>
       </Card>
+
+      {quotaProgress.length > 0 && (
+        <Card className="mt-6">
+          <h2 className="font-semibold">This month&apos;s classes</h2>
+          <div className="mt-4">
+            <QuotaWidget
+              items={quotaProgress.map((q) => ({
+                key: q.professorId,
+                peerName: q.professorName,
+                subject: q.subject,
+                monthlyClassQuota: q.monthlyClassQuota,
+                scheduledCount: q.scheduledCount,
+                attendedCount: q.attendedCount,
+              }))}
+            />
+          </div>
+        </Card>
+      )}
 
       <Card className="mt-6">
         <div className="flex items-center justify-between">
