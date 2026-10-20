@@ -4,12 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
 import { sitePath } from "@/lib/site";
 import { Badge, Button, Card } from "@/components/ui";
+import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
+import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
 
 export default async function ProfessorDashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [upcoming, earnings, availabilityCount] = await Promise.all([
+  const [upcoming, earnings, availabilityCount, monthOverview] = await Promise.all([
     prisma.booking.findMany({
       where: { professorId: user.id, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: new Date() } },
       orderBy: { startAt: "asc" },
@@ -21,6 +23,7 @@ export default async function ProfessorDashboardPage() {
       _sum: { priceCents: true },
     }),
     prisma.availability.count({ where: { professorId: user.id, isActive: true } }),
+    buildPersonMonthOverview({ role: "PROFESSOR", userId: user.id, viewerTimezone: user.timezone }),
   ]);
 
   return (
@@ -57,6 +60,16 @@ export default async function ProfessorDashboardPage() {
           <div className="mt-1 text-2xl font-bold">{availabilityCount}</div>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">{monthOverview.monthLabel} — your schedule</h2>
+        <p className="mt-1 text-sm text-black/50 dark:text-white/50">
+          Your booked sessions this month, plus your own still-open availability.
+        </p>
+        <div className="mt-4">
+          <PersonOverviewCalendar month={monthOverview} />
+        </div>
+      </Card>
 
       {availabilityCount === 0 && (
         <Card className="mt-6">
