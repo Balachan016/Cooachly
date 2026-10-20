@@ -10,7 +10,7 @@ export function MonthOverviewCalendar({ month, viewerTimezone }: { month: Overvi
           <span className="h-2 w-2 rounded-full bg-emerald-500" /> Available
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-600" /> Booked
+          <span className="h-2 w-2 rounded-full bg-blue-600" /> Booked
         </span>
         <span>
           All times shown in <strong>your</strong> timezone ({viewerTimezone}) — a professor&apos;s own window may be
@@ -39,7 +39,7 @@ export function MonthOverviewCalendar({ month, viewerTimezone }: { month: Overvi
                             <div key={ei} className="flex items-start gap-1 text-[11px] leading-tight">
                               <span
                                 className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
-                                  entry.status === "booked" ? "bg-brand-600" : "bg-emerald-500"
+                                  entry.status === "booked" ? "bg-blue-600" : "bg-emerald-500"
                                 }`}
                               />
                               <span className="text-black/70 dark:text-white/70">

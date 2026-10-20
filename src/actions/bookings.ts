@@ -9,6 +9,7 @@ import type { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, buildCalendarWeeks, bookingWindowDaysFor, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
+import { checkSlotAccess } from "@/lib/enrollment";
 import {
   MIN_SLOTS_PER_BOOKING,
   MAX_SLOTS_PER_BOOKING,
@@ -85,6 +86,17 @@ export async function bookSlots(_state: unknown, formData: FormData) {
     return { message: "Professor not found." };
   }
   const hourlyRateCents = professor.professorProfile.hourlyRateCents;
+
+  // Cooachly-only payment gate — mirrors the lock shown on the professor's
+  // detail page, re-checked here so a direct form submission can't bypass
+  // it. Arts has no payment concept at all, so it's skipped entirely there.
+  if (session.site === "COOACHLY") {
+    const student = await prisma.user.findUnique({ where: { id: session.userId }, select: { timezone: true } });
+    const access = await checkSlotAccess({ studentId: session.userId, professorId, viewerTimezone: student?.timezone ?? "UTC" });
+    if (!access.allowed) {
+      return { message: "This month's package with this professor hasn't been recorded as paid yet — contact the Cooachly team." };
+    }
+  }
 
   const availableSlots = await getAvailableSlots(professorId);
   const matches = requestedDates.map((d) => availableSlots.find((s) => s.startAt.getTime() === d.getTime()));

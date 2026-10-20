@@ -113,6 +113,11 @@ enum AuditAction {
   BOOKING_RESCHEDULE_DECLINED
   ACCOUNT_CREATED_BY_ADMIN
   BULK_BOOKING_CREATED
+  MONTHLY_PAYMENT_RECORDED
+  SLOT_VIEW_OVERRIDE_CHANGED
+  PROFESSOR_PAYOUT_RECORDED
+  SUBSCRIPTION_EXPENSE_LOGGED
+  EXCHANGE_RATE_UPDATED
 }
 
 model User {
@@ -170,6 +175,16 @@ model User {
 
   testsCreated         Test[]           @relation("TestsCreated")
   testAssignments      TestAssignment[] @relation("TestAssignments")
+
+  enrollmentsAsStudent       StudentEnrollment[]    @relation("StudentEnrollments")
+  enrollmentsAsProfessor     StudentEnrollment[]    @relation("ProfessorEnrollments")
+  monthlyPaymentsAsStudent   MonthlyPayment[]       @relation("StudentMonthlyPayments")
+  monthlyPaymentsAsProfessor MonthlyPayment[]       @relation("ProfessorMonthlyPayments")
+  monthlyPaymentsRecorded    MonthlyPayment[]       @relation("MonthlyPaymentsRecorded")
+  professorPayouts           ProfessorPayout[]      @relation("ProfessorPayouts")
+  professorPayoutsRecorded   ProfessorPayout[]      @relation("ProfessorPayoutsRecorded")
+  subscriptionExpensesLogged SubscriptionExpense[]  @relation("SubscriptionExpensesRecorded")
+  exchangeRatesUpdated       ExchangeRate[]         @relation("ExchangeRatesUpdated")
 
   @@unique([site, email])
 }
@@ -696,4 +711,98 @@ model TestAnswer {
   updatedAt        DateTime            @updatedAt
 
   @@unique([assignmentId, questionId])
+}
+
+// Cooachly-only (Arts doesn't run payment through the platform at all — see
+// bookSlots). One row per student/professor pairing — each professor teaches
+// one subject (ProfessorProfile.subject), so this pairing already identifies
+// "this student's <subject> plan with this professor" without a separate
+// subject field. monthlyClassQuota defaults to 8 but is editable per pairing.
+// slotViewOverride lets an admin let the student keep browsing/booking this
+// professor's open slots for a period with no MonthlyPayment on file.
+model StudentEnrollment {
+  id                String   @id @default(cuid())
+  studentId         String
+  student           User     @relation("StudentEnrollments", fields: [studentId], references: [id], onDelete: Cascade)
+  professorId       String
+  professor         User     @relation("ProfessorEnrollments", fields: [professorId], references: [id], onDelete: Cascade)
+  monthlyClassQuota Int      @default(8)
+  slotViewOverride  Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([studentId, professorId])
+}
+
+// A recorded offline payment covering one calendar month's package for one
+// student/professor pairing — its mere existence for the current month is
+// what the slot-visibility gate checks (see lib/billing.ts), alongside
+// StudentEnrollment.slotViewOverride.
+model MonthlyPayment {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      User     @relation("StudentMonthlyPayments", fields: [studentId], references: [id], onDelete: Cascade)
+  professorId  String
+  professor    User     @relation("ProfessorMonthlyPayments", fields: [professorId], references: [id], onDelete: Cascade)
+  periodYear   Int
+  periodMonth  Int // 1-12
+  amountCents  Int
+  currency     String   @default("inr")
+  paidAt       DateTime
+  notes        String?
+  recordedById String?
+  recordedBy   User?    @relation("MonthlyPaymentsRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@unique([studentId, professorId, periodYear, periodMonth])
+}
+
+// What was actually paid out to a professor for a given month — manually
+// logged, not auto-calculated from revenue.
+model ProfessorPayout {
+  id           String   @id @default(cuid())
+  professorId  String
+  professor    User     @relation("ProfessorPayouts", fields: [professorId], references: [id], onDelete: Cascade)
+  periodYear   Int
+  periodMonth  Int
+  amountCents  Int
+  currency     String   @default("inr")
+  paidAt       DateTime
+  notes        String?
+  recordedById String?
+  recordedBy   User?    @relation("ProfessorPayoutsRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([professorId])
+}
+
+// One row per billing charge for an external service (Vercel, Neon, Twilio,
+// Daily.co, OpenAI, Resend, ...) — logged manually as each bill actually
+// comes in, kept in its own currency and converted for the P&L using
+// ExchangeRate.
+model SubscriptionExpense {
+  id           String   @id @default(cuid())
+  serviceName  String
+  amountCents  Int
+  currency     String   @default("usd")
+  billedAt     DateTime
+  notes        String?
+  recordedById String?
+  recordedBy   User?    @relation("SubscriptionExpensesRecorded", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+}
+
+// A single admin-editable conversion rate per currency pair — the P&L and
+// expense log convert every non-INR amount using whatever's stored here
+// until a superadmin updates it again. No external FX API involved.
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  updatedById  String?
+  updatedBy    User?    @relation("ExchangeRatesUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([fromCurrency, toCurrency])
 }
