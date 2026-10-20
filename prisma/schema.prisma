@@ -118,6 +118,8 @@ enum AuditAction {
   PROFESSOR_PAYOUT_RECORDED
   SUBSCRIPTION_EXPENSE_LOGGED
   EXCHANGE_RATE_UPDATED
+  CONSENT_ACCEPTED
+  CONSENT_TEMPLATE_UPDATED
 }
 
 model User {
@@ -185,8 +187,45 @@ model User {
   professorPayoutsRecorded   ProfessorPayout[]      @relation("ProfessorPayoutsRecorded")
   subscriptionExpensesLogged SubscriptionExpense[]  @relation("SubscriptionExpensesRecorded")
   exchangeRatesUpdated       ExchangeRate[]         @relation("ExchangeRatesUpdated")
+  consentAcceptances         ConsentAcceptance[]    @relation("ConsentAcceptances")
+  consentTemplatesUpdated    ConsentTemplate[]      @relation("ConsentTemplatesUpdated")
 
   @@unique([site, email])
+}
+
+// Admin-editable canonical text for each role's consent agreement — content
+// may use {{brandName}} / {{roleLabel}} placeholders, substituted per site
+// and role when shown to a student/professor and when snapshotted into a
+// ConsentAcceptance. One row per role; falls back to a hardcoded default
+// (see src/lib/consent.ts) until a superadmin saves one here.
+model ConsentTemplate {
+  id          String   @id @default(cuid())
+  role        Role     @unique
+  content     String
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation("ConsentTemplatesUpdated", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+// One row per person per calendar month they've accepted the consent
+// agreement for their role — required before a student/professor can use
+// their dashboard at all (see the gate in each role's layout). `content` is
+// a full snapshot of the exact (already site/role-substituted) text they
+// accepted, kept even if the template is edited later, so this is a durable
+// compliance record independent of ConsentTemplate's current content.
+model ConsentAcceptance {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("ConsentAcceptances", fields: [userId], references: [id], onDelete: Cascade)
+  site        Site
+  role        Role
+  periodYear  Int
+  periodMonth Int
+  content     String
+  acceptedAt  DateTime @default(now())
+
+  @@unique([userId, periodYear, periodMonth])
+  @@index([userId])
 }
 
 // General-purpose audit trail for the superadmin dashboard: authentication
