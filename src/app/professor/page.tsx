@@ -8,10 +8,13 @@ import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
 import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
 import { QuotaWidget } from "@/components/quota-widget";
 import { getProfessorQuotaProgress } from "@/lib/enrollment";
+import { currentAvailabilityPeriod } from "@/lib/availability-period";
 
 export default async function ProfessorDashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
+
+  const currentPeriod = currentAvailabilityPeriod(user.timezone);
 
   const [upcoming, earnings, availabilityCount, monthOverview, quotaProgress] = await Promise.all([
     prisma.booking.findMany({
@@ -24,7 +27,9 @@ export default async function ProfessorDashboardPage() {
       where: { professorId: user.id, paymentStatus: { in: ["PAID", "COVERED_BY_SUBSCRIPTION"] } },
       _sum: { priceCents: true },
     }),
-    prisma.availability.count({ where: { professorId: user.id, isActive: true } }),
+    prisma.availability.count({
+      where: { professorId: user.id, isActive: true, periodYear: currentPeriod.year, periodMonth: currentPeriod.month },
+    }),
     buildPersonMonthOverview({ role: "PROFESSOR", userId: user.id, viewerTimezone: user.timezone }),
     getProfessorQuotaProgress(user.id, user.timezone),
   ]);
@@ -59,7 +64,7 @@ export default async function ProfessorDashboardPage() {
           <div className="mt-1 text-2xl font-bold">${((earnings._sum.priceCents ?? 0) / 100).toFixed(2)}</div>
         </Card>
         <Card>
-          <div className="text-sm text-black/50 dark:text-white/50">Weekly availability windows</div>
+          <div className="text-sm text-black/50 dark:text-white/50">This month&apos;s availability windows</div>
           <div className="mt-1 text-2xl font-bold">{availabilityCount}</div>
         </Card>
       </div>

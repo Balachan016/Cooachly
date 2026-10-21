@@ -38,6 +38,8 @@ type Availability = {
   endTime: string;
   timezone: string;
   sessionLengthMinutes: number;
+  periodYear: number;
+  periodMonth: number;
 };
 type BookingOverlap = { professorId: string; startAt: Date; endAt: Date };
 
@@ -62,7 +64,9 @@ function expandOpenSlots(
       const dayDate = new Date(year, month, d);
       const dateStr = localDateOnly(dayDate);
       const dayOfWeek = dayDate.getDay();
-      const dayAvailabilities = profAvailabilities.filter((a) => (a.date ? localDateOnly(a.date) === dateStr : a.dayOfWeek === dayOfWeek));
+      const dayAvailabilities = profAvailabilities.filter((a) =>
+        a.date ? localDateOnly(a.date) === dateStr : a.dayOfWeek === dayOfWeek && a.periodYear === year && a.periodMonth === month + 1
+      );
 
       for (const availability of dayAvailabilities) {
         const rangeStart = fromZonedTime(`${dateStr}T${availability.startTime}:00`, availability.timezone);

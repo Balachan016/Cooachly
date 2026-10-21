@@ -5,10 +5,13 @@ import { sitePath } from "@/lib/site";
 import { Badge, Button, Card } from "@/components/ui";
 import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
 import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
+import { currentAvailabilityPeriod } from "@/lib/availability-period";
 
 export default async function ProfessorDashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
+
+  const currentPeriod = currentAvailabilityPeriod(user.timezone);
 
   const [upcoming, completedCount, availabilityCount, monthOverview] = await Promise.all([
     prisma.booking.findMany({
@@ -18,7 +21,9 @@ export default async function ProfessorDashboardPage() {
       include: { student: true },
     }),
     prisma.booking.count({ where: { professorId: user.id, status: "COMPLETED" } }),
-    prisma.availability.count({ where: { professorId: user.id, isActive: true } }),
+    prisma.availability.count({
+      where: { professorId: user.id, isActive: true, periodYear: currentPeriod.year, periodMonth: currentPeriod.month },
+    }),
     buildPersonMonthOverview({ role: "PROFESSOR", userId: user.id, viewerTimezone: user.timezone }),
   ]);
 
@@ -50,7 +55,7 @@ export default async function ProfessorDashboardPage() {
           <div className="mt-1 text-2xl font-bold">{completedCount}</div>
         </Card>
         <Card>
-          <div className="text-sm text-black/50 dark:text-white/50">Weekly availability windows</div>
+          <div className="text-sm text-black/50 dark:text-white/50">This month&apos;s availability windows</div>
           <div className="mt-1 text-2xl font-bold">{availabilityCount}</div>
         </Card>
       </div>

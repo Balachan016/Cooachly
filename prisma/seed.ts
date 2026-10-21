@@ -3,6 +3,15 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// Recurring availability only runs within the one calendar month it's set
+// up for (see Availability.periodYear/periodMonth) — seed both the current
+// and next month so the booking-window demo data this app's test scripts
+// rely on keeps working regardless of which day of the month seed.ts runs.
+const now = new Date();
+const CURRENT_PERIOD = { periodYear: now.getFullYear(), periodMonth: now.getMonth() + 1 };
+const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+const NEXT_PERIOD = { periodYear: nextMonthDate.getFullYear(), periodMonth: nextMonthDate.getMonth() + 1 };
+
 async function upsertUser(opts: {
   name: string;
   email: string;
@@ -76,12 +85,14 @@ async function main() {
 
   const existingAvailability = await prisma.availability.findFirst({ where: { professorId: professor.id } });
   if (!existingAvailability) {
-    await prisma.availability.createMany({
-      data: [
-        { professorId: professor.id, dayOfWeek: 1, startTime: "09:00", endTime: "12:00", timezone: "America/New_York" },
-        { professorId: professor.id, dayOfWeek: 3, startTime: "13:00", endTime: "17:00", timezone: "America/New_York" },
-      ],
-    });
+    for (const period of [CURRENT_PERIOD, NEXT_PERIOD]) {
+      await prisma.availability.createMany({
+        data: [
+          { professorId: professor.id, dayOfWeek: 1, startTime: "09:00", endTime: "12:00", timezone: "America/New_York", ...period },
+          { professorId: professor.id, dayOfWeek: 3, startTime: "13:00", endTime: "17:00", timezone: "America/New_York", ...period },
+        ],
+      });
+    }
   }
 
   // Cooachly Arts (Carnatic vocals) — a fully separate governance: its own
@@ -118,12 +129,14 @@ async function main() {
 
   const existingArtsAvailability = await prisma.availability.findFirst({ where: { professorId: artsGuru.id } });
   if (!existingArtsAvailability) {
-    await prisma.availability.createMany({
-      data: [
-        { professorId: artsGuru.id, dayOfWeek: 6, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata", sessionLengthMinutes: 30 },
-        { professorId: artsGuru.id, dayOfWeek: 0, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata", sessionLengthMinutes: 30 },
-      ],
-    });
+    for (const period of [CURRENT_PERIOD, NEXT_PERIOD]) {
+      await prisma.availability.createMany({
+        data: [
+          { professorId: artsGuru.id, dayOfWeek: 6, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata", sessionLengthMinutes: 30, ...period },
+          { professorId: artsGuru.id, dayOfWeek: 0, startTime: "09:00", endTime: "12:00", timezone: "Asia/Kolkata", sessionLengthMinutes: 30, ...period },
+        ],
+      });
+    }
   }
 
   console.log("Seeded Cooachly users:");
