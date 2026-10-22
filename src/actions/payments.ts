@@ -12,6 +12,9 @@ export type PaymentsActionState = { message?: string; success?: true } | undefin
 const RecordPaymentSchema = z.object({
   studentId: z.string().min(1, "Please select a student."),
   professorId: z.string().min(1, "Please select a professor."),
+  paymentType: z.enum(["monthly", "yearly"]).default("monthly"),
+  forMonth: z.coerce.number().int().min(1).max(12),
+  forYear: z.coerce.number().int().min(2020).max(2100),
   amountCents: z.coerce.number().int().positive("Amount must be greater than zero."),
   currency: z.string().trim().min(1).default("inr"),
   paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Please pick a payment date."),
@@ -19,13 +22,32 @@ const RecordPaymentSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** The 12 consecutive {year, month} periods starting at (forYear, forMonth), wrapping across a year boundary as needed. */
+function yearOfPeriods(forYear: number, forMonth: number): { year: number; month: number }[] {
+  return Array.from({ length: 12 }, (_, i) => {
+    const absoluteMonth = forMonth - 1 + i;
+    return { year: forYear + Math.floor(absoluteMonth / 12), month: (absoluteMonth % 12) + 1 };
+  });
+}
+
 /**
- * Admin/superadmin, Cooachly only: records one calendar month's package
- * payment for a student+professor pairing. Upserts the StudentEnrollment
- * row first (creating it with the given quota, or updating the quota if one
- * was provided) so a payment always has an enrollment to sit under, then
- * upserts the MonthlyPayment itself — recording the same month twice just
- * corrects the earlier entry instead of creating a duplicate.
+ * Admin/superadmin, Cooachly only: records a package payment for a
+ * student+professor pairing, covering either the one chosen month or, for a
+ * yearly package, the 12 consecutive months starting at the chosen month —
+ * each gets its own MonthlyPayment row (an even share of the total amount),
+ * so the existing month-by-month slot-access check, quota tracking, and
+ * cash-basis P&L (which all key off MonthlyPayment) need no special case for
+ * "yearly" at all: the whole year's revenue is still recognized in the
+ * month the money actually came in, since every row shares the same
+ * `paidAt`. Upserts the StudentEnrollment row first (creating it with the
+ * given quota, or updating the quota if one was provided) so a payment
+ * always has an enrollment to sit under; recording the same month twice
+ * just corrects the earlier entry instead of creating a duplicate.
  */
 export async function recordMonthlyPayment(_state: PaymentsActionState, formData: FormData): Promise<PaymentsActionState> {
   const session = await requireRole("ADMIN", "SUPERADMIN");
@@ -34,6 +56,9 @@ export async function recordMonthlyPayment(_state: PaymentsActionState, formData
   const parsed = RecordPaymentSchema.safeParse({
     studentId: formData.get("studentId"),
     professorId: formData.get("professorId"),
+    paymentType: formData.get("paymentType") || undefined,
+    forMonth: formData.get("forMonth"),
+    forYear: formData.get("forYear"),
     amountCents: Math.round(Number(formData.get("amount") || 0) * 100),
     currency: formData.get("currency") || "inr",
     paidAt: formData.get("paidAt"),
@@ -42,11 +67,7 @@ export async function recordMonthlyPayment(_state: PaymentsActionState, formData
   });
   if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please fill in the payment details." };
 
-  const { studentId, professorId, amountCents, currency, paidAt, monthlyClassQuota, notes } = parsed.data;
-  // The month the payment is recorded against is just the calendar month of
-  // the payment date itself — "I paid on Oct 1" means "this covers October".
-  const [periodYear, periodMonthRaw] = paidAt.split("-").map(Number);
-  const periodMonth = periodMonthRaw;
+  const { studentId, professorId, paymentType, forMonth, forYear, amountCents, currency, paidAt, monthlyClassQuota, notes } = parsed.data;
 
   const [student, professor] = await Promise.all([
     prisma.user.findUnique({ where: { id: studentId, role: "STUDENT", site: session.site } }),
@@ -55,33 +76,48 @@ export async function recordMonthlyPayment(_state: PaymentsActionState, formData
   if (!student) return { message: "Selected student not found." };
   if (!professor) return { message: "Selected professor not found." };
 
+  const periods = paymentType === "yearly" ? yearOfPeriods(forYear, forMonth) : [{ year: forYear, month: forMonth }];
+  // Split evenly across every covered month, cents-accurate — any leftover
+  // cent from the division goes to the first month so nothing is lost.
+  const baseShare = Math.floor(amountCents / periods.length);
+  const remainder = amountCents - baseShare * periods.length;
+  const paidAtDate = new Date(`${paidAt}T00:00:00.000Z`);
+  const rangeLabel =
+    paymentType === "yearly"
+      ? `${MONTH_NAMES[periods[0].month - 1]} ${periods[0].year} – ${MONTH_NAMES[periods[11].month - 1]} ${periods[11].year}`
+      : `${MONTH_NAMES[forMonth - 1]} ${forYear}`;
+  const yearlyNote = paymentType === "yearly" ? `Yearly package covering ${rangeLabel}.` : null;
+  const combinedNotes = [yearlyNote, notes || null].filter(Boolean).join(" ") || null;
+
   await prisma.$transaction([
     prisma.studentEnrollment.upsert({
       where: { studentId_professorId: { studentId, professorId } },
       create: { studentId, professorId, monthlyClassQuota: monthlyClassQuota ?? 8 },
       update: monthlyClassQuota ? { monthlyClassQuota } : {},
     }),
-    prisma.monthlyPayment.upsert({
-      where: { studentId_professorId_periodYear_periodMonth: { studentId, professorId, periodYear, periodMonth } },
-      create: {
-        studentId,
-        professorId,
-        periodYear,
-        periodMonth,
-        amountCents,
-        currency: currency.toLowerCase(),
-        paidAt: new Date(`${paidAt}T00:00:00.000Z`),
-        notes: notes || null,
-        recordedById: session.userId,
-      },
-      update: {
-        amountCents,
-        currency: currency.toLowerCase(),
-        paidAt: new Date(`${paidAt}T00:00:00.000Z`),
-        notes: notes || null,
-        recordedById: session.userId,
-      },
-    }),
+    ...periods.map((period, i) =>
+      prisma.monthlyPayment.upsert({
+        where: { studentId_professorId_periodYear_periodMonth: { studentId, professorId, periodYear: period.year, periodMonth: period.month } },
+        create: {
+          studentId,
+          professorId,
+          periodYear: period.year,
+          periodMonth: period.month,
+          amountCents: baseShare + (i === 0 ? remainder : 0),
+          currency: currency.toLowerCase(),
+          paidAt: paidAtDate,
+          notes: combinedNotes,
+          recordedById: session.userId,
+        },
+        update: {
+          amountCents: baseShare + (i === 0 ? remainder : 0),
+          currency: currency.toLowerCase(),
+          paidAt: paidAtDate,
+          notes: combinedNotes,
+          recordedById: session.userId,
+        },
+      })
+    ),
   ]);
 
   await logAudit({
@@ -90,11 +126,11 @@ export async function recordMonthlyPayment(_state: PaymentsActionState, formData
     actorId: session.userId,
     targetType: "User",
     targetId: studentId,
-    detail: `${student.name} paid ${professor.name} for ${periodMonth}/${periodYear}: ${amountCents / 100} ${currency.toUpperCase()}`,
+    detail: `${student.name} paid ${professor.name} for ${rangeLabel}: ${amountCents / 100} ${currency.toUpperCase()}`,
   });
 
   revalidatePath(sitePath(session.site, "/admin/payments"));
-  return { message: `Recorded ${student.name}'s payment to ${professor.name} for ${periodMonth}/${periodYear}.`, success: true };
+  return { message: `Recorded ${student.name}'s payment to ${professor.name} for ${rangeLabel}.`, success: true };
 }
 
 export async function setSlotViewOverride(studentId: string, professorId: string, override: boolean) {
