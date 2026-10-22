@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { adminAddAvailability } from "@/actions/admin-availability";
 import { Button, Label, Select } from "@/components/ui";
 import { TIMEZONES } from "@/lib/roles";
+import { formatTime12h } from "@/lib/time-format";
 
 const DAYS = [
   { value: 0, label: "Sunday" },
@@ -100,7 +101,7 @@ export function AdminAvailabilityForm({
           <Select id="admin-startTime" name="startTime" defaultValue="09:00" required>
             {HOURS.map((h) => (
               <option key={h} value={h}>
-                {h}
+                {formatTime12h(h)}
               </option>
             ))}
           </Select>
@@ -110,7 +111,7 @@ export function AdminAvailabilityForm({
           <Select id="admin-endTime" name="endTime" defaultValue="17:00" required>
             {HOURS.map((h) => (
               <option key={h} value={h}>
-                {h}
+                {formatTime12h(h)}
               </option>
             ))}
           </Select>

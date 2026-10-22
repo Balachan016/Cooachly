@@ -7,6 +7,7 @@ import { AvailabilityMonthSwitcher } from "@/components/availability-month-switc
 import { CopyToNextMonthButton } from "@/components/copy-to-next-month-button";
 import { copyAvailabilityToNextMonth } from "@/actions/availability";
 import { resolveAvailabilityPeriod, nextAvailabilityPeriod, availabilityPeriodLabel, availabilityPeriodDateRange } from "@/lib/availability-period";
+import { formatTime12h } from "@/lib/time-format";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -61,8 +62,8 @@ export default async function AvailabilityPage(props: PageProps<"/professor/avai
                 id={a.id}
                 label={
                   a.date
-                    ? `One-time: ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(a.date)} ${a.startTime}–${a.endTime}`
-                    : `${DAY_NAMES[a.dayOfWeek!]} ${a.startTime}–${a.endTime}`
+                    ? `One-time: ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(a.date)} ${formatTime12h(a.startTime)}–${formatTime12h(a.endTime)}`
+                    : `${DAY_NAMES[a.dayOfWeek!]} ${formatTime12h(a.startTime)}–${formatTime12h(a.endTime)}`
                 }
                 timezone={a.timezone}
                 sessionLengthMinutes={a.sessionLengthMinutes}
