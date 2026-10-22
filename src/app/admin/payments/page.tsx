@@ -103,6 +103,7 @@ export default async function AdminPaymentsPage() {
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3 text-right">Amount</th>
                 <th className="py-2 pr-3">Paid on</th>
+                <th className="py-2 pr-3">Notes</th>
                 <th className="py-2">Override access</th>
               </tr>
             </thead>
@@ -123,6 +124,7 @@ export default async function AdminPaymentsPage() {
                   <td className="py-2 pr-3">
                     {row.payment ? new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(row.payment.paidAt) : "—"}
                   </td>
+                  <td className="py-2 pr-3 max-w-[16rem] text-xs text-black/50 dark:text-white/50">{row.payment?.notes || "—"}</td>
                   <td className="py-2">
                     <OverrideToggle studentId={row.studentId} professorId={row.professorId} override={row.slotViewOverride} />
                   </td>
@@ -130,7 +132,7 @@ export default async function AdminPaymentsPage() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-black/50 dark:text-white/50">
+                  <td colSpan={8} className="py-6 text-center text-black/50 dark:text-white/50">
                     No students or professors yet.
                   </td>
                 </tr>

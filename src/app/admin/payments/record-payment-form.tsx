@@ -1,8 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { recordMonthlyPayment } from "@/actions/payments";
 import { Button, Input, Label, Select } from "@/components/ui";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 function todayDateString(): string {
   const now = new Date();
@@ -18,6 +23,8 @@ export function RecordPaymentForm({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(recordMonthlyPayment, undefined);
+  const [paymentType, setPaymentType] = useState<"monthly" | "yearly">("monthly");
+  const now = new Date();
 
   useEffect(() => {
     if (state?.success) formRef.current?.reset();
@@ -53,24 +60,59 @@ export function RecordPaymentForm({
           </Select>
         </div>
         <div>
-          <Label htmlFor="pay-amount">Amount (₹)</Label>
-          <Input id="pay-amount" name="amount" type="number" min="1" step="1" required placeholder="14400" />
+          <Label htmlFor="pay-type">Package</Label>
+          <Select
+            id="pay-type"
+            name="paymentType"
+            value={paymentType}
+            onChange={(e) => setPaymentType(e.target.value as "monthly" | "yearly")}
+          >
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly (12 months)</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="pay-amount">{paymentType === "yearly" ? "Total for the year (₹)" : "Amount (₹)"}</Label>
+          <Input id="pay-amount" name="amount" type="number" min="1" step="1" required placeholder={paymentType === "yearly" ? "144000" : "14400"} />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <Label htmlFor="pay-for-month">{paymentType === "yearly" ? "Starting month" : "For month"}</Label>
+          <Select id="pay-for-month" name="forMonth" defaultValue={String(now.getMonth() + 1)} required>
+            {MONTHS.map((m, i) => (
+              <option key={m} value={i + 1}>
+                {m}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="pay-for-year">Year</Label>
+          <Input id="pay-for-year" name="forYear" type="number" defaultValue={now.getFullYear()} required />
         </div>
         <div>
           <Label htmlFor="pay-date">Date paid</Label>
           <Input id="pay-date" name="paidAt" type="date" defaultValue={todayDateString()} required />
         </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Label htmlFor="pay-quota">Monthly quota (optional)</Label>
           <Input id="pay-quota" name="monthlyClassQuota" type="number" min="1" max="60" placeholder="8 (default)" />
         </div>
-        <div className="lg:col-span-2">
-          <Label htmlFor="pay-notes">Notes (optional)</Label>
-          <Input id="pay-notes" name="notes" placeholder="e.g. bank transfer ref" />
-        </div>
       </div>
+      {paymentType === "yearly" && (
+        <p className="text-xs text-black/50 dark:text-white/50">
+          Covers 12 consecutive months starting from the month above — split evenly across each month&apos;s record,
+          but the student is unlocked for booking in every one of those months as they come.
+        </p>
+      )}
+
+      <div>
+        <Label htmlFor="pay-notes">Notes (optional)</Label>
+        <Input id="pay-notes" name="notes" placeholder="e.g. bank transfer ref" />
+      </div>
+
       <input type="hidden" name="currency" value="inr" />
       <Button type="submit" disabled={pending}>
         {pending ? "Recording…" : "Record payment"}
