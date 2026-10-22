@@ -65,11 +65,14 @@ export async function getSlotsWithStatus(
   for (let cursor = startOfDay(now); isBefore(cursor, windowEnd); cursor = addDays(cursor, 1)) {
     const dayOfWeek = cursor.getDay();
     const dateStr = formatDateOnly(cursor);
+    const cursorYear = cursor.getFullYear();
+    const cursorMonth = cursor.getMonth() + 1;
     // A one-off window (`date` set) only ever applies to that single
     // calendar day; a recurring window (`dayOfWeek` set) applies to every
-    // matching weekday.
+    // matching weekday, but only within the single calendar month
+    // (periodYear/periodMonth) it was set up for — it doesn't recur forever.
     const dayAvailabilities = availabilities.filter((a) =>
-      a.date ? formatDateOnly(a.date) === dateStr : a.dayOfWeek === dayOfWeek
+      a.date ? formatDateOnly(a.date) === dateStr : a.dayOfWeek === dayOfWeek && a.periodYear === cursorYear && a.periodMonth === cursorMonth
     );
 
     for (const availability of dayAvailabilities) {

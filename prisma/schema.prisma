@@ -400,8 +400,16 @@ model Availability {
   sessionLengthMinutes Int @default(60) // 45, 60, 75, or 90
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
+  // The single calendar month a recurring (dayOfWeek) window is open for —
+  // it does NOT recur indefinitely, only within this month, so a professor
+  // (or admin on their behalf) must set each month up explicitly. For a
+  // one-off (date) window this is just derived from `date` itself, kept in
+  // sync so both kinds of windows can be listed/filtered by month together.
+  periodYear   Int
+  periodMonth  Int
 
   @@index([professorId])
+  @@index([professorId, periodYear, periodMonth])
 }
 
 model Booking {

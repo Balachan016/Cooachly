@@ -29,9 +29,22 @@ function todayDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
-export function AdminAvailabilityForm({ professorId, defaultTimezone }: { professorId: string; defaultTimezone: string }) {
+export function AdminAvailabilityForm({
+  professorId,
+  defaultTimezone,
+  periodKey,
+  dateRange,
+}: {
+  professorId: string;
+  defaultTimezone: string;
+  /** Which month tab the page is on — a new recurring window is created for this month. */
+  periodKey: "current" | "next";
+  /** The selected month's own date range, so a one-time window can't be opened outside it. */
+  dateRange: { min: string; max: string };
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [mode, setMode] = useState<"recurring" | "oneTime">("recurring");
+  const dateMin = dateRange.min > todayDateString() ? dateRange.min : todayDateString();
 
   return (
     <form
@@ -44,6 +57,7 @@ export function AdminAvailabilityForm({ professorId, defaultTimezone }: { profes
       className="mt-4 space-y-4"
     >
       <input type="hidden" name="professorId" value={professorId} />
+      <input type="hidden" name="periodKey" value={periodKey} />
 
       <div>
         <Label htmlFor="admin-mode">When</Label>
@@ -71,7 +85,8 @@ export function AdminAvailabilityForm({ professorId, defaultTimezone }: { profes
             id="admin-date"
             name="date"
             type="date"
-            min={todayDateString()}
+            min={dateMin}
+            max={dateRange.max}
             required
             className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm outline-none focus:border-brand-600 focus:ring-1 focus:ring-brand-600 dark:border-white/15 dark:bg-neutral-800"
           />
