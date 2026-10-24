@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
 import { Card, Select } from "@/components/ui";
+import { DailyWebhookStatus } from "@/components/daily-webhook-status";
 import { ClassLogRow } from "./class-log-row";
 import { GenerateMonthlyButton } from "./generate-monthly-button";
 import { GenerateForPairButton } from "./generate-for-pair-button";
@@ -58,6 +59,8 @@ export default async function ClassLogsPage(props: PageProps<"/arts/admin/class-
       <p className="mt-1 text-sm text-black/60 dark:text-white/60">
         Every completed session&apos;s transcript and AI summary, plus monthly progress recaps per student.
       </p>
+
+      <DailyWebhookStatus />
 
       <Card className="mt-6">
         <h2 className="font-semibold">Monthly summaries</h2>

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendBookingReminder } from "@/lib/notifications/reminders";
 import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
 import { sendTestDueSoonEmail } from "@/lib/notifications/tests";
+import { checkDailyWebhook } from "@/lib/daily";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
 // cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
@@ -97,5 +98,13 @@ export async function GET(request: Request) {
     sentCount += 1;
   }
 
-  return NextResponse.json({ ok: true, remindersSent: sentCount });
+  // Daily silently disables its webhook after a few failed deliveries,
+  // which stops all class attendance and AI summaries until someone
+  // notices. Re-activate it here so an outage lasts at most one cron cycle.
+  const dailyWebhook = await checkDailyWebhook({ repair: true });
+  if (dailyWebhook.status !== "active" && dailyWebhook.status !== "not-configured") {
+    console.error("[cron] Daily webhook not healthy", dailyWebhook);
+  }
+
+  return NextResponse.json({ ok: true, remindersSent: sentCount, dailyWebhook: dailyWebhook.status });
 }
