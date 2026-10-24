@@ -9,6 +9,8 @@ export type PersonOverviewEntry = {
   status: "booked" | "available";
   /** Who's on the other side of a booked entry, or whose open slot this is — omitted for a professor's own open slot. */
   peerName?: string;
+  /** The professor this entry belongs to — always the viewer themselves for a professor's own calendar, so only meaningful for filtering a student's calendar by professor. */
+  professorId: string;
 };
 
 export type PersonOverviewDay = { dateKey: string; dayNumber: number; entries: PersonOverviewEntry[] };
@@ -85,6 +87,7 @@ function expandOpenSlots(
             timeLabel: timeLabelInZone(slotStart, viewerTimezone),
             status: "available",
             peerName: labelWithProfessorName ? professor.name : undefined,
+            professorId: professor.id,
           });
         }
       }
@@ -137,6 +140,10 @@ export async function buildPersonMonthOverview(opts: {
   userId: string;
   viewerTimezone: string;
   reference?: Date;
+  /** Student calendars only — restrict to one professor among the ones they've had sessions with. Ignored for a professor's own calendar (always just themselves). */
+  professorId?: string;
+  /** Show only booked entries, only open slots, or both (default) when omitted. */
+  status?: "booked" | "available";
 }): Promise<PersonOverviewMonth> {
   const reference = opts.reference ?? new Date();
   const zonedToday = new Intl.DateTimeFormat("en-CA", { timeZone: opts.viewerTimezone, year: "numeric", month: "2-digit" }).format(reference);
@@ -152,6 +159,7 @@ export async function buildPersonMonthOverview(opts: {
   const ownBookings = await prisma.booking.findMany({
     where: {
       ...(isStudent ? { studentId: opts.userId } : { professorId: opts.userId }),
+      ...(isStudent && opts.professorId ? { professorId: opts.professorId } : {}),
       status: { in: ["PENDING", "CONFIRMED"] },
       startAt: { gte: monthStart, lt: monthEndExclusive },
     },
@@ -169,6 +177,7 @@ export async function buildPersonMonthOverview(opts: {
     timeLabel: timeLabelInZone(b.startAt, opts.viewerTimezone),
     status: "booked" as const,
     peerName: isStudent ? b.professor.name : b.student.name,
+    professorId: b.professorId,
   }));
 
   let availableEntries: PersonOverviewEntry[] = [];
@@ -177,6 +186,7 @@ export async function buildPersonMonthOverview(opts: {
     const professors = await prisma.user.findMany({
       where: {
         role: "PROFESSOR",
+        ...(opts.professorId ? { id: opts.professorId } : {}),
         bookingsAsProfessor: { some: { studentId: opts.userId, status: { in: ["CONFIRMED", "COMPLETED"] } } },
       },
       select: { id: true, name: true },
@@ -216,5 +226,7 @@ export async function buildPersonMonthOverview(opts: {
     );
   }
 
-  return bucketByDay([...bookedEntries, ...availableEntries], year, month, daysInMonth, opts.viewerTimezone);
+  const allEntries = [...bookedEntries, ...availableEntries].filter((e) => !opts.status || e.status === opts.status);
+
+  return bucketByDay(allEntries, year, month, daysInMonth, opts.viewerTimezone);
 }

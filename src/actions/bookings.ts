@@ -11,14 +11,11 @@ import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, buildCalendarWeeks, bookingWindowDaysFor, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
 import { checkSlotAccess } from "@/lib/enrollment";
 import {
-  MIN_SLOTS_PER_BOOKING,
-  MAX_SLOTS_PER_BOOKING,
   MAX_RESCHEDULES_PER_MONTH,
   MAX_CANCELLATIONS_PER_MONTH,
   STUDENT_CHANGE_CUTOFF_HOURS,
   isPastStudentChangeCutoff,
 } from "@/lib/booking-rules";
-import { stripe, isStripeConfigured } from "@/lib/stripe";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
 import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
@@ -30,10 +27,8 @@ import {
   sendRescheduleProposedEmail,
   sendRescheduleDeclinedEmail,
 } from "@/lib/notifications/booking-confirmation";
-import { formatWhenFor } from "@/lib/notifications/format";
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
-import { getAppUrl } from "@/lib/url";
 
 async function createConfirmedBookings(opts: {
   studentId: string;
@@ -71,9 +66,7 @@ export async function bookSlots(_state: unknown, formData: FormData) {
   const professorId = String(formData.get("professorId") ?? "");
   const requestedStartAts = Array.from(new Set(formData.getAll("startAts").map(String).filter(Boolean)));
   if (!professorId) return { message: "Invalid booking request." };
-  if (requestedStartAts.length < MIN_SLOTS_PER_BOOKING || requestedStartAts.length > MAX_SLOTS_PER_BOOKING) {
-    return { message: `Please select between ${MIN_SLOTS_PER_BOOKING} and ${MAX_SLOTS_PER_BOOKING} sessions.` };
-  }
+  if (requestedStartAts.length === 0) return { message: "Please select at least one session." };
 
   const requestedDates = requestedStartAts.map((s) => new Date(s));
   if (requestedDates.some((d) => Number.isNaN(d.getTime()))) return { message: "Invalid time selected." };
@@ -124,111 +117,24 @@ export async function bookSlots(_state: unknown, formData: FormData) {
     redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
   }
 
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      studentId: session.userId,
-      professorId,
-      status: "ACTIVE",
-      currentPeriodEnd: { gt: new Date() },
-    },
+  // Cooachly: the access check above already means this student's monthly
+  // or yearly package payment is on file (or admin switched on the
+  // override) — they're not charged again per session, so this confirms
+  // directly with no further payment step. (This used to fall through to a
+  // per-session Stripe Checkout, but that charged on top of the package
+  // payment already required to get here, and was the source of "couldn't
+  // start checkout" failures — Stripe itself is still used by the separate,
+  // independent professor-subscription feature in actions/billing.ts.)
+  const bookings = await createConfirmedBookings({
+    studentId: session.userId,
+    professorId,
+    matches: confirmedMatches,
+    paymentStatus: "PAID",
+    priceCentsFor,
   });
-
-  if (activeSubscription) {
-    const bookings = await createConfirmedBookings({
-      studentId: session.userId,
-      professorId,
-      matches: confirmedMatches,
-      paymentStatus: "COVERED_BY_SUBSCRIPTION",
-      priceCentsFor,
-    });
-    revalidatePath(sitePath(session.site, "/student/bookings"));
-    revalidatePath(sitePath(session.site, "/professor/bookings"));
-    redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
-  }
-
-  if (!isStripeConfigured) {
-    const bookings = await createConfirmedBookings({
-      studentId: session.userId,
-      professorId,
-      matches: confirmedMatches,
-      paymentStatus: "UNPAID",
-      priceCentsFor,
-    });
-    revalidatePath(sitePath(session.site, "/student/bookings"));
-    revalidatePath(sitePath(session.site, "/professor/bookings"));
-    redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
-  }
-
-  const pendingBookings = await prisma.$transaction(
-    confirmedMatches.map((slot) =>
-      prisma.booking.create({
-        data: {
-          studentId: session.userId,
-          professorId,
-          startAt: slot.startAt,
-          endAt: slot.endAt,
-          status: "PENDING",
-          paymentStatus: "UNPAID",
-          priceCents: priceCentsFor(slot),
-        },
-      })
-    )
-  );
-
-  const appUrl = await getAppUrl();
-
-  // Stripe calls are kept out of the surrounding redirect()'s control flow
-  // (redirect() throws internally to unwind the action — if these were in
-  // the same try block, a genuine Stripe failure couldn't be told apart
-  // from a successful redirect). On failure, the PENDING bookings created
-  // above are cancelled so their slots free up instead of being stuck
-  // PENDING forever with no checkout session to complete them.
-  let checkoutUrl: string;
-  try {
-    let customerId = null as string | null;
-    const student = await prisma.user.findUnique({ where: { id: session.userId } });
-    if (student?.stripeCustomerId) {
-      customerId = student.stripeCustomerId;
-    } else {
-      const customer = await stripe.customers.create({ email: session.email, name: session.name });
-      customerId = customer.id;
-      await prisma.user.update({ where: { id: session.userId }, data: { stripeCustomerId: customerId } });
-    }
-
-    const checkoutSession = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer: customerId,
-      line_items: pendingBookings.map((booking, i) => ({
-        price_data: {
-          currency: "usd",
-          unit_amount: booking.priceCents,
-          product_data: {
-            name: `${confirmedMatches[i].sessionLengthMinutes}-minute session with ${professor.name} — ${formatWhenFor(confirmedMatches[i].startAt, student?.timezone ?? "UTC")}`,
-          },
-        },
-        quantity: 1,
-      })),
-      success_url: `${appUrl}${sitePath(session.site, `/student/bookings?booked=${pendingBookings.map((b) => b.id).join(",")}`)}`,
-      cancel_url: `${appUrl}${sitePath(session.site, `/student/professors/${professorId}?cancelled=1`)}`,
-      metadata: { bookingIds: pendingBookings.map((b) => b.id).join(","), type: "booking" },
-    });
-
-    await prisma.booking.updateMany({
-      where: { id: { in: pendingBookings.map((b) => b.id) } },
-      data: { stripeCheckoutSessionId: checkoutSession.id },
-    });
-
-    checkoutUrl = checkoutSession.url ?? `${appUrl}${sitePath(session.site, "/student/bookings")}`;
-  } catch (err) {
-    console.error("Failed to create Stripe checkout session for booking", err);
-    await prisma.booking.updateMany({
-      where: { id: { in: pendingBookings.map((b) => b.id) } },
-      data: { status: "CANCELLED" },
-    });
-    return { message: "We couldn't start checkout for your sessions. Please try again in a moment." };
-  }
-
-  redirect(checkoutUrl);
+  revalidatePath(sitePath(session.site, "/student/bookings"));
+  revalidatePath(sitePath(session.site, "/professor/bookings"));
+  redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
 }
 
 export type CancelBookingState = { message?: string; success?: true } | undefined;

@@ -65,15 +65,6 @@ export default async function ProfessorDetailPage(props: PageProps<"/student/pro
             {professor.professorProfile?.bio}
           </p>
 
-          <div className="mt-4 flex items-center gap-3">
-            <span className="text-lg font-semibold">
-              ${((professor.professorProfile?.hourlyRateCents ?? 0) / 100).toFixed(2)}
-            </span>
-            <span className="text-sm text-black/50 dark:text-white/50">
-              / 60-minute session (final price shown per slot below)
-            </span>
-          </div>
-
           <Link
             href={sitePath(user.site, `/student/messages/${professor.id}`)}
             className="mt-3 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"

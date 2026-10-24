@@ -3,7 +3,6 @@
 import { useActionState, useState } from "react";
 import { bookSlots } from "@/actions/bookings";
 import { Button, FormMessage } from "@/components/ui";
-import { MIN_SLOTS_PER_BOOKING, MAX_SLOTS_PER_BOOKING } from "@/lib/booking-rules";
 import type { CalendarDay } from "@/lib/scheduling";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -23,14 +22,10 @@ export function BookingCalendar({
   const [selected, setSelected] = useState<string[]>([]);
 
   const hasAnySlots = weeks.some((week) => week.some((day) => day && day.slots.length > 0));
-  const canSubmit = selected.length >= MIN_SLOTS_PER_BOOKING && selected.length <= MAX_SLOTS_PER_BOOKING && !pending;
+  const canSubmit = selected.length >= 1 && !pending;
 
   function toggle(startAt: string) {
-    setSelected((prev) => {
-      if (prev.includes(startAt)) return prev.filter((s) => s !== startAt);
-      if (prev.length >= MAX_SLOTS_PER_BOOKING) return prev;
-      return [...prev, startAt];
-    });
+    setSelected((prev) => (prev.includes(startAt) ? prev.filter((s) => s !== startAt) : [...prev, startAt]));
   }
 
   return (
@@ -42,8 +37,7 @@ export function BookingCalendar({
 
       <p className="text-xs text-black/50 dark:text-white/50">
         All times shown in your timezone ({timezone}). Times in <span className="text-red-600 dark:text-red-400">red</span>{" "}
-        are already booked. Select between {MIN_SLOTS_PER_BOOKING} and {MAX_SLOTS_PER_BOOKING} sessions to book at
-        once.
+        are already booked. Select as many sessions as you&apos;d like to book at once.
       </p>
 
       {!hasAnySlots ? (
@@ -79,25 +73,20 @@ export function BookingCalendar({
                           </div>
                           {day.slots.map((slot) => {
                             const isSelected = selected.includes(slot.startAt);
-                            const atLimit = !isSelected && selected.length >= MAX_SLOTS_PER_BOOKING;
-                            const disabled = slot.booked || atLimit;
+                            const disabled = slot.booked;
                             return (
                               <button
                                 key={slot.startAt}
                                 type="button"
                                 disabled={disabled}
                                 onClick={() => toggle(slot.startAt)}
-                                title={
-                                  slot.booked ? "Already booked" : atLimit ? `You can only select up to ${MAX_SLOTS_PER_BOOKING}` : slot.label
-                                }
+                                title={slot.booked ? "Already booked" : slot.label}
                                 className={`w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight ${
                                   slot.booked
                                     ? "cursor-not-allowed bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                                     : isSelected
                                       ? "bg-brand-700 text-white"
-                                      : atLimit
-                                        ? "cursor-not-allowed bg-black/5 text-black/30 dark:bg-white/5 dark:text-white/30"
-                                        : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
+                                      : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50"
                                 }`}
                               >
                                 {isSelected ? "✓ " : ""}
@@ -119,10 +108,7 @@ export function BookingCalendar({
       {state?.message && <FormMessage>{state.message}</FormMessage>}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-sm text-black/60 dark:text-white/60">
-          {selected.length} of {MAX_SLOTS_PER_BOOKING} selected
-          {selected.length < MIN_SLOTS_PER_BOOKING ? ` (minimum ${MIN_SLOTS_PER_BOOKING})` : ""}
-        </span>
+        <span className="text-sm text-black/60 dark:text-white/60">{selected.length} selected</span>
         <Button type="submit" disabled={!canSubmit} className="flex-1 sm:flex-none sm:px-8">
           {pending ? "Booking…" : bookLabel}
         </Button>

@@ -2,18 +2,36 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { sitePath } from "@/lib/site";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, Card, Select } from "@/components/ui";
 import { ContactInfoForm } from "@/components/contact-info-form";
 import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
 import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
 import { QuotaWidget } from "@/components/quota-widget";
 import { getStudentQuotaProgress } from "@/lib/enrollment";
+import { currentYearMonth, parseMonthParam, monthParamValue, monthReferenceDate } from "@/lib/month-nav";
+import { MonthNav } from "@/components/month-nav";
 
-export default async function StudentDashboardPage() {
+export default async function StudentDashboardPage(props: PageProps<"/student">) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [upcoming, pendingTests, monthOverview, quotaProgress] = await Promise.all([
+  const searchParams = await props.searchParams;
+  const monthParam = typeof searchParams.month === "string" ? searchParams.month : undefined;
+  const selectedMonth = parseMonthParam(monthParam, currentYearMonth(user.timezone));
+  const professorFilter = typeof searchParams.professor === "string" ? searchParams.professor : "";
+  const statusFilter = searchParams.status === "booked" || searchParams.status === "available" ? searchParams.status : undefined;
+  const overviewHref = (overrides: { month?: string; professor?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    const month = overrides.month ?? monthParamValue(selectedMonth);
+    const professor = overrides.professor ?? professorFilter;
+    const status = overrides.status ?? statusFilter ?? "";
+    params.set("month", month);
+    if (professor) params.set("professor", professor);
+    if (status) params.set("status", status);
+    return `?${params.toString()}`;
+  };
+
+  const [upcoming, pendingTests, monthOverview, quotaProgress, scheduleProfessors] = await Promise.all([
     prisma.booking.findMany({
       where: { studentId: user.id, status: { in: ["PENDING", "CONFIRMED"] }, startAt: { gte: new Date() } },
       orderBy: { startAt: "asc" },
@@ -25,8 +43,20 @@ export default async function StudentDashboardPage() {
       orderBy: { assignedAt: "desc" },
       include: { test: true },
     }),
-    buildPersonMonthOverview({ role: "STUDENT", userId: user.id, viewerTimezone: user.timezone }),
+    buildPersonMonthOverview({
+      role: "STUDENT",
+      userId: user.id,
+      viewerTimezone: user.timezone,
+      reference: monthReferenceDate(selectedMonth),
+      professorId: professorFilter || undefined,
+      status: statusFilter,
+    }),
     getStudentQuotaProgress(user.id, user.timezone),
+    prisma.user.findMany({
+      where: { role: "PROFESSOR", bookingsAsProfessor: { some: { studentId: user.id, status: { in: ["CONFIRMED", "COMPLETED"] } } } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
@@ -47,6 +77,48 @@ export default async function StudentDashboardPage() {
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">
           Your booked sessions this month, plus any open slots you could still book with your professors.
         </p>
+
+        <div className="mt-4">
+          <MonthNav current={selectedMonth} hrefFor={(ym) => overviewHref({ month: monthParamValue(ym) })} />
+        </div>
+
+        {scheduleProfessors.length > 0 && (
+          <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
+            <input type="hidden" name="month" value={monthParamValue(selectedMonth)} />
+            <div className="w-56">
+              <label htmlFor="professor" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+                Professor
+              </label>
+              <Select id="professor" name="professor" defaultValue={professorFilter}>
+                <option value="">All professors</option>
+                {scheduleProfessors.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-44">
+              <label htmlFor="status" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+                Status
+              </label>
+              <Select id="status" name="status" defaultValue={statusFilter ?? ""}>
+                <option value="">Booked &amp; open</option>
+                <option value="booked">Booked only</option>
+                <option value="available">Open only</option>
+              </Select>
+            </div>
+            <button type="submit" className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
+              Filter
+            </button>
+            {(professorFilter || statusFilter) && (
+              <a href={overviewHref({ professor: "", status: "" })} className="text-sm font-medium text-black/50 hover:underline dark:text-white/50">
+                Clear filters
+              </a>
+            )}
+          </form>
+        )}
+
         <div className="mt-4">
           <PersonOverviewCalendar month={monthOverview} />
         </div>

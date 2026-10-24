@@ -3,18 +3,32 @@ import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { isStripeConfigured } from "@/lib/stripe";
 import { sitePath } from "@/lib/site";
-import { Badge, Button, Card } from "@/components/ui";
+import { Badge, Button, Card, Select } from "@/components/ui";
 import { PersonOverviewCalendar } from "@/components/person-overview-calendar";
 import { buildPersonMonthOverview } from "@/lib/person-overview-calendar";
 import { QuotaWidget } from "@/components/quota-widget";
 import { getProfessorQuotaProgress } from "@/lib/enrollment";
 import { currentAvailabilityPeriod } from "@/lib/availability-period";
+import { currentYearMonth, parseMonthParam, monthParamValue, monthReferenceDate } from "@/lib/month-nav";
+import { MonthNav } from "@/components/month-nav";
 
-export default async function ProfessorDashboardPage() {
+export default async function ProfessorDashboardPage(props: PageProps<"/professor">) {
   const user = await getCurrentUser();
   if (!user) return null;
 
   const currentPeriod = currentAvailabilityPeriod(user.timezone);
+
+  const searchParams = await props.searchParams;
+  const monthParam = typeof searchParams.month === "string" ? searchParams.month : undefined;
+  const selectedMonth = parseMonthParam(monthParam, currentYearMonth(user.timezone));
+  const statusFilter = searchParams.status === "booked" || searchParams.status === "available" ? searchParams.status : undefined;
+  const overviewHref = (overrides: { month?: string; status?: string }) => {
+    const params = new URLSearchParams();
+    params.set("month", overrides.month ?? monthParamValue(selectedMonth));
+    const status = overrides.status ?? statusFilter ?? "";
+    if (status) params.set("status", status);
+    return `?${params.toString()}`;
+  };
 
   const [upcoming, earnings, availabilityCount, monthOverview, quotaProgress] = await Promise.all([
     prisma.booking.findMany({
@@ -30,7 +44,13 @@ export default async function ProfessorDashboardPage() {
     prisma.availability.count({
       where: { professorId: user.id, isActive: true, periodYear: currentPeriod.year, periodMonth: currentPeriod.month },
     }),
-    buildPersonMonthOverview({ role: "PROFESSOR", userId: user.id, viewerTimezone: user.timezone }),
+    buildPersonMonthOverview({
+      role: "PROFESSOR",
+      userId: user.id,
+      viewerTimezone: user.timezone,
+      reference: monthReferenceDate(selectedMonth),
+      status: statusFilter,
+    }),
     getProfessorQuotaProgress(user.id, user.timezone),
   ]);
 
@@ -74,6 +94,33 @@ export default async function ProfessorDashboardPage() {
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">
           Your booked sessions this month, plus your own still-open availability.
         </p>
+
+        <div className="mt-4">
+          <MonthNav current={selectedMonth} hrefFor={(ym) => overviewHref({ month: monthParamValue(ym) })} />
+        </div>
+
+        <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="month" value={monthParamValue(selectedMonth)} />
+          <div className="w-44">
+            <label htmlFor="status" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+              Status
+            </label>
+            <Select id="status" name="status" defaultValue={statusFilter ?? ""}>
+              <option value="">Booked &amp; open</option>
+              <option value="booked">Booked only</option>
+              <option value="available">Open only</option>
+            </Select>
+          </div>
+          <button type="submit" className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600">
+            Filter
+          </button>
+          {statusFilter && (
+            <a href={overviewHref({ status: "" })} className="text-sm font-medium text-black/50 hover:underline dark:text-white/50">
+              Clear filters
+            </a>
+          )}
+        </form>
+
         <div className="mt-4">
           <PersonOverviewCalendar month={monthOverview} />
         </div>
