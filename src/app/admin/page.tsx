@@ -5,6 +5,8 @@ import { Card, Select } from "@/components/ui";
 import { buildAdminMonthOverview, type OverviewFilters } from "@/lib/admin-overview-calendar";
 import { TestNotificationButton } from "./test-notification-button";
 import { MonthOverviewCalendar } from "./month-overview-calendar";
+import { currentYearMonth, parseMonthParam, monthParamValue, monthReferenceDate } from "@/lib/month-nav";
+import { MonthNav } from "@/components/month-nav";
 
 export default async function AdminOverviewPage(props: PageProps<"/admin">) {
   const session = await requireRole("ADMIN");
@@ -15,6 +17,16 @@ export default async function AdminOverviewPage(props: PageProps<"/admin">) {
   const studentFilter = typeof searchParams.student === "string" ? searchParams.student : "";
   const statusFilter = searchParams.status === "booked" || searchParams.status === "available" ? searchParams.status : "";
   const hasOverviewFilters = Boolean(professorFilter || studentFilter || statusFilter);
+  const monthParam = typeof searchParams.month === "string" ? searchParams.month : undefined;
+  const selectedMonth = parseMonthParam(monthParam, currentYearMonth(viewerTimezone));
+  const monthHref = (ym: { year: number; month: number }) => {
+    const params = new URLSearchParams();
+    if (studentFilter) params.set("student", studentFilter);
+    if (professorFilter) params.set("professor", professorFilter);
+    if (statusFilter) params.set("status", statusFilter);
+    params.set("month", monthParamValue(ym));
+    return `${sitePath(session.site, "/admin")}?${params.toString()}`;
+  };
 
   const filters: OverviewFilters = {
     professorId: professorFilter || undefined,
@@ -27,7 +39,7 @@ export default async function AdminOverviewPage(props: PageProps<"/admin">) {
     prisma.user.count({ where: { role: "PROFESSOR", site: session.site } }),
     prisma.user.count({ where: { role: "STUDENT", site: session.site } }),
     prisma.booking.count({ where: { professor: { site: session.site } } }),
-    buildAdminMonthOverview(session.site, viewerTimezone, new Date(), filters),
+    buildAdminMonthOverview(session.site, viewerTimezone, monthReferenceDate(selectedMonth), filters),
     prisma.user.findMany({
       where: { role: "PROFESSOR", site: session.site },
       select: { id: true, name: true },
@@ -60,7 +72,12 @@ export default async function AdminOverviewPage(props: PageProps<"/admin">) {
           Every booking and every still-open availability window this month, across all professors, by name.
         </p>
 
+        <div className="mt-4">
+          <MonthNav current={selectedMonth} hrefFor={monthHref} />
+        </div>
+
         <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="month" value={monthParamValue(selectedMonth)} />
           <div className="w-56">
             <label htmlFor="student" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
               Student
@@ -105,7 +122,7 @@ export default async function AdminOverviewPage(props: PageProps<"/admin">) {
           </button>
           {hasOverviewFilters && (
             <a
-              href={sitePath(session.site, "/admin")}
+              href={`${sitePath(session.site, "/admin")}?month=${monthParamValue(selectedMonth)}`}
               className="text-sm font-medium text-black/50 hover:underline dark:text-white/50"
             >
               Clear filters

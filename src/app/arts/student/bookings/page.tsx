@@ -11,12 +11,13 @@ export default async function StudentBookingsPage(props: PageProps<"/arts/studen
   if (!user) return null;
 
   const searchParams = await props.searchParams;
-  const view = searchParams.view === "completed" ? "completed" : "upcoming";
+  const view =
+    searchParams.view === "completed" ? "completed" : searchParams.view === "cancelled" ? "cancelled" : "upcoming";
 
   const [bookings, cancellationsRemaining] = await Promise.all([
     prisma.booking.findMany({
       where: { studentId: user.id, ...bookingStatusFilter(view) },
-      orderBy: { startAt: view === "completed" ? "desc" : "asc" },
+      orderBy: { startAt: view === "upcoming" ? "asc" : "desc" },
       include: { professor: true, attachments: true, reviews: true },
     }),
     getCancellationsRemaining(user.id),
@@ -27,7 +28,7 @@ export default async function StudentBookingsPage(props: PageProps<"/arts/studen
       <h1 className="text-2xl font-semibold">My bookings</h1>
 
       <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
-        {(["upcoming", "completed"] as const).map((tabView) => (
+        {(["upcoming", "completed", "cancelled"] as const).map((tabView) => (
           <a
             key={tabView}
             href={tabView === "upcoming" ? "?" : `?view=${tabView}`}
@@ -55,7 +56,7 @@ export default async function StudentBookingsPage(props: PageProps<"/arts/studen
           ))}
           {bookings.length === 0 && (
             <p className="p-6 text-sm text-black/50 dark:text-white/50">
-              {view === "completed" ? "No completed sessions yet." : "No upcoming bookings."}
+              {view === "completed" ? "No completed sessions yet." : view === "cancelled" ? "No cancelled sessions." : "No upcoming bookings."}
             </p>
           )}
         </div>

@@ -13,7 +13,8 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const searchParams = await props.searchParams;
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
-  const view = searchParams.view === "completed" ? "completed" : "upcoming";
+  const view =
+    searchParams.view === "completed" ? "completed" : searchParams.view === "cancelled" ? "cancelled" : "upcoming";
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
@@ -25,7 +26,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const [bookings, students] = await Promise.all([
     prisma.booking.findMany({
       where,
-      orderBy: { startAt: view === "completed" ? "desc" : "asc" },
+      orderBy: { startAt: view === "upcoming" ? "asc" : "desc" },
       take: 300,
       include: {
         student: true,
@@ -42,11 +43,11 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   ]);
 
   const hasFilters = Boolean(studentId || date);
-  const tabQuery = (tabView: "upcoming" | "completed") => {
+  const tabQuery = (tabView: "upcoming" | "completed" | "cancelled") => {
     const params = new URLSearchParams();
     if (studentId) params.set("student", studentId);
     if (date) params.set("date", date);
-    if (tabView === "completed") params.set("view", "completed");
+    if (tabView !== "upcoming") params.set("view", tabView);
     const qs = params.toString();
     return qs ? `?${qs}` : "";
   };
@@ -54,7 +55,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
     const params = new URLSearchParams();
     if (studentId) params.set("student", studentId);
     if (date) params.set("date", date);
-    if (view === "completed") params.set("view", "completed");
+    if (view !== "upcoming") params.set("view", view);
     const qs = params.toString();
     return `/api/admin/export/bookings${qs ? `?${qs}` : ""}`;
   })();
@@ -69,7 +70,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
               ? "Classes matching your filters."
               : view === "completed"
                 ? "Up to 300 completed classes, most recent first."
-                : "Up to 300 upcoming classes, soonest first."}{" "}
+                : view === "cancelled"
+                  ? "Up to 300 cancelled classes, most recent first."
+                  : "Up to 300 upcoming classes, soonest first."}{" "}
             Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
           </p>
         </div>
@@ -90,7 +93,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
       </div>
 
       <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
-        {(["upcoming", "completed"] as const).map((tabView) => (
+        {(["upcoming", "completed", "cancelled"] as const).map((tabView) => (
           <a
             key={tabView}
             href={`${sitePath(session.site, "/admin/bookings")}${tabQuery(tabView)}`}
@@ -106,7 +109,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
       </div>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
-        {view === "completed" && <input type="hidden" name="view" value="completed" />}
+        {view !== "upcoming" && <input type="hidden" name="view" value={view} />}
         <div className="w-56">
           <label htmlFor="student" className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
             Student
@@ -170,7 +173,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
                     ? "No classes match your filters."
                     : view === "completed"
                       ? "No completed classes yet."
-                      : "No upcoming bookings."}
+                      : view === "cancelled"
+                        ? "No cancelled classes."
+                        : "No upcoming bookings."}
                 </td>
               </tr>
             )}

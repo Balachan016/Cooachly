@@ -65,9 +65,6 @@ export default async function BrowseProfessorsPage(props: PageProps<"/student/pr
                   ))}
                 </div>
               )}
-              <p className="mt-3 text-sm font-medium">
-                ${((p.professorProfile?.hourlyRateCents ?? 0) / 100).toFixed(2)} / session
-              </p>
             </Card>
           </Link>
         ))}

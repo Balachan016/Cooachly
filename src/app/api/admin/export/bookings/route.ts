@@ -13,7 +13,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const studentId = url.searchParams.get("student") || "";
   const date = url.searchParams.get("date") || "";
-  const view = url.searchParams.get("view") === "completed" ? "completed" : "upcoming";
+  const viewParam = url.searchParams.get("view");
+  const view = viewParam === "completed" ? "completed" : viewParam === "cancelled" ? "cancelled" : "upcoming";
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
 
   const bookings = await prisma.booking.findMany({
     where,
-    orderBy: { startAt: view === "completed" ? "desc" : "asc" },
+    orderBy: { startAt: view === "upcoming" ? "asc" : "desc" },
     take: 5000,
     include: { student: true, professor: true },
   });
