@@ -6,11 +6,11 @@ import { HeroIllustration, MathIcon, ChemistryIcon, PhysicsIcon, TextBadge, Glob
 export default function Home() {
   return (
     <div className="flex-1">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-y-4 px-6 py-6">
         <Link href="/">
           <Logo withTagline />
         </Link>
-        <nav className="flex items-center gap-4">
+        <nav className="flex w-full items-center justify-end gap-4 sm:w-auto">
           <Link href="/" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
             Home
           </Link>
@@ -26,7 +26,7 @@ export default function Home() {
           <Link href="/contact" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
             Contact
           </Link>
-          <Link href="/become-a-coach" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
+          <Link href="/become-a-coach" className="whitespace-nowrap rounded-full bg-accent-300 px-3 py-1.5 text-sm font-semibold text-brand-900 shadow-sm ring-1 ring-brand-900/15 hover:brightness-95 dark:text-brand-950">
             Become a coach
           </Link>
           <Link href="/arts" className="hidden text-sm font-medium text-black/70 hover:text-black sm:inline dark:text-white/70 dark:hover:text-white">
@@ -196,7 +196,7 @@ export default function Home() {
       <footer className="mx-auto max-w-6xl px-6 py-10 text-sm text-black/40 dark:text-white/40">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} Cooachly</span>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link href="/pricing" className="hover:text-black dark:hover:text-white">
               Pricing
             </Link>
