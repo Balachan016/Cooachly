@@ -113,8 +113,6 @@ export function AdminBookingRow({
                 {booking.meetingLink && booking.status !== "CANCELLED" && !isPast ? (
                   <a
                     href={`/api/daily/join/${booking.id}`}
-                    target="_blank"
-                    rel="noreferrer"
                     className="mt-1 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
                   >
                     Join call →
