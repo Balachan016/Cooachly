@@ -54,11 +54,19 @@ export async function POST(request: Request) {
     // own ID under "id" — neither event uses "room_name"+"transcript_id"
     // together, which is what this used to (incorrectly) assume, causing
     // every single webhook delivery to 400 since the pipeline was first set up.
+    // participant.joined/participant.left carry user_id/user_name directly on
+    // payload, NOT nested under a "participant" object — that nested shape
+    // is only how the client-side daily-js SDK event looks, a separate thing
+    // from this server-side webhook payload. Reading from a "participant"
+    // sub-object (as this used to) always comes back undefined, so every
+    // join/leave silently saved as an unidentified participant instead of
+    // the real student/professor who joined via their own signed token.
     payload?: {
       room?: string;
       room_name?: string;
       id?: string;
-      participant?: { user_id?: string; user_name?: string };
+      user_id?: string;
+      user_name?: string;
     };
   };
 
@@ -72,25 +80,35 @@ export async function POST(request: Request) {
 
   if (event.type === "participant.joined" || event.type === "participant.left") {
     const roomName = event.payload?.room;
-    const participant = event.payload?.participant;
+    const userId = event.payload?.user_id;
+    const userName = event.payload?.user_name;
     if (!roomName) return NextResponse.json({ ok: false, error: "Missing room" }, { status: 400 });
 
+    // A non-2xx response here is not just "logged and ignored" — Daily's
+    // default retry policy is a circuit breaker that stops sending *any*
+    // further webhooks (including meeting.started and transcript.ready-to-
+    // download, for every room) once this endpoint looks unhealthy. A join/
+    // leave for a room with no matching booking (e.g. a one-off test call
+    // made directly in the Daily dashboard) isn't a sign anything is
+    // actually broken, so this acknowledges receipt with 200 rather than
+    // 404, which only flags these as "ignored" rather than tripping that
+    // breaker and silently killing the pipeline for every other booking too.
     const booking = await findBookingByRoomName(roomName);
-    if (!booking) return NextResponse.json({ ok: false, error: "Booking not found" }, { status: 404 });
+    if (!booking) return NextResponse.json({ ok: true, ignored: "Booking not found" });
 
     // Only trust a participant's user_id if it's actually one of our own
     // user ids — set via /api/daily/join/[bookingId]'s meeting token. A join
     // straight off the bare room link has Daily's own random anonymous id
     // instead, which would otherwise violate the userId foreign key.
-    const matchedUser = participant?.user_id
-      ? await prisma.user.findUnique({ where: { id: participant.user_id }, select: { id: true } })
+    const matchedUser = userId
+      ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
       : null;
 
     await prisma.callAttendanceEvent.create({
       data: {
         bookingId: booking.id,
         userId: matchedUser?.id ?? null,
-        participantName: participant?.user_name ?? null,
+        participantName: userName ?? null,
         eventType: event.type === "participant.joined" ? "JOINED" : "LEFT",
         occurredAt: event.event_ts ? new Date(event.event_ts * 1000) : new Date(),
       },
@@ -106,8 +124,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Missing room_name or id" }, { status: 400 });
     }
 
+    // Same reasoning as the participant.joined/left handler above: ack with
+    // 200 instead of 404 so an orphaned room never trips Daily's circuit
+    // breaker and stops every future webhook delivery.
     const booking = await findBookingByRoomName(roomName);
-    if (!booking) return NextResponse.json({ ok: false, error: "Booking not found" }, { status: 404 });
+    if (!booking) return NextResponse.json({ ok: true, ignored: "Booking not found" });
 
     const downloadLink = await getTranscriptDownloadLink(transcriptId);
     if (!downloadLink) {
