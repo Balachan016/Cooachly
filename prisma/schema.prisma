@@ -470,6 +470,13 @@ model Booking {
 
   @@index([professorId, startAt])
   @@index([studentId, startAt])
+  // There's also a partial unique index on (professorId, startAt) WHERE
+  // status IN ('PENDING', 'CONFIRMED') — added by migration
+  // 20261101120000_prevent_duplicate_slot_bookings directly in SQL, since
+  // Prisma's schema DSL can't express a conditional/partial unique
+  // constraint. It's what actually stops two bookings ever landing on the
+  // exact same professor + start time, closing the race condition that
+  // the app-level availability check alone couldn't.
 }
 
 model NotificationLog {

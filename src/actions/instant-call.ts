@@ -3,6 +3,7 @@
 import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { fromZonedTime } from "date-fns-tz";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { isDailyConfigured, provisionVideoRoomForBooking } from "@/lib/daily";
@@ -72,19 +73,27 @@ export async function startInstantCall(_state: InstantCallState, formData: FormD
   // still allows it blank) — just for displaying the time back to the admin.
   const displayTimezone = timezone || student.timezone;
 
-  const booking = await prisma.booking.create({
-    data: {
-      studentId,
-      professorId,
-      startAt,
-      endAt,
-      status: "CONFIRMED",
-      paymentStatus: "PAID",
-      priceCents: 0,
-      notes: isInstant ? "Instant call started by admin" : "Session created directly by admin",
-      meetingLink: meetingLink || null,
-    },
-  });
+  let booking;
+  try {
+    booking = await prisma.booking.create({
+      data: {
+        studentId,
+        professorId,
+        startAt,
+        endAt,
+        status: "CONFIRMED",
+        paymentStatus: "PAID",
+        priceCents: 0,
+        notes: isInstant ? "Instant call started by admin" : "Session created directly by admin",
+        meetingLink: meetingLink || null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { message: `${professor.name} already has a session scheduled at that exact time.` };
+    }
+    throw err;
+  }
 
   if (isDailyConfigured) {
     await provisionVideoRoomForBooking(booking);
