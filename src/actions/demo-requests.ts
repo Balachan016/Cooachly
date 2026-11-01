@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { generateTempPassword, hashPassword } from "@/lib/password";
 import { DEMO_SESSION_LENGTH_MINUTES } from "@/lib/booking-rules";
 import { sendDemoRequestScheduledEmail, sendDemoJoinedWelcomeEmail } from "@/lib/notifications/demo-requests";
@@ -58,10 +59,22 @@ export async function scheduleDemoCall(
   let newAccountTempPassword: string | undefined;
 
   if (existingBooking) {
-    await prisma.booking.update({
+    const updatedBooking = await prisma.booking.update({
       where: { id: existingBooking.id },
       data: { professorId: professor.id, startAt: scheduledAt, endAt, meetingLink },
     });
+    // Leaving the meeting link blank means "use Daily" (same as every other
+    // booking type) — an admin who deliberately pastes their own Zoom/Meet
+    // link for a demo keeps using it untouched, with no Daily room, same as
+    // before this. Rescheduling an already-Daily demo just extends its
+    // room's expiry instead of provisioning a second one for the same call.
+    if (!meetingLink) {
+      if (updatedBooking.dailyRoomName) {
+        await updateDailyRoomExpiry(updatedBooking.dailyRoomName, Math.floor(endAt.getTime() / 1000) + 2 * 60 * 60);
+      } else {
+        await provisionVideoRoomForBooking(updatedBooking);
+      }
+    }
   } else {
     let student = await prisma.user.findUnique({ where: { site_email: { site: session.site, email: demoRequest.email } } });
     if (student && student.role !== "STUDENT") {
@@ -83,7 +96,7 @@ export async function scheduleDemoCall(
       });
     }
 
-    await prisma.booking.create({
+    const booking = await prisma.booking.create({
       data: {
         studentId: student.id,
         professorId: professor.id,
@@ -97,6 +110,7 @@ export async function scheduleDemoCall(
         demoRequestId: id,
       },
     });
+    if (!meetingLink) await provisionVideoRoomForBooking(booking);
   }
 
   const updated = await prisma.demoRequest.update({
