@@ -194,6 +194,17 @@ export function AdminBookingRow({
             </div>
 
             <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">
+              <div className="text-xs font-semibold uppercase text-black/40 dark:text-white/40">Record</div>
+              <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+                Created{" "}
+                {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: viewerTimezone }).format(
+                  booking.createdAt
+                )}
+                {booking.notes ? ` — ${booking.notes}` : ""}
+              </p>
+            </div>
+
+            <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">
               <div className="text-xs font-semibold uppercase text-black/40 dark:text-white/40">Reminder log</div>
               {booking.notificationLogs.length === 0 ? (
                 <p className="mt-1 text-sm text-black/40 dark:text-white/40">No reminders sent yet.</p>
