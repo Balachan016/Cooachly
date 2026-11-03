@@ -2,6 +2,7 @@
 
 import * as z from "zod";
 import { revalidatePath } from "next/cache";
+import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
@@ -16,6 +17,7 @@ import type { DemoRequestStatus } from "@prisma/client";
 const ScheduleDemoCallSchema = z.object({
   professorId: z.string().min(1, "Please choose a professor."),
   scheduledAt: z.string().min(1, "Please choose a date and time."),
+  timezone: z.string().min(1, "Please pick a timezone."),
   meetingLink: z.string().trim().optional(),
   adminNotes: z.string().trim().optional(),
 });
@@ -35,6 +37,7 @@ export async function scheduleDemoCall(
   const parsed = ScheduleDemoCallSchema.safeParse({
     professorId: formData.get("professorId"),
     scheduledAt: formData.get("scheduledAt"),
+    timezone: formData.get("timezone"),
     meetingLink: formData.get("meetingLink") || undefined,
     adminNotes: formData.get("adminNotes") || undefined,
   });
@@ -42,7 +45,16 @@ export async function scheduleDemoCall(
     return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
   }
 
-  const scheduledAt = new Date(parsed.data.scheduledAt);
+  // scheduledAt is a plain "YYYY-MM-DDTHH:mm" wall-clock string with no zone
+  // of its own — interpret it in the zone the admin picked (same convention
+  // as every other scheduling flow in this app), not the server's runtime
+  // zone, which is what new Date(...) on a bare string like this used to do.
+  let scheduledAt: Date;
+  try {
+    scheduledAt = fromZonedTime(`${parsed.data.scheduledAt}:00`, parsed.data.timezone);
+  } catch {
+    return { message: "Invalid date/time or timezone." };
+  }
   if (Number.isNaN(scheduledAt.getTime())) return { message: "Invalid date/time." };
 
   const professor = await prisma.user.findUnique({ where: { id: parsed.data.professorId, role: "PROFESSOR" } });
