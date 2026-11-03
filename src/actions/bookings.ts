@@ -344,6 +344,19 @@ export async function adminRescheduleBooking(_state: RescheduleFormState, formDa
     await updateDailyRoomExpiry(updated.dailyRoomName, newExp);
   }
 
+  // A demo booking's own DemoRequest.scheduledAt is a separate column from
+  // the Booking it's linked to — scheduleDemoCall keeps both in sync when
+  // it's the one moving the time, but rescheduling the same booking from
+  // here (the admin Bookings page's general-purpose reschedule control)
+  // only touched the Booking, leaving the demo-requests page showing the
+  // old time. Keep both in sync regardless of which control the admin uses.
+  if (updated.demoRequestId) {
+    await prisma.demoRequest.update({
+      where: { id: updated.demoRequestId },
+      data: { scheduledAt: newStartDate },
+    });
+  }
+
   await sendBookingRescheduledEmail(updated, previousStartAt, {
     requestedBy: "ADMIN",
     requestedByName: `${session.name} (admin)`,
@@ -363,6 +376,7 @@ export async function adminRescheduleBooking(_state: RescheduleFormState, formDa
   revalidatePath(sitePath(bookingSite, "/student/bookings"));
   revalidatePath(sitePath(bookingSite, "/professor/bookings"));
   revalidatePath(sitePath(bookingSite, "/admin/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/demo-requests"));
   revalidatePath("/superadmin/bookings");
 
   return { message: "Session rescheduled.", success: true };

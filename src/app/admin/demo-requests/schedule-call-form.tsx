@@ -27,6 +27,7 @@ export function ScheduleCallForm({
   const [timezone, setTimezone] = useState(defaultTimezone);
   const action = scheduleDemoCall.bind(null, demoRequestId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const isScheduled = Boolean(defaultScheduledAt);
 
   return (
     <form action={formAction} className="grid gap-3 sm:grid-cols-2">
@@ -101,7 +102,7 @@ export function ScheduleCallForm({
 
       <div className="sm:col-span-2">
         <Button type="submit" variant="secondary" disabled={pending}>
-          {pending ? "Saving…" : "Schedule call"}
+          {pending ? "Saving…" : isScheduled ? "Reschedule call" : "Schedule call"}
         </Button>
       </div>
     </form>
