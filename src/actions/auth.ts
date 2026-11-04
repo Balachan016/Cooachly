@@ -21,6 +21,20 @@ function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_LOGIN_ATTEMPTS = 5;
+
+/** Checked before the password is ever touched, so repeated guesses against a real or made-up email are throttled the same way. */
+async function isLoginLocked(site: Site, email: string): Promise<boolean> {
+  const since = new Date(Date.now() - LOGIN_ATTEMPT_WINDOW_MS);
+  const count = await prisma.loginAttempt.count({ where: { site, email, createdAt: { gte: since } } });
+  return count >= MAX_LOGIN_ATTEMPTS;
+}
+
+async function recordFailedLoginAttempt(site: Site, email: string): Promise<void> {
+  await prisma.loginAttempt.create({ data: { site, email } });
+}
+
 // Every auth form carries a hidden `site` field so a single shared action
 // knows which platform (Cooachly or Arts) it's authenticating against;
 // an absent/invalid value falls back to Cooachly rather than failing.
@@ -60,15 +74,25 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
   const { email, password } = validated.data;
   const site = readSite(formData);
 
+  if (await isLoginLocked(site, email)) {
+    return { message: "Too many failed attempts. Please wait 15 minutes and try again." };
+  }
+
   const user = await prisma.user.findUnique({ where: { site_email: { site, email } } });
   if (!user || !user.isActive) {
+    await recordFailedLoginAttempt(site, email);
     return { message: "Invalid email or password." };
   }
 
   const passwordsMatch = await verifyPassword(password, user.passwordHash);
   if (!passwordsMatch) {
+    await recordFailedLoginAttempt(site, email);
     return { message: "Invalid email or password." };
   }
+
+  // Successful login — this email is no longer under suspicion, so don't
+  // make them wait out the window if they fat-fingered it a few times first.
+  await prisma.loginAttempt.deleteMany({ where: { site, email } });
 
   await createSession({ userId: user.id, role: user.role, site: user.site, name: user.name, email: user.email });
   await logAudit({
