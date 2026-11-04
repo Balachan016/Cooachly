@@ -55,6 +55,20 @@ export default async function SettingsPage() {
           </div>
         </Card>
       )}
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Your data</h2>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          Download a copy of what we hold on your account — profile, bookings, reviews, messages, and consent
+          records.
+        </p>
+        <a
+          href="/api/account/export"
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg border border-black/15 px-4 py-2 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          Export my data
+        </a>
+      </Card>
     </div>
   );
 }
