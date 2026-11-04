@@ -7,6 +7,7 @@ import { TestNotificationButton } from "./test-notification-button";
 import { MonthOverviewCalendar } from "./month-overview-calendar";
 import { currentYearMonth, parseMonthParam, monthParamValue, monthReferenceDate } from "@/lib/month-nav";
 import { MonthNav } from "@/components/month-nav";
+import { DailyWebhookHealth } from "@/components/daily-webhook-health";
 
 export default async function AdminOverviewPage(props: PageProps<"/admin">) {
   const session = await requireRole("ADMIN");
@@ -145,6 +146,8 @@ export default async function AdminOverviewPage(props: PageProps<"/admin">) {
           <TestNotificationButton />
         </div>
       </Card>
+
+      <DailyWebhookHealth />
     </div>
   );
 }
