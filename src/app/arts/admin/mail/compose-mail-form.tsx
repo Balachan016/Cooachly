@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { sendAdminEmail } from "@/actions/mail";
 import { Button, Input, Label, Textarea } from "@/components/ui";
 
-export function ComposeMailForm() {
-  const [to, setTo] = useState("");
+export function ComposeMailForm({ initialTo = "", initialSubject = "" }: { initialTo?: string; initialSubject?: string }) {
+  const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState("");
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState("");
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);

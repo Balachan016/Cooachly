@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
+import { sitePath } from "@/lib/site";
 import { Card } from "@/components/ui";
 
 export default async function AdminEnquiriesPage() {
@@ -9,6 +10,11 @@ export default async function AdminEnquiriesPage() {
     orderBy: { createdAt: "desc" },
     take: 200,
   });
+
+  const replyHref = (e: { email: string; name: string }) => {
+    const params = new URLSearchParams({ to: e.email, subject: `Re: your enquiry` });
+    return `${sitePath(session.site, "/admin/mail")}?${params.toString()}`;
+  };
 
   return (
     <div>
@@ -23,8 +29,13 @@ export default async function AdminEnquiriesPage() {
             <div key={e.id} className="p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <div className="font-medium">{e.name}</div>
-                <div className="text-xs text-black/50 dark:text-white/50">
-                  {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(e.createdAt)}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-black/50 dark:text-white/50">
+                    {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(e.createdAt)}
+                  </span>
+                  <a href={replyHref(e)} className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
+                    Reply
+                  </a>
                 </div>
               </div>
               <div className="text-sm text-black/60 dark:text-white/60">
