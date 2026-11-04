@@ -3,8 +3,16 @@ import Link from "next/link";
 import { logout, returnFromSwitch } from "@/actions/auth";
 import { Button } from "@/components/ui";
 import { Logo } from "@/components/logo";
+import { NavGroupDisclosure } from "@/components/nav-group-disclosure";
 
 export type NavLink = { href: string; label: string };
+/** A collapsible section of links in the desktop sidebar — flattened back into plain links on mobile. */
+export type NavGroup = { label: string; links: NavLink[] };
+export type NavItem = NavLink | NavGroup;
+
+function isNavGroup(item: NavItem): item is NavGroup {
+  return "links" in item;
+}
 
 export function DashboardShell({
   children,
@@ -17,7 +25,7 @@ export function DashboardShell({
   switchedInBy,
 }: {
   children: React.ReactNode;
-  navLinks: NavLink[];
+  navLinks: NavItem[];
   roleLabel: string;
   userName: string;
   homeHref?: string;
@@ -26,6 +34,7 @@ export function DashboardShell({
   /** The admin's name, when this session is an admin "switched in" as this user. */
   switchedInBy?: string;
 }) {
+  const flatMobileLinks = navLinks.flatMap((item) => (isNavGroup(item) ? item.links : [item]));
   return (
     <div className="flex min-h-screen flex-1 flex-col">
       {switchedInBy && (
@@ -72,15 +81,19 @@ export function DashboardShell({
           </div>
         </div>
         <nav className="flex-1 space-y-1 p-3">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="block rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((item) =>
+            isNavGroup(item) ? (
+              <NavGroupDisclosure key={item.label} label={item.label} links={item.links} />
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="block rounded-md px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
+              >
+                {item.label}
+              </Link>
+            )
+          )}
         </nav>
       </aside>
 
@@ -104,7 +117,7 @@ export function DashboardShell({
           </div>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-4 pb-3">
-          {navLinks.map((link) => (
+          {flatMobileLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
