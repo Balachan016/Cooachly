@@ -189,6 +189,7 @@ model User {
   exchangeRatesUpdated       ExchangeRate[]         @relation("ExchangeRatesUpdated")
   consentAcceptances         ConsentAcceptance[]    @relation("ConsentAcceptances")
   consentTemplatesUpdated    ConsentTemplate[]      @relation("ConsentTemplatesUpdated")
+  adminEmailsSent            AdminEmail[]           @relation("AdminEmailsSent")
 
   @@unique([site, email])
 }
@@ -509,6 +510,25 @@ model NotificationLog {
 
   @@index([bookingId])
   @@index([providerMessageSid])
+}
+
+// An ad-hoc email an admin composed and sent through the Admin > Mail tab —
+// the repository of mail actually sent that way, separate from
+// NotificationLog (the system's own automatic notification emails).
+model AdminEmail {
+  id        String             @id @default(cuid())
+  site      Site               @default(COOACHLY)
+  senderId  String?
+  sender    User?              @relation("AdminEmailsSent", fields: [senderId], references: [id], onDelete: SetNull)
+  to        String             // comma-separated recipient addresses
+  cc        String?            // comma-separated CC'd addresses, if any
+  subject   String
+  body      String             // HTML body as composed/sent
+  status    NotificationStatus
+  error     String?
+  createdAt DateTime           @default(now())
+
+  @@index([site, createdAt])
 }
 
 enum CallEventType {

@@ -1,27 +1,59 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { summarizeMonth, isAiSummaryConfigured } from "@/lib/ai-summary";
 import { sitePath } from "@/lib/site";
 
+export type SummaryPeriod = { startMonth: string; endMonth: string; timezone: string };
+
+/** [start, end) instants covering startMonth through endMonth inclusive ("YYYY-MM" strings), as that span reads in the given timezone — not UTC, so a month boundary lands on the right calendar day for whoever's reading it. */
+function monthRangeInTimezone(period: SummaryPeriod): { periodStart: Date; periodEnd: Date } {
+  const startMatch = /^(\d{4})-(\d{2})$/.exec(period.startMonth);
+  const endMatch = /^(\d{4})-(\d{2})$/.exec(period.endMonth);
+  if (!startMatch || !endMatch) throw new Error("Invalid month format.");
+  const [, startY, startM] = startMatch.map(Number) as unknown as [never, number, number];
+  const [, endY, endM] = endMatch.map(Number) as unknown as [never, number, number];
+
+  const periodStart = fromZonedTime(`${startY}-${String(startM).padStart(2, "0")}-01T00:00:00`, period.timezone);
+  // Exclusive upper bound: the first instant of the month right after endMonth.
+  const afterEndY = endM === 12 ? endY + 1 : endY;
+  const afterEndM = endM === 12 ? 1 : endM + 1;
+  const periodEnd = fromZonedTime(`${afterEndY}-${String(afterEndM).padStart(2, "0")}-01T00:00:00`, period.timezone);
+  return { periodStart, periodEnd };
+}
+
 /**
- * Generates a monthly progress recap per (student, professor, subject) for
- * the most recently completed calendar month, from that month's individual
- * session summaries. Safe to re-run — re-generating a month overwrites its
+ * Generates a progress recap per (student, professor, subject) from each
+ * completed session's own summary within a date range — defaulting to last
+ * calendar month, but the admin can widen it to any custom span (a
+ * semester, a year, anything in between) via the Summaries tab's start/end
+ * month picker. Safe to re-run — re-generating a period overwrites its
  * existing recap rather than duplicating it.
  */
-export async function generateMonthlySummaries(): Promise<{ message: string }> {
+export async function generateMonthlySummaries(period?: SummaryPeriod): Promise<{ message: string }> {
   const session = await requireRole("ADMIN");
 
   if (!isAiSummaryConfigured) {
     return { message: "OpenAI isn't configured, so monthly summaries can't be generated yet." };
   }
 
-  const now = new Date();
-  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  let periodStart: Date;
+  let periodEnd: Date;
+  if (period) {
+    try {
+      ({ periodStart, periodEnd } = monthRangeInTimezone(period));
+    } catch {
+      return { message: "Invalid month range or timezone." };
+    }
+    if (periodEnd <= periodStart) return { message: "The end month must be on or after the start month." };
+  } else {
+    const now = new Date();
+    periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  }
 
   const bookings = await prisma.booking.findMany({
     where: {
@@ -91,10 +123,13 @@ export async function generateMonthlySummaries(): Promise<{ message: string }> {
 
   revalidatePath(sitePath(session.site, "/admin/class-logs"));
 
+  const periodLabel = period
+    ? `${period.startMonth}${period.endMonth !== period.startMonth ? ` through ${period.endMonth}` : ""}`
+    : "last month";
   if (groups.size === 0) {
-    return { message: "No completed sessions with summaries found for last month." };
+    return { message: `No completed sessions with summaries found for ${periodLabel}.` };
   }
-  return { message: `Generated ${generated} of ${groups.size} monthly summaries for last month.` };
+  return { message: `Generated ${generated} of ${groups.size} summaries for ${periodLabel}.` };
 }
 
 /**
