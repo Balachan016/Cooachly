@@ -3,8 +3,11 @@ import { requireRole } from "@/lib/dal";
 import { Badge, Card } from "@/components/ui";
 import { ComposeMailForm } from "./compose-mail-form";
 
-export default async function AdminMailPage() {
+export default async function AdminMailPage(props: PageProps<"/arts/admin/mail">) {
   const session = await requireRole("ADMIN", "SUPERADMIN");
+  const searchParams = await props.searchParams;
+  const initialTo = typeof searchParams.to === "string" ? searchParams.to : "";
+  const initialSubject = typeof searchParams.subject === "string" ? searchParams.subject : "";
   const sent = await prisma.adminEmail.findMany({
     where: { site: session.site },
     orderBy: { createdAt: "desc" },
@@ -22,7 +25,7 @@ export default async function AdminMailPage() {
       <Card className="mt-6">
         <h2 className="font-semibold">Compose</h2>
         <div className="mt-4">
-          <ComposeMailForm />
+          <ComposeMailForm initialTo={initialTo} initialSubject={initialSubject} />
         </div>
       </Card>
 

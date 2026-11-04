@@ -25,6 +25,24 @@ async function findBookingByRoomName(roomName: string) {
   });
 }
 
+/** Every delivery gets a row, success or failure — see the DailyWebhookEvent model comment for why. */
+async function logWebhookEvent(type: string, ok: boolean, error?: string): Promise<void> {
+  await prisma.dailyWebhookEvent.create({ data: { type, ok, error } }).catch((err) => {
+    console.error("Failed to log Daily webhook event", err);
+  });
+}
+
+/** Wraps every response this route sends so each delivery — success or failure — is logged exactly once, right where it's decided. */
+async function respond(
+  type: string,
+  ok: boolean,
+  body: Record<string, unknown>,
+  init?: { status?: number }
+): Promise<NextResponse> {
+  await logWebhookEvent(type, ok, typeof body.error === "string" ? body.error : undefined);
+  return NextResponse.json(body, init);
+}
+
 export async function POST(request: Request) {
   const body = await request.text();
 
@@ -41,7 +59,7 @@ export async function POST(request: Request) {
       .update(`${timestamp}.${body}`)
       .digest("base64");
     if (!timestamp || signature !== expected) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      return respond("signature", false, { error: "Invalid signature" }, { status: 401 });
     }
   }
 
@@ -72,17 +90,17 @@ export async function POST(request: Request) {
 
   if (event.type === "meeting.started") {
     const roomName = event.payload?.room;
-    if (!roomName) return NextResponse.json({ ok: false, error: "Missing room" }, { status: 400 });
+    if (!roomName) return respond(event.type, false, { ok: false, error: "Missing room" }, { status: 400 });
 
     const started = await startTranscription(roomName);
-    return NextResponse.json({ ok: true, transcriptionStarted: started });
+    return respond(event.type, true, { ok: true, transcriptionStarted: started });
   }
 
   if (event.type === "participant.joined" || event.type === "participant.left") {
     const roomName = event.payload?.room;
     const userId = event.payload?.user_id;
     const userName = event.payload?.user_name;
-    if (!roomName) return NextResponse.json({ ok: false, error: "Missing room" }, { status: 400 });
+    if (!roomName) return respond(event.type, false, { ok: false, error: "Missing room" }, { status: 400 });
 
     // A non-2xx response here is not just "logged and ignored" — Daily's
     // default retry policy is a circuit breaker that stops sending *any*
@@ -94,7 +112,7 @@ export async function POST(request: Request) {
     // 404, which only flags these as "ignored" rather than tripping that
     // breaker and silently killing the pipeline for every other booking too.
     const booking = await findBookingByRoomName(roomName);
-    if (!booking) return NextResponse.json({ ok: true, ignored: "Booking not found" });
+    if (!booking) return respond(event.type, true, { ok: true, ignored: "Booking not found" });
 
     // Only trust a participant's user_id if it's actually one of our own
     // user ids — set via /api/daily/join/[bookingId]'s meeting token. A join
@@ -114,41 +132,41 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ ok: true });
+    return respond(event.type, true, { ok: true });
   }
 
   if (event.type === "transcript.ready-to-download") {
     const roomName = event.payload?.room_name;
     const transcriptId = event.payload?.id;
     if (!roomName || !transcriptId) {
-      return NextResponse.json({ ok: false, error: "Missing room_name or id" }, { status: 400 });
+      return respond(event.type, false, { ok: false, error: "Missing room_name or id" }, { status: 400 });
     }
 
     // Same reasoning as the participant.joined/left handler above: ack with
     // 200 instead of 404 so an orphaned room never trips Daily's circuit
     // breaker and stops every future webhook delivery.
     const booking = await findBookingByRoomName(roomName);
-    if (!booking) return NextResponse.json({ ok: true, ignored: "Booking not found" });
+    if (!booking) return respond(event.type, true, { ok: true, ignored: "Booking not found" });
 
     const downloadLink = await getTranscriptDownloadLink(transcriptId);
     if (!downloadLink) {
-      return NextResponse.json({ ok: false, error: "Could not fetch transcript link" }, { status: 502 });
+      return respond(event.type, false, { ok: false, error: "Could not fetch transcript link" }, { status: 502 });
     }
 
     let vttText: string;
     try {
       const vttRes = await fetch(downloadLink);
       if (!vttRes.ok) {
-        return NextResponse.json({ ok: false, error: "Could not download transcript file" }, { status: 502 });
+        return respond(event.type, false, { ok: false, error: "Could not download transcript file" }, { status: 502 });
       }
       vttText = await vttRes.text();
     } catch (err) {
       console.error("Failed to download transcript file", err);
-      return NextResponse.json({ ok: false, error: "Could not reach transcript file host" }, { status: 502 });
+      return respond(event.type, false, { ok: false, error: "Could not reach transcript file host" }, { status: 502 });
     }
     const transcript = parseVttTranscript(vttText);
     if (!transcript) {
-      return NextResponse.json({ ok: true, transcribed: false });
+      return respond(event.type, true, { ok: true, transcribed: false });
     }
 
     const summary = await summarizeTranscript({
@@ -196,8 +214,8 @@ export async function POST(request: Request) {
       ]);
     }
 
-    return NextResponse.json({ ok: true, transcribed: true, summarized: Boolean(summary) });
+    return respond(event.type, true, { ok: true, transcribed: true, summarized: Boolean(summary) });
   }
 
-  return NextResponse.json({ ok: true, ignored: event.type });
+  return respond(event.type, true, { ok: true, ignored: event.type });
 }

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { TestNotificationButton } from "./test-notification-button";
+import { DailyWebhookHealth } from "@/components/daily-webhook-health";
 
 export default async function AdminOverviewPage() {
   const session = await requireRole("ADMIN");
@@ -45,6 +46,8 @@ export default async function AdminOverviewPage() {
           <TestNotificationButton />
         </div>
       </Card>
+
+      <DailyWebhookHealth />
     </div>
   );
 }
