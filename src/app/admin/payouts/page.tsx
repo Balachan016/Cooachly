@@ -2,11 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { PayoutForm } from "./payout-form";
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { PayoutRow } from "./payout-row";
 
 export default async function AdminPayoutsPage() {
   const session = await requireRole("ADMIN", "SUPERADMIN");
@@ -36,6 +32,7 @@ export default async function AdminPayoutsPage() {
       take: 100,
     }),
   ]);
+  const canEdit = session.role === "SUPERADMIN";
 
   return (
     <div>
@@ -63,26 +60,16 @@ export default async function AdminPayoutsPage() {
                 <th className="py-2 pr-3 text-right">Amount</th>
                 <th className="py-2 pr-3">Paid on</th>
                 <th className="py-2">Notes</th>
+                {canEdit && <th className="py-2 pl-3">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {payouts.map((p) => (
-                <tr key={p.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                  <td className="py-2 pr-3 font-medium">{p.professor.name}</td>
-                  <td className="py-2 pr-3">
-                    {MONTHS[p.periodMonth - 1]} {p.periodYear}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {p.currency === "inr" ? "₹" : `${p.currency.toUpperCase()} `}
-                    {(p.amountCents / 100).toLocaleString("en-IN")}
-                  </td>
-                  <td className="py-2 pr-3">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(p.paidAt)}</td>
-                  <td className="py-2 text-black/60 dark:text-white/60">{p.notes ?? "—"}</td>
-                </tr>
+                <PayoutRow key={p.id} payout={p} canEdit={canEdit} />
               ))}
               {payouts.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-black/50 dark:text-white/50">
+                  <td colSpan={canEdit ? 6 : 5} className="py-6 text-center text-black/50 dark:text-white/50">
                     No payouts recorded yet.
                   </td>
                 </tr>
