@@ -3,11 +3,7 @@ import { requireRole, getCurrentUser } from "@/lib/dal";
 import { Badge, Card } from "@/components/ui";
 import { RecordPaymentForm } from "./record-payment-form";
 import { OverrideToggle } from "./override-toggle";
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { PaymentRow } from "./payment-row";
 
 function currentPeriod(timezone: string): { year: number; month: number } {
   const formatted = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit" }).format(new Date());
@@ -77,7 +73,7 @@ export default async function AdminPaymentsPage(props: PageProps<"/admin/payment
       </div>
 
       {tab === "payments" ? (
-        <PaymentsTab session={session} students={students} professors={professors} />
+        <PaymentsTab session={session} students={students} professors={professors} canEdit={session.role === "SUPERADMIN"} />
       ) : (
         <OverrideTab session={session} students={students} professors={professors} year={year} month={month} />
       )}
@@ -89,10 +85,12 @@ async function PaymentsTab({
   session,
   students,
   professors,
+  canEdit,
 }: {
   session: { site: "COOACHLY" | "ARTS" };
   students: { id: string; name: string }[];
   professors: { id: string; name: string; subject: string }[];
+  canEdit: boolean;
 }) {
   const payments = await prisma.monthlyPayment.findMany({
     where: { student: { site: session.site } },
@@ -122,29 +120,16 @@ async function PaymentsTab({
                 <th className="py-2 pr-3 text-right">Amount</th>
                 <th className="py-2 pr-3">Paid on</th>
                 <th className="py-2">Notes</th>
+                {canEdit && <th className="py-2 pl-3">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {payments.map((p) => (
-                <tr key={p.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                  <td className="py-2 pr-3 font-medium">{p.student.name}</td>
-                  <td className="py-2 pr-3">
-                    {p.professor.name} · {p.professor.professorProfile?.subject || "Coaching"}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {MONTHS[p.periodMonth - 1]} {p.periodYear}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {p.currency === "inr" ? "₹" : `${p.currency.toUpperCase()} `}
-                    {(p.amountCents / 100).toLocaleString("en-IN")}
-                  </td>
-                  <td className="py-2 pr-3">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(p.paidAt)}</td>
-                  <td className="py-2 max-w-[16rem] text-xs text-black/60 dark:text-white/60">{p.notes || "—"}</td>
-                </tr>
+                <PaymentRow key={p.id} payment={p} canEdit={canEdit} />
               ))}
               {payments.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-black/50 dark:text-white/50">
+                  <td colSpan={canEdit ? 7 : 6} className="py-6 text-center text-black/50 dark:text-white/50">
                     No payments recorded yet.
                   </td>
                 </tr>
