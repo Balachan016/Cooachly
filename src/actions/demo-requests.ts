@@ -2,9 +2,11 @@
 
 import * as z from "zod";
 import { revalidatePath } from "next/cache";
+import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { generateTempPassword, hashPassword } from "@/lib/password";
 import { DEMO_SESSION_LENGTH_MINUTES } from "@/lib/booking-rules";
 import { sendDemoRequestScheduledEmail, sendDemoJoinedWelcomeEmail } from "@/lib/notifications/demo-requests";
@@ -15,6 +17,7 @@ import type { DemoRequestStatus } from "@prisma/client";
 const ScheduleDemoCallSchema = z.object({
   professorId: z.string().min(1, "Please choose a professor."),
   scheduledAt: z.string().min(1, "Please choose a date and time."),
+  timezone: z.string().min(1, "Please pick a timezone."),
   meetingLink: z.string().trim().optional(),
   adminNotes: z.string().trim().optional(),
 });
@@ -34,6 +37,7 @@ export async function scheduleDemoCall(
   const parsed = ScheduleDemoCallSchema.safeParse({
     professorId: formData.get("professorId"),
     scheduledAt: formData.get("scheduledAt"),
+    timezone: formData.get("timezone"),
     meetingLink: formData.get("meetingLink") || undefined,
     adminNotes: formData.get("adminNotes") || undefined,
   });
@@ -41,7 +45,16 @@ export async function scheduleDemoCall(
     return { message: parsed.error.issues[0]?.message ?? "Please check the form fields." };
   }
 
-  const scheduledAt = new Date(parsed.data.scheduledAt);
+  // scheduledAt is a plain "YYYY-MM-DDTHH:mm" wall-clock string with no zone
+  // of its own — interpret it in the zone the admin picked (same convention
+  // as every other scheduling flow in this app), not the server's runtime
+  // zone, which is what new Date(...) on a bare string like this used to do.
+  let scheduledAt: Date;
+  try {
+    scheduledAt = fromZonedTime(`${parsed.data.scheduledAt}:00`, parsed.data.timezone);
+  } catch {
+    return { message: "Invalid date/time or timezone." };
+  }
   if (Number.isNaN(scheduledAt.getTime())) return { message: "Invalid date/time." };
 
   const professor = await prisma.user.findUnique({ where: { id: parsed.data.professorId, role: "PROFESSOR" } });
@@ -58,10 +71,22 @@ export async function scheduleDemoCall(
   let newAccountTempPassword: string | undefined;
 
   if (existingBooking) {
-    await prisma.booking.update({
+    const updatedBooking = await prisma.booking.update({
       where: { id: existingBooking.id },
       data: { professorId: professor.id, startAt: scheduledAt, endAt, meetingLink },
     });
+    // Leaving the meeting link blank means "use Daily" (same as every other
+    // booking type) — an admin who deliberately pastes their own Zoom/Meet
+    // link for a demo keeps using it untouched, with no Daily room, same as
+    // before this. Rescheduling an already-Daily demo just extends its
+    // room's expiry instead of provisioning a second one for the same call.
+    if (!meetingLink) {
+      if (updatedBooking.dailyRoomName) {
+        await updateDailyRoomExpiry(updatedBooking.dailyRoomName, Math.floor(endAt.getTime() / 1000) + 2 * 60 * 60);
+      } else {
+        await provisionVideoRoomForBooking(updatedBooking);
+      }
+    }
   } else {
     let student = await prisma.user.findUnique({ where: { site_email: { site: session.site, email: demoRequest.email } } });
     if (student && student.role !== "STUDENT") {
@@ -83,7 +108,7 @@ export async function scheduleDemoCall(
       });
     }
 
-    await prisma.booking.create({
+    const booking = await prisma.booking.create({
       data: {
         studentId: student.id,
         professorId: professor.id,
@@ -97,6 +122,7 @@ export async function scheduleDemoCall(
         demoRequestId: id,
       },
     });
+    if (!meetingLink) await provisionVideoRoomForBooking(booking);
   }
 
   const updated = await prisma.demoRequest.update({

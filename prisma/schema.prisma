@@ -120,6 +120,10 @@ enum AuditAction {
   EXCHANGE_RATE_UPDATED
   CONSENT_ACCEPTED
   CONSENT_TEMPLATE_UPDATED
+  MONTHLY_PAYMENT_UPDATED
+  MONTHLY_PAYMENT_DELETED
+  PROFESSOR_PAYOUT_UPDATED
+  PROFESSOR_PAYOUT_DELETED
 }
 
 model User {
@@ -189,6 +193,7 @@ model User {
   exchangeRatesUpdated       ExchangeRate[]         @relation("ExchangeRatesUpdated")
   consentAcceptances         ConsentAcceptance[]    @relation("ConsentAcceptances")
   consentTemplatesUpdated    ConsentTemplate[]      @relation("ConsentTemplatesUpdated")
+  adminEmailsSent            AdminEmail[]           @relation("AdminEmailsSent")
 
   @@unique([site, email])
 }
@@ -345,6 +350,20 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// One row per failed login — no row on success. login() counts rows for a
+// given (site, email) within the last LOGIN_ATTEMPT_WINDOW_MS and rejects
+// outright once MAX_LOGIN_ATTEMPTS is hit, before ever touching the
+// password hash, so repeated guesses against a real OR nonexistent email
+// are throttled the same way. A successful login clears that email's rows.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  site      Site     @default(COOACHLY)
+  email     String
+  createdAt DateTime @default(now())
+
+  @@index([site, email, createdAt])
+}
+
 // Accounts are no longer created via open public self-registration — an
 // admin sends a personalized invite (typically after a free demo), and the
 // recipient redeems it at /register/[token] to set their own password. No
@@ -470,6 +489,13 @@ model Booking {
 
   @@index([professorId, startAt])
   @@index([studentId, startAt])
+  // There's also a partial unique index on (professorId, startAt) WHERE
+  // status IN ('PENDING', 'CONFIRMED') — added by migration
+  // 20261101120000_prevent_duplicate_slot_bookings directly in SQL, since
+  // Prisma's schema DSL can't express a conditional/partial unique
+  // constraint. It's what actually stops two bookings ever landing on the
+  // exact same professor + start time, closing the race condition that
+  // the app-level availability check alone couldn't.
 }
 
 model NotificationLog {
@@ -504,6 +530,25 @@ model NotificationLog {
   @@index([providerMessageSid])
 }
 
+// An ad-hoc email an admin composed and sent through the Admin > Mail tab —
+// the repository of mail actually sent that way, separate from
+// NotificationLog (the system's own automatic notification emails).
+model AdminEmail {
+  id        String             @id @default(cuid())
+  site      Site               @default(COOACHLY)
+  senderId  String?
+  sender    User?              @relation("AdminEmailsSent", fields: [senderId], references: [id], onDelete: SetNull)
+  to        String             // comma-separated recipient addresses
+  cc        String?            // comma-separated CC'd addresses, if any
+  subject   String
+  body      String             // HTML body as composed/sent
+  status    NotificationStatus
+  error     String?
+  createdAt DateTime           @default(now())
+
+  @@index([site, createdAt])
+}
+
 enum CallEventType {
   JOINED
   LEFT
@@ -528,6 +573,23 @@ model CallAttendanceEvent {
   createdAt       DateTime      @default(now())
 
   @@index([bookingId])
+}
+
+// One row per inbound Daily.co webhook delivery — recorded for every event
+// type this app handles, success or failure. This is what the admin
+// Overview's "Daily webhook health" card reads from: without it, a tripped
+// circuit breaker (see /api/daily/webhook's own comments) or a bad
+// signature config is invisible until someone notices a missing summary,
+// the same way the field-name bug that silently broke this pipeline once
+// already was.
+model DailyWebhookEvent {
+  id         String   @id @default(cuid())
+  type       String
+  ok         Boolean
+  error      String?
+  receivedAt DateTime @default(now())
+
+  @@index([receivedAt])
 }
 
 // A browser/device the user has allowed to receive Web Push notifications

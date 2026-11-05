@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { scheduleDemoCall } from "@/actions/demo-requests";
 import { Button, Input, Label, Select, Textarea } from "@/components/ui";
+import { TIMEZONES } from "@/lib/roles";
 
 type ProfessorOption = { id: string; name: string; subject: string };
 
@@ -11,6 +12,7 @@ export function ScheduleCallForm({
   professors,
   defaultProfessorId,
   defaultScheduledAt,
+  defaultTimezone,
   defaultMeetingLink,
   defaultAdminNotes,
 }: {
@@ -18,11 +20,14 @@ export function ScheduleCallForm({
   professors: ProfessorOption[];
   defaultProfessorId?: string | null;
   defaultScheduledAt?: string | null;
+  defaultTimezone: string;
   defaultMeetingLink?: string | null;
   defaultAdminNotes?: string | null;
 }) {
+  const [timezone, setTimezone] = useState(defaultTimezone);
   const action = scheduleDemoCall.bind(null, demoRequestId);
   const [state, formAction, pending] = useActionState(action, undefined);
+  const isScheduled = Boolean(defaultScheduledAt);
 
   return (
     <form action={formAction} className="grid gap-3 sm:grid-cols-2">
@@ -49,6 +54,22 @@ export function ScheduleCallForm({
           defaultValue={defaultScheduledAt ?? ""}
           required
         />
+      </div>
+      <div>
+        <Label htmlFor={`timezone-${demoRequestId}`}>In this timezone</Label>
+        <Select
+          id={`timezone-${demoRequestId}`}
+          name="timezone"
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+        >
+          {!TIMEZONES.includes(timezone) && <option value={timezone}>{timezone}</option>}
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>
+              {tz}
+            </option>
+          ))}
+        </Select>
       </div>
       <div>
         <Label htmlFor={`meetingLink-${demoRequestId}`}>Meeting link (optional)</Label>
@@ -81,7 +102,7 @@ export function ScheduleCallForm({
 
       <div className="sm:col-span-2">
         <Button type="submit" variant="secondary" disabled={pending}>
-          {pending ? "Saving…" : "Schedule call"}
+          {pending ? "Saving…" : isScheduled ? "Reschedule call" : "Schedule call"}
         </Button>
       </div>
     </form>

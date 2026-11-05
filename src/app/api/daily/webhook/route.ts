@@ -19,19 +19,15 @@ import { SITE_CONFIG } from "@/lib/site";
 //
 // Daily switches this webhook to FAILED (and stops sending anything) after
 // three non-200 or slow responses in a row, which silently stops all
-// attendance and summaries. So every event we receive is acknowledged with
-// a 200 — rooms without a booking (e.g. admin test calls) are ignored, not
-// rejected, and the slow transcript → AI summary → email work runs after
-// the response. Only a bad signature is rejected. The reminder cron also
-// re-activates the webhook if it ever ends up FAILED (see checkDailyWebhook).
+// attendance and summaries. So every validly signed delivery is answered
+// with 200 — problems are recorded in DailyWebhookEvent with ok=false
+// instead of being reported back to Daily — and the slow transcript → AI
+// summary → email work runs after the response. Only a bad signature is
+// rejected. The reminder cron also re-activates the webhook if it ever ends
+// up FAILED (see checkDailyWebhook).
 
 // Room for the post-response transcript download + AI summary + emails.
 export const maxDuration = 60;
-
-function ignored(reason: string, detail?: Record<string, unknown>) {
-  console.warn(`[daily-webhook] ignored: ${reason}`, detail ?? "");
-  return NextResponse.json({ ok: true, ignored: reason });
-}
 
 async function findBookingByRoomName(roomName: string) {
   const bookingId = roomName.replace(/^cooachly-/, "");
@@ -39,6 +35,24 @@ async function findBookingByRoomName(roomName: string) {
     where: { id: bookingId },
     include: { student: true, professor: true },
   });
+}
+
+/** Every delivery gets a row, success or failure — see the DailyWebhookEvent model comment for why. */
+async function logWebhookEvent(type: string, ok: boolean, error?: string): Promise<void> {
+  await prisma.dailyWebhookEvent.create({ data: { type, ok, error } }).catch((err) => {
+    console.error("Failed to log Daily webhook event", err);
+  });
+}
+
+/** Wraps every response this route sends so each delivery — success or failure — is logged exactly once, right where it's decided. */
+async function respond(
+  type: string,
+  ok: boolean,
+  body: Record<string, unknown>,
+  init?: { status?: number }
+): Promise<NextResponse> {
+  await logWebhookEvent(type, ok, typeof body.error === "string" ? body.error : undefined);
+  return NextResponse.json(body, init);
 }
 
 export async function POST(request: Request) {
@@ -60,7 +74,7 @@ export async function POST(request: Request) {
       // Repeated 401s make Daily disable the webhook — if this shows up for
       // real events, DAILY_WEBHOOK_SECRET doesn't match the webhook's hmac.
       console.error("[daily-webhook] rejected: signature mismatch (check DAILY_WEBHOOK_SECRET)");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      return respond("signature", false, { error: "Invalid signature" }, { status: 401 });
     }
   }
 
@@ -68,7 +82,7 @@ export async function POST(request: Request) {
   try {
     event = JSON.parse(body);
   } catch {
-    return ignored("unparseable body");
+    return respond("unparseable", false, { ok: true, ignored: "Unparseable body" });
   }
 
   try {
@@ -77,7 +91,7 @@ export async function POST(request: Request) {
     // Log and still acknowledge: a 500 here counts toward Daily disabling
     // the webhook for every future call.
     console.error(`[daily-webhook] failed handling ${event.type}`, err);
-    return NextResponse.json({ ok: false, error: "Internal error (logged)" });
+    return respond(event.type, false, { ok: false, error: "Internal error (logged)" });
   }
 }
 
@@ -90,89 +104,115 @@ type DailyEvent = {
   // own ID under "id" — neither event uses "room_name"+"transcript_id"
   // together, which is what this used to (incorrectly) assume, causing
   // every single webhook delivery to 400 since the pipeline was first set up.
+  // participant.joined/participant.left carry user_id/user_name directly on
+  // payload, NOT nested under a "participant" object — that nested shape
+  // is only how the client-side daily-js SDK event looks, a separate thing
+  // from this server-side webhook payload. Reading from a "participant"
+  // sub-object (as this used to) always comes back undefined, so every
+  // join/leave silently saved as an unidentified participant instead of
+  // the real student/professor who joined via their own signed token.
   payload?: {
     room?: string;
     room_name?: string;
     id?: string;
-    participant?: { user_id?: string; user_name?: string };
+    user_id?: string;
+    user_name?: string;
   };
 };
 
 async function handleEvent(event: DailyEvent) {
   if (event.type === "meeting.started") {
     const roomName = event.payload?.room;
-    if (!roomName) return ignored("meeting.started without room");
+    if (!roomName) return respond(event.type, false, { ok: false, error: "Missing room" });
 
     const started = await startTranscription(roomName);
-    return NextResponse.json({ ok: true, transcriptionStarted: started });
+    return respond(event.type, true, { ok: true, transcriptionStarted: started });
   }
 
   if (event.type === "participant.joined" || event.type === "participant.left") {
     const roomName = event.payload?.room;
-    const participant = event.payload?.participant;
-    if (!roomName) return ignored(`${event.type} without room`);
+    const userId = event.payload?.user_id;
+    const userName = event.payload?.user_name;
+    if (!roomName) return respond(event.type, false, { ok: false, error: "Missing room" });
 
+    // A non-2xx response here is not just "logged and ignored" — Daily's
+    // default retry policy is a circuit breaker that stops sending *any*
+    // further webhooks (including meeting.started and transcript.ready-to-
+    // download, for every room) once this endpoint looks unhealthy. A join/
+    // leave for a room with no matching booking (e.g. a one-off test call
+    // made directly in the Daily dashboard) isn't a sign anything is
+    // actually broken, so this acknowledges receipt with 200 rather than
+    // 404, which only flags these as "ignored" rather than tripping that
+    // breaker and silently killing the pipeline for every other booking too.
     const booking = await findBookingByRoomName(roomName);
-    if (!booking) return ignored("no booking for room", { roomName });
+    if (!booking) return respond(event.type, true, { ok: true, ignored: "Booking not found" });
 
     // Only trust a participant's user_id if it's actually one of our own
     // user ids — set via /api/daily/join/[bookingId]'s meeting token. A join
     // straight off the bare room link has Daily's own random anonymous id
     // instead, which would otherwise violate the userId foreign key.
-    const matchedUser = participant?.user_id
-      ? await prisma.user.findUnique({ where: { id: participant.user_id }, select: { id: true } })
+    const matchedUser = userId
+      ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
       : null;
 
     await prisma.callAttendanceEvent.create({
       data: {
         bookingId: booking.id,
         userId: matchedUser?.id ?? null,
-        participantName: participant?.user_name ?? null,
+        participantName: userName ?? null,
         eventType: event.type === "participant.joined" ? "JOINED" : "LEFT",
         occurredAt: event.event_ts ? new Date(event.event_ts * 1000) : new Date(),
       },
     });
 
-    return NextResponse.json({ ok: true });
+    return respond(event.type, true, { ok: true });
   }
 
   if (event.type === "transcript.ready-to-download") {
     const roomName = event.payload?.room_name;
     const transcriptId = event.payload?.id;
-    if (!roomName || !transcriptId) return ignored("transcript event without room_name or id");
+    if (!roomName || !transcriptId) {
+      return respond(event.type, false, { ok: false, error: "Missing room_name or id" });
+    }
 
     // Downloading + summarizing + emailing can take well over Daily's
-    // response timeout, so acknowledge now and do it after responding.
-    after(() =>
-      processTranscript(roomName, transcriptId).catch((err) =>
-        console.error(`[daily-webhook] transcript processing failed for ${roomName}`, err)
-      )
-    );
-    return NextResponse.json({ ok: true, queued: true });
+    // response timeout, so acknowledge now and do it after responding. The
+    // outcome is logged as its own "transcript.processed" event.
+    after(async () => {
+      try {
+        const result = await processTranscript(roomName, transcriptId);
+        await logWebhookEvent("transcript.processed", result.ok, result.error);
+      } catch (err) {
+        console.error(`[daily-webhook] transcript processing failed for ${roomName}`, err);
+        await logWebhookEvent("transcript.processed", false, err instanceof Error ? err.message : String(err));
+      }
+    });
+    return respond(event.type, true, { ok: true, queued: true });
   }
 
-  return NextResponse.json({ ok: true, ignored: event.type });
+  return respond(event.type, true, { ok: true, ignored: event.type });
 }
 
-async function processTranscript(roomName: string, transcriptId: string) {
+async function processTranscript(roomName: string, transcriptId: string): Promise<{ ok: boolean; error?: string }> {
   const booking = await findBookingByRoomName(roomName);
-  if (!booking) return console.warn(`[daily-webhook] no booking for room ${roomName}`);
+  if (!booking) return { ok: true, error: "Booking not found (ignored)" };
   // Daily can redeliver an event; don't re-summarize or re-email.
-  if (booking.transcript) return console.warn(`[daily-webhook] transcript already stored for ${booking.id}`);
+  if (booking.transcript) return { ok: true, error: "Transcript already stored (ignored)" };
 
   const downloadLink = await getTranscriptDownloadLink(transcriptId);
-  if (!downloadLink) return console.error(`[daily-webhook] could not fetch transcript link for ${booking.id}`);
+  if (!downloadLink) return { ok: false, error: "Could not fetch transcript link" };
 
   let vttText: string;
   try {
     const vttRes = await fetch(downloadLink);
-    if (!vttRes.ok) return console.error(`[daily-webhook] transcript download failed (${vttRes.status}) for ${booking.id}`);
+    if (!vttRes.ok) return { ok: false, error: `Could not download transcript file (${vttRes.status})` };
     vttText = await vttRes.text();
   } catch (err) {
-    return console.error(`[daily-webhook] could not reach transcript file host for ${booking.id}`, err);
+    console.error("Failed to download transcript file", err);
+    return { ok: false, error: "Could not reach transcript file host" };
   }
   const transcript = parseVttTranscript(vttText);
-  if (!transcript) return console.warn(`[daily-webhook] empty transcript for ${booking.id}`);
+  if (!transcript) return { ok: true, error: "Empty transcript" };
 
   const summary = await summarizeTranscript({
     transcript,
@@ -219,4 +259,5 @@ async function processTranscript(roomName: string, transcriptId: string) {
     ]);
   }
 
+  return { ok: true };
 }

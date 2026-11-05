@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 import { revalidatePath } from "next/cache";
 import { addMinutes } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
-import type { Booking, User } from "@prisma/client";
+import { Prisma, type Booking, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { provisionVideoRoomForBooking } from "@/lib/daily";
@@ -228,19 +228,34 @@ export async function importBookingSchedule(_state: ImportScheduleState, formDat
 
     const hourlyRateCents = professorEntry.user.professorProfile?.hourlyRateCents ?? 0;
 
-    const booking = await prisma.booking.create({
-      data: {
-        studentId: studentEntry.user.id,
-        professorId: professorEntry.user.id,
-        startAt,
-        endAt,
-        status: "CONFIRMED",
-        paymentStatus: "UNPAID",
-        priceCents: hourlyRateCents,
-        notes: subject ? `Imported schedule: ${subject}` : "Imported schedule",
-      },
-      include: { student: true, professor: true },
-    });
+    let booking;
+    try {
+      booking = await prisma.booking.create({
+        data: {
+          studentId: studentEntry.user.id,
+          professorId: professorEntry.user.id,
+          startAt,
+          endAt,
+          status: "CONFIRMED",
+          paymentStatus: "UNPAID",
+          priceCents: hourlyRateCents,
+          notes: subject ? `Imported schedule: ${subject}` : "Imported schedule",
+        },
+        include: { student: true, professor: true },
+      });
+    } catch (err) {
+      // The conflict check above has a brief gap before this insert commits
+      // — the DB's own unique constraint on (professorId, startAt) is the
+      // real guard against a slot being double-booked in that gap.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        results.push({
+          line: lineNo, student: studentEntry.user.name, professor: professorEntry.user.name, when: whenLabel, status: "skipped",
+          reason: "Professor already has a session at this time.",
+        });
+        continue;
+      }
+      throw err;
+    }
     await provisionVideoRoomForBooking(booking);
     createdBookings.push(booking);
     results.push({ line: lineNo, student: studentEntry.user.name, professor: professorEntry.user.name, when: whenLabel, status: "created" });

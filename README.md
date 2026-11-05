@@ -291,6 +291,21 @@ nobody sees stale bookings); it only shows an offline page when there's no conne
 No audio or video is ever stored with this approach — only the text transcript, which is both
 cheaper and more private than cloud recording.
 
+**If attendance tracking, transcription, and AI summaries all stop at once** (not just one of
+them), the webhook has almost certainly tripped Daily's circuit breaker: by default, 3 non-2xx
+responses from your endpoint — across *any* event type — and Daily stops sending *all* future
+webhooks to it, silently, with no notice anywhere in your own app. Check for this first:
+
+1. `GET https://api.daily.co/v1/webhooks` (with your `DAILY_API_KEY` as the bearer token) lists
+   your webhook(s) — look at `failedCount` and whether it's still trying to deliver.
+2. Fix whatever caused the failures (check Vercel's function logs for `/api/daily/webhook` around
+   when it stopped, and confirm `DAILY_WEBHOOK_SECRET` in production still matches what Daily has
+   on file for that webhook, if you set one — a mismatch after recreating/updating the webhook
+   rejects every single delivery with 401 and trips the breaker almost immediately).
+3. `POST https://api.daily.co/v1/webhooks/<uuid>` makes Daily retry once; a 200 from your endpoint
+   closes the breaker and resumes normal delivery. There's no dashboard button for this — it's
+   API-only.
+
 ## Setting up file sharing (Vercel Blob)
 
 Professors/admins can share a test file on a booking, and students can upload their answer back.

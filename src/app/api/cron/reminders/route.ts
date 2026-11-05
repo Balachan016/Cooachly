@@ -5,13 +5,16 @@ import { sendBookingReminder } from "@/lib/notifications/reminders";
 import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
 import { sendTestDueSoonEmail } from "@/lib/notifications/tests";
 import { checkDailyWebhook } from "@/lib/daily";
+import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
+import { PAST_DUE_GRACE_MS } from "@/lib/bookings";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
 // cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
 // or ~5m from now that haven't had that reminder sent yet, and sends it
 // (email always; WhatsApp if the user has a phone number and Twilio is
 // configured). Also sends a one-time "due soon" nudge for unsubmitted
-// tests whose due date is ~24h away.
+// tests whose due date is ~24h away, and sweeps up any booking whose call
+// is long over but never got marked COMPLETED (see PAST_DUE_GRACE_MS).
 
 const WINDOW_MINUTES = 5;
 const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day
@@ -98,6 +101,25 @@ export async function GET(request: Request) {
     sentCount += 1;
   }
 
+  let completedCount = 0;
+  const pastDueBookings = await prisma.booking.findMany({
+    where: {
+      status: { in: ["PENDING", "CONFIRMED"] },
+      endAt: { lt: new Date(Date.now() - PAST_DUE_GRACE_MS) },
+    },
+    include: { student: true, professor: true },
+  });
+
+  for (const booking of pastDueBookings) {
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "COMPLETED" },
+      include: { student: true, professor: true },
+    });
+    await sendFeedbackRequestEmails(updated);
+    completedCount += 1;
+  }
+
   // Daily silently disables its webhook after a few failed deliveries,
   // which stops all class attendance and AI summaries until someone
   // notices. Re-activate it here so an outage lasts at most one cron cycle.
@@ -106,5 +128,10 @@ export async function GET(request: Request) {
     console.error("[cron] Daily webhook not healthy", dailyWebhook);
   }
 
-  return NextResponse.json({ ok: true, remindersSent: sentCount, dailyWebhook: dailyWebhook.status });
+  return NextResponse.json({
+    ok: true,
+    remindersSent: sentCount,
+    pastDueBookingsCompleted: completedCount,
+    dailyWebhook: dailyWebhook.status,
+  });
 }

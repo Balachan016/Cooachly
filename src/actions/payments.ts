@@ -1,6 +1,7 @@
 "use server";
 
 import * as z from "zod";
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
@@ -161,6 +162,100 @@ export async function setSlotViewOverride(studentId: string, professorId: string
   revalidatePath(sitePath(session.site, "/admin/payments"));
 }
 
+const EditPaymentSchema = z.object({
+  periodYear: z.coerce.number().int().min(2020).max(2100),
+  periodMonth: z.coerce.number().int().min(1).max(12),
+  amountCents: z.coerce.number().int().positive("Amount must be greater than zero."),
+  currency: z.string().trim().min(1).default("inr"),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Please pick a payment date."),
+  notes: z.string().trim().optional(),
+});
+
+/**
+ * Superadmin-only: corrects an existing payment row in place (wrong
+ * amount, date, or month typo'd in at recording time) rather than
+ * re-recording it. Doesn't let the student/professor pairing itself
+ * change — that identity is what the enrollment and quota logic key off,
+ * so correcting a mis-assigned payment is a delete + a fresh record instead.
+ */
+export async function updateMonthlyPayment(paymentId: string, _state: PaymentsActionState, formData: FormData): Promise<PaymentsActionState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const existing = await prisma.monthlyPayment.findUnique({
+    where: { id: paymentId },
+    include: { student: true, professor: true },
+  });
+  if (!existing) return { message: "Payment not found." };
+
+  const parsed = EditPaymentSchema.safeParse({
+    periodYear: formData.get("periodYear"),
+    periodMonth: formData.get("periodMonth"),
+    amountCents: Math.round(Number(formData.get("amount") || 0) * 100),
+    currency: formData.get("currency") || "inr",
+    paidAt: formData.get("paidAt"),
+    notes: formData.get("notes") || undefined,
+  });
+  if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please fill in the payment details." };
+
+  const { periodYear, periodMonth, amountCents, currency, paidAt, notes } = parsed.data;
+
+  try {
+    await prisma.monthlyPayment.update({
+      where: { id: paymentId },
+      data: {
+        periodYear,
+        periodMonth,
+        amountCents,
+        currency: currency.toLowerCase(),
+        paidAt: new Date(`${paidAt}T00:00:00.000Z`),
+        notes: notes || null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { message: `${existing.student.name} already has a payment to ${existing.professor.name} recorded for that month.` };
+    }
+    throw err;
+  }
+
+  await logAudit({
+    site: existing.student.site,
+    action: "MONTHLY_PAYMENT_UPDATED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: existing.studentId,
+    detail: `Edited ${existing.student.name}'s payment to ${existing.professor.name} for ${periodMonth}/${periodYear}: ${amountCents / 100} ${currency.toUpperCase()}`,
+  });
+
+  revalidatePath(sitePath(existing.student.site, "/admin/payments"));
+  return { message: "Payment updated.", success: true };
+}
+
+/** Superadmin-only: permanently removes a payment row (e.g. recorded against the wrong student/professor entirely). */
+export async function deleteMonthlyPayment(paymentId: string): Promise<{ message: string }> {
+  const session = await requireRole("SUPERADMIN");
+
+  const existing = await prisma.monthlyPayment.findUnique({
+    where: { id: paymentId },
+    include: { student: true, professor: true },
+  });
+  if (!existing) return { message: "Payment not found." };
+
+  await prisma.monthlyPayment.delete({ where: { id: paymentId } });
+
+  await logAudit({
+    site: existing.student.site,
+    action: "MONTHLY_PAYMENT_DELETED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: existing.studentId,
+    detail: `Deleted ${existing.student.name}'s payment to ${existing.professor.name} for ${existing.periodMonth}/${existing.periodYear}: ${existing.amountCents / 100} ${existing.currency.toUpperCase()}`,
+  });
+
+  revalidatePath(sitePath(existing.student.site, "/admin/payments"));
+  return { message: "Payment deleted." };
+}
+
 const PayoutSchema = z.object({
   professorId: z.string().min(1, "Please select a professor."),
   amountCents: z.coerce.number().int().positive("Amount must be greater than zero."),
@@ -215,6 +310,72 @@ export async function recordProfessorPayout(_state: PaymentsActionState, formDat
 
   revalidatePath(sitePath(session.site, "/admin/payouts"));
   return { message: `Recorded payout to ${professor.name} for ${periodMonth}/${periodYear}.`, success: true };
+}
+
+/** Superadmin-only: corrects an existing payout row in place. */
+export async function updateProfessorPayout(payoutId: string, _state: PaymentsActionState, formData: FormData): Promise<PaymentsActionState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const existing = await prisma.professorPayout.findUnique({ where: { id: payoutId }, include: { professor: true } });
+  if (!existing) return { message: "Payout not found." };
+
+  const parsed = PayoutSchema.omit({ professorId: true }).safeParse({
+    amountCents: Math.round(Number(formData.get("amount") || 0) * 100),
+    currency: formData.get("currency") || "inr",
+    paidAt: formData.get("paidAt"),
+    periodYear: formData.get("periodYear"),
+    periodMonth: formData.get("periodMonth"),
+    notes: formData.get("notes") || undefined,
+  });
+  if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please fill in the payout details." };
+
+  const { amountCents, currency, paidAt, periodYear, periodMonth, notes } = parsed.data;
+
+  await prisma.professorPayout.update({
+    where: { id: payoutId },
+    data: {
+      periodYear,
+      periodMonth,
+      amountCents,
+      currency: currency.toLowerCase(),
+      paidAt: new Date(`${paidAt}T00:00:00.000Z`),
+      notes: notes || null,
+    },
+  });
+
+  await logAudit({
+    site: existing.professor.site,
+    action: "PROFESSOR_PAYOUT_UPDATED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: existing.professorId,
+    detail: `Edited payout to ${existing.professor.name} for ${periodMonth}/${periodYear}: ${amountCents / 100} ${currency.toUpperCase()}`,
+  });
+
+  revalidatePath(sitePath(existing.professor.site, "/admin/payouts"));
+  return { message: "Payout updated.", success: true };
+}
+
+/** Superadmin-only: permanently removes a payout row. */
+export async function deleteProfessorPayout(payoutId: string): Promise<{ message: string }> {
+  const session = await requireRole("SUPERADMIN");
+
+  const existing = await prisma.professorPayout.findUnique({ where: { id: payoutId }, include: { professor: true } });
+  if (!existing) return { message: "Payout not found." };
+
+  await prisma.professorPayout.delete({ where: { id: payoutId } });
+
+  await logAudit({
+    site: existing.professor.site,
+    action: "PROFESSOR_PAYOUT_DELETED",
+    actorId: session.userId,
+    targetType: "User",
+    targetId: existing.professorId,
+    detail: `Deleted payout to ${existing.professor.name} for ${existing.periodMonth}/${existing.periodYear}: ${existing.amountCents / 100} ${existing.currency.toUpperCase()}`,
+  });
+
+  revalidatePath(sitePath(existing.professor.site, "/admin/payouts"));
+  return { message: "Payout deleted." };
 }
 
 const ExpenseSchema = z.object({

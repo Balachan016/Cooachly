@@ -1,5 +1,6 @@
+import { formatInTimeZone } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireRole, getCurrentUser } from "@/lib/dal";
 import { Badge, Card } from "@/components/ui";
 import { ScheduleCallForm } from "./schedule-call-form";
 import { DemoRequestStatusActions } from "./status-actions";
@@ -11,14 +12,18 @@ const STATUS_TONE = {
   DROPPED: "danger",
 } as const;
 
-function toDateTimeLocal(date: Date | null): string {
+// A "YYYY-MM-DDTHH:mm" wall-clock string for a datetime-local input, as that
+// instant reads in the given timezone — not the server's runtime zone, which
+// is what reading a UTC Date's own getFullYear()/getHours()/etc. would give.
+function toDateTimeLocal(date: Date | null, timezone: string): string {
   if (!date) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return formatInTimeZone(date, timezone, "yyyy-MM-dd'T'HH:mm");
 }
 
 export default async function AdminDemoRequestsPage() {
   const session = await requireRole("ADMIN");
+  const viewer = await getCurrentUser();
+  const viewerTimezone = viewer?.timezone ?? "UTC";
 
   const [demoRequests, professors] = await Promise.all([
     prisma.demoRequest.findMany({
@@ -74,7 +79,10 @@ export default async function AdminDemoRequestsPage() {
               {r.scheduledAt && (
                 <div className="mt-1 text-sm text-black/70 dark:text-white/70">
                   Call scheduled with {r.professor?.name ?? "—"} for{" "}
-                  {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(r.scheduledAt)}
+                  {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: viewerTimezone }).format(
+                    r.scheduledAt
+                  )}{" "}
+                  ({viewerTimezone})
                   {r.meetingLink ? (
                     <>
                       {" "}
@@ -95,7 +103,8 @@ export default async function AdminDemoRequestsPage() {
                   demoRequestId={r.id}
                   professors={professorOptions}
                   defaultProfessorId={r.professorId}
-                  defaultScheduledAt={toDateTimeLocal(r.scheduledAt)}
+                  defaultScheduledAt={toDateTimeLocal(r.scheduledAt, viewerTimezone)}
+                  defaultTimezone={viewerTimezone}
                   defaultMeetingLink={r.meetingLink}
                   defaultAdminNotes={r.adminNotes}
                 />

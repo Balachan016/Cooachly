@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { startOfMonth, endOfMonth } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
 import type { AvailableSlot, CalendarDay } from "@/lib/scheduling";
-import type { PaymentStatus } from "@prisma/client";
+import { Prisma, type PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { getAvailableSlots, buildCalendarWeeks, bookingWindowDaysFor, SESSION_LENGTH_MINUTES } from "@/lib/scheduling";
@@ -30,6 +30,15 @@ import {
 import { logAudit } from "@/lib/audit";
 import { sitePath } from "@/lib/site";
 
+/**
+ * Returns null instead of throwing if the DB's partial unique index on
+ * (professorId, startAt) rejects one of these inserts — a slot that passed
+ * bookSlots' own availability check a moment ago but got taken by someone
+ * else's concurrent request in the gap before this transaction committed
+ * (a double-click, or a retry after a slow response, are the common
+ * triggers). The whole transaction rolls back either way, so this never
+ * leaves a partial booking behind.
+ */
 async function createConfirmedBookings(opts: {
   studentId: string;
   professorId: string;
@@ -37,22 +46,28 @@ async function createConfirmedBookings(opts: {
   paymentStatus: PaymentStatus;
   priceCentsFor: (slot: AvailableSlot) => number;
 }) {
-  const bookings = await prisma.$transaction(
-    opts.matches.map((slot) =>
-      prisma.booking.create({
-        data: {
-          studentId: opts.studentId,
-          professorId: opts.professorId,
-          startAt: slot.startAt,
-          endAt: slot.endAt,
-          status: "CONFIRMED",
-          paymentStatus: opts.paymentStatus,
-          priceCents: opts.priceCentsFor(slot),
-        },
-        include: { student: true, professor: true },
-      })
-    )
-  );
+  let bookings;
+  try {
+    bookings = await prisma.$transaction(
+      opts.matches.map((slot) =>
+        prisma.booking.create({
+          data: {
+            studentId: opts.studentId,
+            professorId: opts.professorId,
+            startAt: slot.startAt,
+            endAt: slot.endAt,
+            status: "CONFIRMED",
+            paymentStatus: opts.paymentStatus,
+            priceCents: opts.priceCentsFor(slot),
+          },
+          include: { student: true, professor: true },
+        })
+      )
+    );
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return null;
+    throw err;
+  }
   for (const booking of bookings) {
     await provisionVideoRoomForBooking(booking);
   }
@@ -112,6 +127,7 @@ export async function bookSlots(_state: unknown, formData: FormData) {
       paymentStatus: "UNPAID",
       priceCentsFor: () => 0,
     });
+    if (!bookings) return { message: "One or more of these times were just booked by someone else. Please reselect." };
     revalidatePath(sitePath(session.site, "/student/bookings"));
     revalidatePath(sitePath(session.site, "/professor/bookings"));
     redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
@@ -132,6 +148,7 @@ export async function bookSlots(_state: unknown, formData: FormData) {
     paymentStatus: "PAID",
     priceCentsFor,
   });
+  if (!bookings) return { message: "One or more of these times were just booked by someone else. Please reselect." };
   revalidatePath(sitePath(session.site, "/student/bookings"));
   revalidatePath(sitePath(session.site, "/professor/bookings"));
   redirect(sitePath(session.site, `/student/bookings?booked=${bookings.map((b) => b.id).join(",")}`));
@@ -303,20 +320,41 @@ export async function adminRescheduleBooking(_state: RescheduleFormState, formDa
   const newEndDate = new Date(newStartDate.getTime() + durationMs);
   const previousStartAt = booking.startAt;
 
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: {
-      startAt: newStartDate,
-      endAt: newEndDate,
-      rescheduledAt: new Date(),
-      rescheduledByRole: session.role,
-    },
-    include: { student: true, professor: true },
-  });
+  let updated;
+  try {
+    updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        startAt: newStartDate,
+        endAt: newEndDate,
+        rescheduledAt: new Date(),
+        rescheduledByRole: session.role,
+      },
+      include: { student: true, professor: true },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { message: `${booking.professor.name} already has a session scheduled at that exact time.` };
+    }
+    throw err;
+  }
 
   if (updated.dailyRoomName) {
     const newExp = Math.floor(updated.endAt.getTime() / 1000) + 2 * 60 * 60; // same 2h wrap-up buffer as room creation
     await updateDailyRoomExpiry(updated.dailyRoomName, newExp);
+  }
+
+  // A demo booking's own DemoRequest.scheduledAt is a separate column from
+  // the Booking it's linked to — scheduleDemoCall keeps both in sync when
+  // it's the one moving the time, but rescheduling the same booking from
+  // here (the admin Bookings page's general-purpose reschedule control)
+  // only touched the Booking, leaving the demo-requests page showing the
+  // old time. Keep both in sync regardless of which control the admin uses.
+  if (updated.demoRequestId) {
+    await prisma.demoRequest.update({
+      where: { id: updated.demoRequestId },
+      data: { scheduledAt: newStartDate },
+    });
   }
 
   await sendBookingRescheduledEmail(updated, previousStartAt, {
@@ -338,6 +376,7 @@ export async function adminRescheduleBooking(_state: RescheduleFormState, formDa
   revalidatePath(sitePath(bookingSite, "/student/bookings"));
   revalidatePath(sitePath(bookingSite, "/professor/bookings"));
   revalidatePath(sitePath(bookingSite, "/admin/bookings"));
+  revalidatePath(sitePath(bookingSite, "/admin/demo-requests"));
   revalidatePath("/superadmin/bookings");
 
   return { message: "Session rescheduled.", success: true };
@@ -614,20 +653,31 @@ export async function acceptRescheduleProposal(bookingId: string): Promise<Resch
   }
 
   const previousStartAt = booking.startAt;
-  const updated = await prisma.booking.update({
-    where: { id: booking.id },
-    data: {
-      startAt: match.startAt,
-      endAt: match.endAt,
-      rescheduledAt: new Date(),
-      rescheduledByRole: proposerRole,
-      rescheduleProposedStartAt: null,
-      rescheduleProposedBy: null,
-      rescheduleProposedReason: null,
-      rescheduleProposedAt: null,
-    },
-    include: { student: true, professor: true },
-  });
+  let updated;
+  try {
+    updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        startAt: match.startAt,
+        endAt: match.endAt,
+        rescheduledAt: new Date(),
+        rescheduledByRole: proposerRole,
+        rescheduleProposedStartAt: null,
+        rescheduleProposedBy: null,
+        rescheduleProposedReason: null,
+        rescheduleProposedAt: null,
+      },
+      include: { student: true, professor: true },
+    });
+  } catch (err) {
+    // The getAvailableSlots check above has a brief gap before this update
+    // commits — the DB's own unique constraint on (professorId, startAt) is
+    // the real guard against someone else taking the slot in that gap.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { message: "That proposed time was just taken by someone else. Please propose a new time." };
+    }
+    throw err;
+  }
 
   if (updated.dailyRoomName) {
     const newExp = Math.floor(updated.endAt.getTime() / 1000) + 2 * 60 * 60; // same 2h wrap-up buffer as room creation

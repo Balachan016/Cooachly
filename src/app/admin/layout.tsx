@@ -1,25 +1,32 @@
 import { requireRole } from "@/lib/dal";
 import { sitePath, SITE_CONFIG } from "@/lib/site";
-import { DashboardShell } from "@/components/dashboard-shell";
+import { DashboardShell, type NavItem } from "@/components/dashboard-shell";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole("ADMIN", "SUPERADMIN");
   const p = (path: string) => sitePath(session.site, path);
-  const navLinks = [
+  const navLinks: NavItem[] = [
     { href: p("/admin"), label: "Overview" },
     { href: p("/admin/users"), label: "Users" },
     { href: p("/admin/bookings"), label: "Bookings" },
     { href: p("/admin/availability"), label: "Availability" },
-    { href: p("/admin/payments"), label: "Payments" },
-    { href: p("/admin/payouts"), label: "Payouts" },
-    { href: p("/admin/expenses"), label: "Expenses" },
-    { href: p("/admin/pnl"), label: "P&L" },
     { href: p("/admin/class-logs"), label: "Class logs" },
     { href: p("/admin/tests"), label: "Tests" },
     { href: p("/admin/feedback"), label: "Feedback" },
     { href: p("/admin/demo-requests"), label: "Demo requests" },
     { href: p("/admin/enquiries"), label: "Enquiries" },
     { href: p("/admin/coach-applications"), label: "Coach applications" },
+    { href: p("/admin/mail"), label: "Mail" },
+    { href: p("/admin/support-bot"), label: "Support bot" },
+    {
+      label: "Accounts",
+      links: [
+        { href: p("/admin/payments"), label: "Payments" },
+        { href: p("/admin/payouts"), label: "Payouts" },
+        { href: p("/admin/expenses"), label: "Expenses" },
+        { href: p("/admin/pnl"), label: "P&L" },
+      ],
+    },
   ];
 
   return (

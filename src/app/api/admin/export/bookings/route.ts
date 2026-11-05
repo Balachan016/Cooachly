@@ -31,8 +31,22 @@ export async function GET(request: Request) {
   });
 
   const rows = [
-    ["When (UTC)", "Student", "Student email", "Professor", "Status", "Payment status", "Price", "Currency", "Free demo"],
+    [
+      "Booking ID",
+      "When (UTC)",
+      "Student",
+      "Student email",
+      "Professor",
+      "Status",
+      "Payment status",
+      "Price",
+      "Currency",
+      "Free demo",
+      "Notes",
+      "Created at (UTC)",
+    ],
     ...bookings.map((b) => [
+      b.id,
       b.startAt.toISOString(),
       b.student.name,
       b.student.email,
@@ -42,6 +56,8 @@ export async function GET(request: Request) {
       (b.priceCents / 100).toFixed(2),
       b.currency,
       b.isDemo ? "Yes" : "No",
+      b.notes ?? "",
+      b.createdAt.toISOString(),
     ]),
   ];
 

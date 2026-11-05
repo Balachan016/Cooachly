@@ -113,8 +113,6 @@ export function AdminBookingRow({
                 {booking.meetingLink && booking.status !== "CANCELLED" && !isPast ? (
                   <a
                     href={`/api/daily/join/${booking.id}`}
-                    target="_blank"
-                    rel="noreferrer"
                     className="mt-1 inline-block text-sm font-medium text-brand-700 hover:underline dark:text-brand-400"
                   >
                     Join call →
@@ -191,6 +189,17 @@ export function AdminBookingRow({
                   <p className="mt-1 text-sm text-black/40 dark:text-white/40">—</p>
                 )}
               </div>
+            </div>
+
+            <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">
+              <div className="text-xs font-semibold uppercase text-black/40 dark:text-white/40">Record</div>
+              <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+                Created{" "}
+                {new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: viewerTimezone }).format(
+                  booking.createdAt
+                )}
+                {booking.notes ? ` — ${booking.notes}` : ""}
+              </p>
             </div>
 
             <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">

@@ -3,7 +3,7 @@
 import * as z from "zod";
 import { revalidatePath } from "next/cache";
 import { fromZonedTime } from "date-fns-tz";
-import type { Booking, User } from "@prisma/client";
+import { Prisma, type Booking, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { provisionVideoRoomForBooking } from "@/lib/daily";
@@ -145,19 +145,31 @@ export async function createBulkBooking(_state: BulkBookingState, formData: Form
       continue;
     }
 
-    const booking = await prisma.booking.create({
-      data: {
-        studentId,
-        professorId,
-        startAt: occ.startAt,
-        endAt,
-        status: "CONFIRMED",
-        paymentStatus: "UNPAID",
-        priceCents: hourlyRateCents,
-        notes,
-      },
-      include: { student: true, professor: true },
-    });
+    let booking;
+    try {
+      booking = await prisma.booking.create({
+        data: {
+          studentId,
+          professorId,
+          startAt: occ.startAt,
+          endAt,
+          status: "CONFIRMED",
+          paymentStatus: "UNPAID",
+          priceCents: hourlyRateCents,
+          notes,
+        },
+        include: { student: true, professor: true },
+      });
+    } catch (err) {
+      // The findFirst check above has a brief gap before this insert
+      // commits — the DB's own unique constraint on (professorId, startAt)
+      // is the real guard against a slot being double-booked in that gap.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        results.push({ when: occ.when, status: "skipped", reason: "Professor already has a session at this time." });
+        continue;
+      }
+      throw err;
+    }
     await provisionVideoRoomForBooking(booking);
     createdBookings.push(booking);
     results.push({ when: occ.when, status: "created" });
