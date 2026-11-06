@@ -3,11 +3,7 @@ import { requireRole } from "@/lib/dal";
 import { convertToInrCents } from "@/lib/exchange-rate";
 import { Card } from "@/components/ui";
 import { ExpenseForm } from "./expense-form";
-
-function formatAmount(amountCents: number, currency: string): string {
-  const amount = (amountCents / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return currency === "inr" ? `₹${amount}` : currency === "usd" ? `$${amount}` : `${currency.toUpperCase()} ${amount}`;
-}
+import { ExpenseRow } from "./expense-row";
 
 export default async function AdminExpensesPage() {
   const session = await requireRole("ADMIN", "SUPERADMIN");
@@ -24,6 +20,7 @@ export default async function AdminExpensesPage() {
     );
   }
 
+  const canEdit = session.role === "SUPERADMIN";
   const expenses = await prisma.subscriptionExpense.findMany({ orderBy: { billedAt: "desc" }, take: 100 });
   const conversions = await Promise.all(expenses.map((e) => convertToInrCents(e.amountCents, e.currency)));
 
@@ -79,26 +76,16 @@ export default async function AdminExpensesPage() {
                 <th className="py-2 pr-3 text-right">≈ INR</th>
                 <th className="py-2 pr-3">Billed on</th>
                 <th className="py-2">Notes</th>
+                {canEdit && <th className="py-2 pl-3">Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {expenses.map((e, i) => {
-                const inrCents = conversions[i].inrCents;
-                return (
-                  <tr key={e.id} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                    <td className="py-2 pr-3 font-medium">{e.serviceName}</td>
-                    <td className="py-2 pr-3 text-right">{formatAmount(e.amountCents, e.currency)}</td>
-                    <td className="py-2 pr-3 text-right">
-                      {inrCents !== null ? `₹${(inrCents / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                    </td>
-                    <td className="py-2 pr-3">{new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(e.billedAt)}</td>
-                    <td className="py-2 text-black/60 dark:text-white/60">{e.notes ?? "—"}</td>
-                  </tr>
-                );
-              })}
+              {expenses.map((e, i) => (
+                <ExpenseRow key={e.id} expense={e} inrCents={conversions[i].inrCents} canEdit={canEdit} />
+              ))}
               {expenses.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-black/50 dark:text-white/50">
+                  <td colSpan={canEdit ? 6 : 5} className="py-6 text-center text-black/50 dark:text-white/50">
                     No charges logged yet.
                   </td>
                 </tr>
