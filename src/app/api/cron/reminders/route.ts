@@ -5,15 +5,18 @@ import { sendBookingReminder } from "@/lib/notifications/reminders";
 import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
 import { sendTestDueSoonEmail } from "@/lib/notifications/tests";
 import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
-import { PAST_DUE_GRACE_MS } from "@/lib/bookings";
+import { sendJoinNudge } from "@/lib/notifications/voice-nudge";
+import { PAST_DUE_GRACE_MS, JOIN_NUDGE_DELAY_MS, getMissingParties } from "@/lib/bookings";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
 // cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
 // or ~5m from now that haven't had that reminder sent yet, and sends it
 // (email always; WhatsApp if the user has a phone number and Twilio is
 // configured). Also sends a one-time "due soon" nudge for unsubmitted
-// tests whose due date is ~24h away, and sweeps up any booking whose call
-// is long over but never got marked COMPLETED (see PAST_DUE_GRACE_MS).
+// tests whose due date is ~24h away, a one-time WhatsApp voice-note nudge
+// to whoever hasn't joined a call ~2-3 minutes after its start (see
+// JOIN_NUDGE_DELAY_MS), and sweeps up any booking whose call is long over
+// but never got marked COMPLETED (see PAST_DUE_GRACE_MS).
 
 const WINDOW_MINUTES = 5;
 const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day
@@ -100,6 +103,28 @@ export async function GET(request: Request) {
     sentCount += 1;
   }
 
+  let joinNudgesSent = 0;
+  const joinNudgeCutoff = new Date(Date.now() - JOIN_NUDGE_DELAY_MS);
+  const dueForJoinNudge = await prisma.booking.findMany({
+    where: {
+      status: { in: ["PENDING", "CONFIRMED"] },
+      joinNudgeSentAt: null,
+      dailyRoomUrl: { not: null },
+      startAt: { lte: joinNudgeCutoff },
+      endAt: { gte: new Date() },
+    },
+    include: { student: true, professor: true, callAttendanceEvents: true },
+  });
+
+  for (const booking of dueForJoinNudge) {
+    const missing = getMissingParties(booking, booking.callAttendanceEvents);
+    for (const party of missing) {
+      await sendJoinNudge(booking, party);
+      joinNudgesSent += 1;
+    }
+    await prisma.booking.update({ where: { id: booking.id }, data: { joinNudgeSentAt: new Date() } });
+  }
+
   let completedCount = 0;
   const pastDueBookings = await prisma.booking.findMany({
     where: {
@@ -119,5 +144,10 @@ export async function GET(request: Request) {
     completedCount += 1;
   }
 
-  return NextResponse.json({ ok: true, remindersSent: sentCount, pastDueBookingsCompleted: completedCount });
+  return NextResponse.json({
+    ok: true,
+    remindersSent: sentCount,
+    joinNudgesSent,
+    pastDueBookingsCompleted: completedCount,
+  });
 }

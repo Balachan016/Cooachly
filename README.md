@@ -29,6 +29,9 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
   upload their answer back, both stored via Vercel Blob.
 - **Reminders** — automatic email (Resend), WhatsApp, and SMS (Twilio) reminders 1 day, 1 hour,
   and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
+- **Live call status + join nudge** — Admin → Bookings shows who's actually joined each session
+  right now (derived from Daily's join/leave events), and automatically sends a one-time WhatsApp
+  voice message to whoever hasn't joined ~2-3 minutes after start.
 - **Installable mobile app (PWA)** — Cooachly and Cooachly Arts can each be installed to an iPhone or
   Android home screen from the browser, with their own icon and name, and send push notifications
   for session reminders and new messages. Turned on per device under **Settings → Mobile app &
@@ -227,6 +230,27 @@ Open [http://localhost:3000](http://localhost:3000).
 Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
 job frequently is safe. WhatsApp and SMS are both skipped for anyone without a phone number on file.
+
+### Join nudge (voice message if nobody's joined the call)
+
+The same `/api/cron/reminders` job also watches for a session that's ~2-3 minutes past its own
+start time with the student and/or professor still not showing as joined (per Daily's
+`participant.joined`/`participant.left` webhook events — see Admin → Bookings' "Live now" panel,
+which reads the same data). Whoever's missing gets a one-time WhatsApp **voice note** — not a
+text — generated on the fly and sent automatically; it's never re-sent for the same booking.
+
+This reuses infrastructure already documented above/below rather than adding a new service:
+
+1. **Twilio WhatsApp** (see above) — the voice note is delivered as WhatsApp audio media, so this
+   needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` configured.
+2. **OpenAI** (see "Setting up video calls & AI summaries" below) — `OPENAI_API_KEY` generates the
+   spoken audio (text-to-speech) from a short script.
+3. **Vercel Blob** (see "Setting up file sharing" below) — `BLOB_READ_WRITE_TOKEN` hosts the
+   generated audio clip at a public URL, since WhatsApp media messages need one to fetch from.
+
+Missing any of the three just means that leg is skipped (logged in Admin → Bookings' "Reminder
+log" as `join_nudge`, same as every other channel) — nothing breaks, it just won't actually send
+until all three are set.
 
 ## Setting up the mobile app & push notifications
 

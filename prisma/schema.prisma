@@ -479,6 +479,11 @@ model Booking {
   reminder1hSentAt       DateTime?
   reminder5mSentAt       DateTime?
   feedbackRequestSentAt  DateTime?
+  // Set the first time the cron sweep evaluates this booking ~2-3 minutes
+  // past its start with the call still open — whoever hasn't joined by then
+  // gets a one-time WhatsApp voice-note nudge. Set regardless of whether a
+  // nudge was actually needed, so a booking is only ever evaluated once.
+  joinNudgeSentAt        DateTime?
 
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt

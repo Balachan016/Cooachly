@@ -175,6 +175,48 @@ export async function sendWhatsApp(opts: { to: string; body: string }): Promise<
 }
 
 /**
+ * Sends an audio file as a WhatsApp voice message — no SMS fallback, since
+ * plain SMS can't carry media. mediaUrl must be a publicly reachable HTTPS
+ * URL (see @/lib/notifications/voice-nudge, which generates and uploads the
+ * clip this calls with).
+ */
+export async function sendWhatsAppVoiceNote(opts: { to: string; mediaUrl: string }): Promise<WhatsAppSendResult> {
+  const addresses = { from: whatsappFrom?.replace(/^whatsapp:/, ""), to: opts.to, channel: "WHATSAPP" as const };
+
+  if (!client || !whatsappFrom) {
+    console.log(`[whatsapp:skipped, not configured] to=${opts.to}`);
+    return { skipped: true as const, ...addresses };
+  }
+
+  if (RESTRICT_WHATSAPP_TO_ADMINS_ONLY) {
+    const recipientIsAdmin = await prisma.user.findFirst({
+      where: { phone: opts.to, role: { in: ["ADMIN", "SUPERADMIN"] } },
+      select: { id: true },
+    });
+    if (!recipientIsAdmin) {
+      console.log(`[whatsapp:skipped, restricted to admins] to=${opts.to}`);
+      return { skipped: true as const, ...addresses };
+    }
+  }
+
+  try {
+    const appUrl = await getAppUrl();
+    const message = await client.messages.create({
+      from: whatsappFrom,
+      to: `whatsapp:${opts.to}`,
+      mediaUrl: [opts.mediaUrl],
+      statusCallback: `${appUrl}/api/twilio/status`,
+    });
+    return { skipped: false as const, sid: message.sid, ...addresses };
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to send WhatsApp voice note", err);
+    return { skipped: false as const, error: `${message}${code}`, ...addresses };
+  }
+}
+
+/**
  * Account invites are "business-initiated" WhatsApp messages too, so the same
  * 24h-window template requirement applies (see sendWhatsAppReminder below).
  * Set TWILIO_INVITE_CONTENT_SID once a template is approved; until then this
