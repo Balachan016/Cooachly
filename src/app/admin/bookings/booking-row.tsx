@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Attachment, Booking, NotificationLog, Role, User } from "@prisma/client";
+import type { Attachment, Booking, CallAttendanceEvent, NotificationLog, Role, User } from "@prisma/client";
 import { extendBooking, deleteBooking, markBookingCompleted, adminCancelBooking } from "@/actions/bookings";
 import { sendManualReminder } from "@/actions/reminders";
 import { isPastDate } from "@/lib/time";
+import { getLiveCallStatus } from "@/lib/bookings";
 import { Badge, Button } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
@@ -18,7 +19,29 @@ const KIND_LABEL: Record<string, string> = {
   manual: "Manual reminder",
   instant: "Instant call",
   test: "Test",
+  join_nudge: "Join nudge (voice)",
 };
+
+function LiveStatusBadge({
+  booking,
+  events,
+}: {
+  booking: { studentId: string; professorId: string; startAt: Date; endAt: Date; status: string };
+  events: CallAttendanceEvent[];
+}) {
+  const status = getLiveCallStatus(booking, events);
+  if (!status) return null;
+
+  if (status.kind === "live_both") return <Badge tone="success">Live — both joined</Badge>;
+  if (status.kind === "live_waiting") {
+    return <Badge tone="warning">Live — waiting on {status.missing === "STUDENT" ? "student" : "professor"}</Badge>;
+  }
+  return (
+    <Badge tone="danger">
+      Nobody joined yet ({status.minutesSinceStart}m)
+    </Badge>
+  );
+}
 
 export function AdminBookingRow({
   booking,
@@ -30,6 +53,7 @@ export function AdminBookingRow({
     professor: User;
     attachments: Attachment[];
     notificationLogs: NotificationLog[];
+    callAttendanceEvents: CallAttendanceEvent[];
   };
   viewerRole: Role;
   viewerTimezone: string;
@@ -75,6 +99,7 @@ export function AdminBookingRow({
             <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
             {booking.isDemo && <Badge tone="default">Free demo</Badge>}
             {booking.rescheduleProposedStartAt && <Badge tone="warning">Reschedule pending</Badge>}
+            <LiveStatusBadge booking={booking} events={booking.callAttendanceEvents} />
           </div>
         </td>
         <td className="whitespace-nowrap px-4 py-1.5 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
