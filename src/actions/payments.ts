@@ -423,6 +423,66 @@ export async function logSubscriptionExpense(_state: PaymentsActionState, formDa
   return { message: `Logged ${serviceName} charge.`, success: true };
 }
 
+/** Superadmin-only: corrects an existing logged charge in place. */
+export async function updateSubscriptionExpense(expenseId: string, _state: PaymentsActionState, formData: FormData): Promise<PaymentsActionState> {
+  const session = await requireRole("SUPERADMIN");
+
+  const existing = await prisma.subscriptionExpense.findUnique({ where: { id: expenseId } });
+  if (!existing) return { message: "Charge not found." };
+
+  const parsed = ExpenseSchema.safeParse({
+    serviceName: formData.get("serviceName"),
+    amountCents: Math.round(Number(formData.get("amount") || 0) * 100),
+    currency: formData.get("currency") || "usd",
+    billedAt: formData.get("billedAt"),
+    notes: formData.get("notes") || undefined,
+  });
+  if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Please fill in the charge details." };
+
+  const { serviceName, amountCents, currency, billedAt, notes } = parsed.data;
+
+  await prisma.subscriptionExpense.update({
+    where: { id: expenseId },
+    data: {
+      serviceName,
+      amountCents,
+      currency: currency.toLowerCase(),
+      billedAt: new Date(`${billedAt}T00:00:00.000Z`),
+      notes: notes || null,
+    },
+  });
+
+  await logAudit({
+    site: session.site,
+    action: "SUBSCRIPTION_EXPENSE_UPDATED",
+    actorId: session.userId,
+    detail: `Edited ${serviceName} charge: ${amountCents / 100} ${currency.toUpperCase()}`,
+  });
+
+  revalidatePath(sitePath(session.site, "/admin/expenses"));
+  return { message: "Charge updated.", success: true };
+}
+
+/** Superadmin-only: permanently removes a logged charge. */
+export async function deleteSubscriptionExpense(expenseId: string): Promise<{ message: string }> {
+  const session = await requireRole("SUPERADMIN");
+
+  const existing = await prisma.subscriptionExpense.findUnique({ where: { id: expenseId } });
+  if (!existing) return { message: "Charge not found." };
+
+  await prisma.subscriptionExpense.delete({ where: { id: expenseId } });
+
+  await logAudit({
+    site: session.site,
+    action: "SUBSCRIPTION_EXPENSE_DELETED",
+    actorId: session.userId,
+    detail: `Deleted ${existing.serviceName} charge: ${existing.amountCents / 100} ${existing.currency.toUpperCase()}`,
+  });
+
+  revalidatePath(sitePath(session.site, "/admin/expenses"));
+  return { message: "Charge deleted." };
+}
+
 const ExchangeRateSchema = z.object({
   fromCurrency: z.string().trim().min(1),
   toCurrency: z.string().trim().min(1),
