@@ -318,17 +318,31 @@ cheaper and more private than cloud recording.
 **If attendance tracking, transcription, and AI summaries all stop at once** (not just one of
 them), the webhook has almost certainly tripped Daily's circuit breaker: by default, 3 non-2xx
 responses from your endpoint — across *any* event type — and Daily stops sending *all* future
-webhooks to it, silently, with no notice anywhere in your own app. Check for this first:
+webhooks to it, silently, with no notice anywhere in your own app. Check Admin → Overview's "Daily
+webhook health" card first — it reads the same `DailyWebhookEvent` log every delivery writes to,
+and flags both outright failures and a last delivery that's gone stale (succeeded, but a long time
+ago — which a tripped-then-reset breaker with no session since can look like, so don't read
+"stale" alone as still broken). Then, on Daily's own side:
 
 1. `GET https://api.daily.co/v1/webhooks` (with your `DAILY_API_KEY` as the bearer token) lists
-   your webhook(s) — look at `failedCount` and whether it's still trying to deliver.
-2. Fix whatever caused the failures (check Vercel's function logs for `/api/daily/webhook` around
-   when it stopped, and confirm `DAILY_WEBHOOK_SECRET` in production still matches what Daily has
-   on file for that webhook, if you set one — a mismatch after recreating/updating the webhook
-   rejects every single delivery with 401 and trips the breaker almost immediately).
-3. `POST https://api.daily.co/v1/webhooks/<uuid>` makes Daily retry once; a 200 from your endpoint
-   closes the breaker and resumes normal delivery. There's no dashboard button for this — it's
-   API-only.
+   your webhook(s) — look at `state`/`failedCount` and whether `lastMomentPushed` is recent.
+2. Fix whatever caused the failures first, or the reset below just trips again:
+   - Check Vercel's function logs for `/api/daily/webhook` around when it stopped.
+   - Confirm `DAILY_WEBHOOK_SECRET` in production still matches what Daily has on file for that
+     webhook, if you set one — a mismatch after recreating/updating the webhook rejects every
+     single delivery with 401 and trips the breaker almost immediately.
+   - **Check for a www/apex redirect on the registered webhook URL.** If `url` (from step 1) is,
+     say, `https://www.cooachly.com/api/daily/webhook` but you've set up the one-click redirect
+     from the "Deploying" section below with `www` redirecting to the apex domain (or vice versa),
+     *every* delivery gets a 3xx instead of 200 — webhook senders don't follow redirects — which
+     trips the breaker again almost immediately after every reset. Point the webhook's `url` at
+     whichever domain doesn't redirect.
+3. Reset it: `POST https://api.daily.co/v1/webhooks/<uuid>` with the **same `url`, `eventTypes`,
+   and `hmac`** your `GET` in step 1 showed, as a JSON body — this is an update call, not a bare
+   retry trigger, and Daily rejects it with `"url" is required` if you POST without a body. Use
+   this same call to fix the `url` if step 2 found a redirect problem. A 200 back with
+   `"state":"ACTIVE"` and `"failedCount":0` confirms it's reset; there's no dashboard button for
+   this, it's API-only.
 
 ## Setting up file sharing (Vercel Blob)
 
