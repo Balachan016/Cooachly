@@ -52,7 +52,7 @@ export async function updateStudentProfile(
       fileWarning = "Saved your other details, but file storage isn't configured yet, so the syllabus wasn't uploaded.";
     } else {
       const uploaded = await uploadFile({ pathname: `syllabi/${session.userId}-${file.name}`, file });
-      if (!uploaded) {
+      if (!uploaded.url) {
         fileWarning = "Saved your other details, but the syllabus upload failed. Please try again.";
       } else {
         syllabusFileName = file.name;

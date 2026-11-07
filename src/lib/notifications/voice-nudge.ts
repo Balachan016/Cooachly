@@ -44,7 +44,7 @@ async function sendVoiceNote(opts: { to: string; text: string; pathname: string 
 
   const file = new File([new Uint8Array(audio)], `${opts.pathname}.mp3`, { type: "audio/mpeg" });
   const uploaded = await uploadFile({ pathname: `voice-nudges/${opts.pathname}.mp3`, file });
-  if (!uploaded) return { skipped: true, error: "Vercel Blob isn't configured" };
+  if (!uploaded.url) return { skipped: true, error: uploaded.error };
 
   const result = await sendWhatsAppVoiceNote({ to: opts.to, mediaUrl: uploaded.url });
   return result.skipped ? { skipped: true, error: "Twilio WhatsApp isn't configured" } : { skipped: false, error: result.error };

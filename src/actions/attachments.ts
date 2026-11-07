@@ -44,7 +44,7 @@ export async function uploadAttachment(
   }
 
   const uploaded = await uploadFile({ pathname: `bookings/${bookingId}/${kind.toLowerCase()}-${file.name}`, file });
-  if (!uploaded) return { message: "Upload failed. Please try again." };
+  if (!uploaded.url) return { message: "Upload failed. Please try again." };
 
   await prisma.attachment.create({
     data: {
