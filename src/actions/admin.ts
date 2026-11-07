@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/dal";
 import { hashPassword, generateTempPassword } from "@/lib/password";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { sendWhatsApp } from "@/lib/notifications/sms";
+import { sendTestVoiceNote } from "@/lib/notifications/voice-nudge";
 import { isPushConfigured, sendPushToUser } from "@/lib/notifications/push";
 import { logNotification } from "@/lib/notifications/log";
 import { logAudit } from "@/lib/audit";
@@ -487,4 +488,26 @@ export async function sendTestNotification(): Promise<{ message: string }> {
     : "Daily.co not configured, no link generated";
 
   return { message: `Email: ${emailStatus}. ${textChannelStatus}. Push: ${pushStatus}. Video: ${videoStatus}.` };
+}
+
+/**
+ * Separate from sendTestNotification above — that one sends a plain-text
+ * WhatsApp message; this exercises the join-nudge's actual voice-note
+ * pipeline (OpenAI TTS + Vercel Blob + Twilio WhatsApp media) end to end,
+ * so an admin can confirm all three pieces work together without waiting
+ * for a real session to come up short a party.
+ */
+export async function sendTestVoiceMessage(): Promise<{ message: string }> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+
+  const admin = await prisma.user.findUnique({ where: { id: session.userId } });
+  if (!admin) return { message: "Admin account not found." };
+  if (!admin.phone) return { message: "Add a phone number under Settings first." };
+
+  return sendTestVoiceNote({
+    userId: admin.id,
+    name: admin.name,
+    phone: admin.phone,
+    brandName: SITE_CONFIG[admin.site].brandName,
+  });
 }

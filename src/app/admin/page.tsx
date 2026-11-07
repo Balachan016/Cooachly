@@ -4,6 +4,7 @@ import { sitePath } from "@/lib/site";
 import { Card, Select } from "@/components/ui";
 import { buildAdminMonthOverview, type OverviewFilters } from "@/lib/admin-overview-calendar";
 import { TestNotificationButton } from "./test-notification-button";
+import { TestVoiceMessageButton } from "./test-voice-message-button";
 import { MonthOverviewCalendar } from "./month-overview-calendar";
 import { currentYearMonth, parseMonthParam, monthParamValue, monthReferenceDate } from "@/lib/month-nav";
 import { MonthNav } from "@/components/month-nav";
@@ -144,6 +145,18 @@ export default async function AdminOverviewPage(props: PageProps<"/admin">) {
         </p>
         <div className="mt-4">
           <TestNotificationButton />
+        </div>
+      </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Test join-nudge voice message</h2>
+        <p className="mt-1 text-sm text-black/50 dark:text-white/50">
+          Sends a test WhatsApp voice note to your own number, using the exact same pipeline as the
+          automatic join-nudge — confirms OpenAI (text-to-speech), Vercel Blob (hosting the clip), and
+          Twilio WhatsApp are all wired up together.
+        </p>
+        <div className="mt-4">
+          <TestVoiceMessageButton />
         </div>
       </Card>
 

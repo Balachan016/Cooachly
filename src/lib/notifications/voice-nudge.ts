@@ -20,14 +20,34 @@ async function generateSpeech(text: string): Promise<Buffer | null> {
       body: JSON.stringify({ model: "tts-1", voice: "alloy", input: text, response_format: "mp3" }),
     });
     if (!res.ok) {
-      console.error("Failed to generate join-nudge speech", await res.text());
+      console.error("Failed to generate voice-note speech", await res.text());
       return null;
     }
     return Buffer.from(await res.arrayBuffer());
   } catch (err) {
-    console.error("Failed to reach OpenAI for join-nudge speech", err);
+    console.error("Failed to reach OpenAI for voice-note speech", err);
     return null;
   }
+}
+
+type SendResult = { skipped: boolean; error?: string };
+
+/**
+ * Shared by the real join-nudge and the admin "test my voice-message setup"
+ * button — generates the audio, uploads it, and sends it as a WhatsApp
+ * voice note. Returns the same shape logNotification expects, so every
+ * caller logs it the same way.
+ */
+async function sendVoiceNote(opts: { to: string; text: string; pathname: string }): Promise<SendResult> {
+  const audio = await generateSpeech(opts.text);
+  if (!audio) return { skipped: true, error: "OpenAI isn't configured, or speech generation failed" };
+
+  const file = new File([new Uint8Array(audio)], `${opts.pathname}.mp3`, { type: "audio/mpeg" });
+  const uploaded = await uploadFile({ pathname: `voice-nudges/${opts.pathname}.mp3`, file });
+  if (!uploaded) return { skipped: true, error: "Vercel Blob isn't configured" };
+
+  const result = await sendWhatsAppVoiceNote({ to: opts.to, mediaUrl: uploaded.url });
+  return result.skipped ? { skipped: true, error: "Twilio WhatsApp isn't configured" } : { skipped: false, error: result.error };
 }
 
 type BookingWithParties = Booking & { student: User; professor: User };
@@ -58,31 +78,22 @@ export async function sendJoinNudge(booking: BookingWithParties, missing: "STUDE
   const brandName = SITE_CONFIG[recipient.site].brandName;
   const text = `Hi ${recipient.name}, this is an automated voice message from ${brandName}. Your session with ${peer.name} started a few minutes ago and we haven't seen you join yet. Please join now using the link we sent you.`;
 
-  const audio = await generateSpeech(text);
-  if (!audio) {
-    await logNotification({
-      bookingId: booking.id,
-      userId: recipient.id,
-      channel: "WHATSAPP",
-      kind: "join_nudge",
-      result: { skipped: true, error: "OpenAI isn't configured, or speech generation failed" },
-    });
-    return;
-  }
-
-  const file = new File([new Uint8Array(audio)], `join-nudge-${booking.id}-${missing.toLowerCase()}.mp3`, { type: "audio/mpeg" });
-  const uploaded = await uploadFile({ pathname: `voice-nudges/${booking.id}-${missing.toLowerCase()}.mp3`, file });
-  if (!uploaded) {
-    await logNotification({
-      bookingId: booking.id,
-      userId: recipient.id,
-      channel: "WHATSAPP",
-      kind: "join_nudge",
-      result: { skipped: true, error: "Vercel Blob isn't configured" },
-    });
-    return;
-  }
-
-  const result = await sendWhatsAppVoiceNote({ to: recipient.phone, mediaUrl: uploaded.url });
+  const result = await sendVoiceNote({ to: recipient.phone, text, pathname: `join-nudge-${booking.id}-${missing.toLowerCase()}` });
   await logNotification({ bookingId: booking.id, userId: recipient.id, channel: "WHATSAPP", kind: "join_nudge", result });
+}
+
+/**
+ * Admin-triggered test of the exact same voice-note pipeline the join-nudge
+ * uses, sent to the admin's own WhatsApp number — lets them confirm OpenAI
+ * TTS, Vercel Blob, and Twilio WhatsApp are all actually wired up together
+ * without waiting for a real session to be short a party.
+ */
+export async function sendTestVoiceNote(opts: { userId: string; name: string; phone: string; brandName: string }): Promise<{ message: string }> {
+  const text = `Hi ${opts.name}, this is a test voice message from ${opts.brandName}, confirming your WhatsApp voice note setup is working correctly.`;
+  const result = await sendVoiceNote({ to: opts.phone, text, pathname: `test-${opts.userId}-${Date.now()}` });
+  await logNotification({ userId: opts.userId, channel: "WHATSAPP", kind: "test_voice", result });
+
+  if (!result.skipped && !result.error) return { message: "Voice note: sent — check WhatsApp." };
+  if (result.skipped) return { message: `Voice note: not configured — ${result.error}` };
+  return { message: `Voice note: failed — ${result.error}` };
 }

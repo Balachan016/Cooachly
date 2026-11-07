@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { Card } from "@/components/ui";
 import { TestNotificationButton } from "./test-notification-button";
+import { TestVoiceMessageButton } from "./test-voice-message-button";
 import { DailyWebhookHealth } from "@/components/daily-webhook-health";
 
 export default async function AdminOverviewPage() {
@@ -44,6 +45,18 @@ export default async function AdminOverviewPage() {
         </p>
         <div className="mt-4">
           <TestNotificationButton />
+        </div>
+      </Card>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Test join-nudge voice message</h2>
+        <p className="mt-1 text-sm text-black/50 dark:text-white/50">
+          Sends a test WhatsApp voice note to your own number, using the exact same pipeline as the
+          automatic join-nudge — confirms OpenAI (text-to-speech), Vercel Blob (hosting the clip), and
+          Twilio WhatsApp are all wired up together.
+        </p>
+        <div className="mt-4">
+          <TestVoiceMessageButton />
         </div>
       </Card>
 
