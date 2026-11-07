@@ -1,7 +1,12 @@
 import "server-only";
 import { put } from "@vercel/blob";
 
-export const isBlobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+// Vercel's newer "Connect Database"/Storage flow wires up a Blob store via
+// OIDC (BLOB_STORE_ID + the platform's own auto-injected VERCEL_OIDC_TOKEN)
+// instead of handing you a static BLOB_READ_WRITE_TOKEN to copy — @vercel/
+// blob's put() already knows how to use either, so this just needs to
+// recognize both as "configured" rather than requiring the older token.
+export const isBlobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 
 export async function uploadFile(opts: {
   pathname: string;

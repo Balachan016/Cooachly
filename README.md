@@ -332,13 +332,26 @@ webhooks to it, silently, with no notice anywhere in your own app. Check for thi
 
 ## Setting up file sharing (Vercel Blob)
 
-Professors/admins can share a test file on a booking, and students can upload their answer back.
-This needs blob storage:
+Professors/admins can share a test file on a booking, students can upload their answer back, and
+the join-nudge voice note (see above) is hosted here too. This needs blob storage:
 
-1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available).
-2. Vercel automatically injects `BLOB_READ_WRITE_TOKEN` into your production environment once
-   connected — no manual copying needed there. For local development, copy the token shown in the
-   Blob store's dashboard into your `.env`.
+1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available), or
+   **Connect Database** if a Blob store already exists on your account.
+2. Vercel automatically injects what your production environment needs once connected — no manual
+   copying needed there. Which variable(s) show up under **Settings → Environment Variables**
+   depends on which flow you used:
+   - **Newer "Connect Database" flow**: injects `BLOB_STORE_ID` (and `BLOB_WEBHOOK_PUBLIC_KEY`) —
+     no `BLOB_READ_WRITE_TOKEN` at all. Auth happens via Vercel's own OIDC token, which the platform
+     injects automatically as long as **Enable access to System Environment Variables** (shown
+     right on that same Environment Variables page) is checked — it is by default.
+   - **Older flow**: injects `BLOB_READ_WRITE_TOKEN` directly.
+
+   The app's own `isBlobConfigured` check (and every upload path, including the join-nudge voice
+   note) treats either one as configured — you don't need to hunt for a `BLOB_READ_WRITE_TOKEN`
+   that a newer-style connection never created.
+3. For **local development**, the OIDC flow doesn't apply (that's a Vercel-runtime-only
+   mechanism), so pull a real read-write token from the Blob store's own dashboard page and put it
+   in your `.env` as `BLOB_READ_WRITE_TOKEN`.
 
 Without this configured, upload attempts show a message asking an admin to set it up, rather than
 failing silently.
