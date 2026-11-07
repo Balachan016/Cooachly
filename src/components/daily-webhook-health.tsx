@@ -2,6 +2,23 @@ import { prisma } from "@/lib/prisma";
 import { Badge, Card } from "@/components/ui";
 
 const RECENT_COUNT = 10;
+// A last delivery can be "ok: true" and still be from days ago if the
+// circuit breaker tripped and was then reset without any new session
+// happening yet — the badge used to read "Healthy" in exactly that state,
+// which is what made the most recent incident (reset fixed on Daily's side,
+// but no way to tell from this card whether anything had actually flowed
+// since) harder to confirm than it should have been. This threshold is
+// just when the card starts calling that out — it's not itself a sign of
+// breakage, since plenty of real gaps between sessions are normal.
+const STALE_AFTER_HOURS = 24;
+
+function timeAgo(d: Date): string {
+  const ms = new Date().getTime() - d.getTime();
+  const hours = ms / 3_600_000;
+  if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))}m ago`;
+  if (hours < 48) return `${Math.round(hours)}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
 
 /**
  * Not site-scoped — Daily's webhook delivery (and its circuit breaker) is
@@ -17,6 +34,8 @@ export async function DailyWebhookHealth() {
   });
   const last = events[0];
   const recentFailures = events.filter((e) => !e.ok).length;
+  const hoursSinceLast = last ? (new Date().getTime() - last.receivedAt.getTime()) / 3_600_000 : null;
+  const isStale = hoursSinceLast !== null && hoursSinceLast > STALE_AFTER_HOURS;
   const formatTime = (d: Date) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(d);
 
   return (
@@ -30,9 +49,11 @@ export async function DailyWebhookHealth() {
 
       {last ? (
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-          <Badge tone={last.ok ? "success" : "danger"}>{last.ok ? "Healthy" : "Last delivery failed"}</Badge>
+          <Badge tone={!last.ok ? "danger" : isStale ? "warning" : "success"}>
+            {!last.ok ? "Last delivery failed" : isStale ? "No recent deliveries" : "Healthy"}
+          </Badge>
           <span className="text-black/60 dark:text-white/60">
-            Last delivery: {last.type} · {formatTime(last.receivedAt)}
+            Last delivery: {last.type} · {formatTime(last.receivedAt)} ({timeAgo(last.receivedAt)})
           </span>
           {recentFailures > 0 && (
             <span className="text-red-600 dark:text-red-400">
