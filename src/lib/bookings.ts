@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 
-export type BookingListView = "upcoming" | "completed" | "cancelled";
+export type BookingListView = "upcoming" | "completed" | "cancelled" | "reschedules";
 
 // A session normally only flips to COMPLETED when Daily's transcript webhook
 // fires, which needs transcription turned on and an actual transcript to
@@ -72,13 +72,18 @@ export function getMissingParties(
 }
 
 /**
- * Status half of the Prisma `where` clause for a bookings list. A cancelled
+ * Filter half of the Prisma `where` clause for a bookings list. A cancelled
  * session scheduled for today stays in "upcoming" too (still relevant — e.g.
  * may get rebooked same-day), but every cancelled session — today's
  * included — has its own "cancelled" tab. "completed" is sessions that
  * actually happened: either already marked COMPLETED, or still
  * PENDING/CONFIRMED but long enough past their own end time that they
- * clearly aren't still "upcoming" either.
+ * clearly aren't still "upcoming" either. "reschedules" isn't actually a
+ * status — it's every booking with reschedule activity to review, whatever
+ * its current status: a pending student/professor proposal waiting on
+ * someone (rescheduleProposedStartAt), or a booking that's already been
+ * moved at least once (rescheduledAt) — so admins don't have to scan every
+ * tab's full list to find the handful that actually need attention.
  */
 export function bookingStatusFilter(view: BookingListView): Prisma.BookingWhereInput {
   const now = new Date();
@@ -100,6 +105,9 @@ export function bookingStatusFilter(view: BookingListView): Prisma.BookingWhereI
   }
   if (view === "cancelled") {
     return { status: "CANCELLED" };
+  }
+  if (view === "reschedules") {
+    return { OR: [{ rescheduleProposedStartAt: { not: null } }, { rescheduledAt: { not: null } }] };
   }
   return { OR: [{ status: "COMPLETED" }, pastDueButNotYetCompleted] };
 }
