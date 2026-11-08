@@ -30,8 +30,8 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Reminders** — automatic email (Resend), WhatsApp, and SMS (Twilio) reminders 1 day, 1 hour,
   and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
 - **Live call status + join nudge** — Admin → Bookings shows who's actually joined each session
-  right now (derived from Daily's join/leave events), and automatically sends a one-time WhatsApp
-  voice message to whoever hasn't joined ~2-3 minutes after start.
+  right now (derived from Daily's join/leave events), and automatically places a one-time
+  automated voice call to whoever hasn't joined ~2-3 minutes after start.
 - **Installable mobile app (PWA)** — Cooachly and Cooachly Arts can each be installed to an iPhone or
   Android home screen from the browser, with their own icon and name, and send push notifications
   for session reminders and new messages. Turned on per device under **Settings → Mobile app &
@@ -231,26 +231,40 @@ Reminders only go out for **confirmed** bookings, and only once per threshold (t
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
 job frequently is safe. WhatsApp and SMS are both skipped for anyone without a phone number on file.
 
-### Join nudge (voice message if nobody's joined the call)
+### Join nudge (automated voice call if nobody's joined the call)
 
 The same `/api/cron/reminders` job also watches for a session that's ~2-3 minutes past its own
 start time with the student and/or professor still not showing as joined (per Daily's
 `participant.joined`/`participant.left` webhook events — see Admin → Bookings' "Live now" panel,
-which reads the same data). Whoever's missing gets a one-time WhatsApp **voice note** — not a
-text — generated on the fly and sent automatically; it's never re-sent for the same booking.
+which reads the same data). Whoever's missing gets a one-time **automated phone call** that plays
+a short spoken message — not a WhatsApp message — generated on the fly and placed automatically;
+it's never re-sent for the same booking.
+
+This is a phone call rather than a WhatsApp voice note on purpose: WhatsApp's approved Message
+Template system (required for any business-initiated message sent outside a 24h customer-service
+window — see "WhatsApp templates" above) doesn't support an audio header at all (Meta's template
+header formats are TEXT/IMAGE/VIDEO/DOCUMENT only), so a free-form WhatsApp voice note to someone
+who hasn't messaged the business number in the last 24 hours is rejected outright with Twilio
+error 63016 — which in practice is every real student/professor, every time. A call has no such
+restriction.
 
 This reuses infrastructure already documented above/below rather than adding a new service:
 
-1. **Twilio WhatsApp** (see above) — the voice note is delivered as WhatsApp audio media, so this
-   needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` configured.
+1. **Twilio Voice** — needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (same as WhatsApp/SMS above)
+   plus `TWILIO_VOICE_FROM`, a Twilio phone number with **Voice** enabled (Twilio Console → Phone
+   Numbers → your number → Voice Configuration). This can be the same number used for SMS, or a
+   separate one — Voice capability is independent of the SMS/WhatsApp registration steps above.
 2. **OpenAI** (see "Setting up video calls & AI summaries" below) — `OPENAI_API_KEY` generates the
    spoken audio (text-to-speech) from a short script.
 3. **Vercel Blob** (see "Setting up file sharing" below) — `BLOB_READ_WRITE_TOKEN` hosts the
-   generated audio clip at a public URL, since WhatsApp media messages need one to fetch from.
+   generated audio clip at a public URL, since Twilio's call needs one to fetch the audio from
+   mid-call.
 
 Missing any of the three just means that leg is skipped (logged in Admin → Bookings' "Reminder
-log" as `join_nudge`, same as every other channel) — nothing breaks, it just won't actually send
-until all three are set.
+log" as `join_nudge`, same as every other channel) — nothing breaks, it just won't actually place
+the call until all three are set. Superadmin → Reminders shows each piece's config status, plus
+the real call outcome (`completed`/`no-answer`/`busy`/`failed`) once Twilio's status callback
+reports it.
 
 ## Setting up the mobile app & push notifications
 
@@ -347,7 +361,7 @@ ago — which a tripped-then-reset breaker with no session since can look like, 
 ## Setting up file sharing (Vercel Blob)
 
 Professors/admins can share a test file on a booking, students can upload their answer back, and
-the join-nudge voice note (see above) is hosted here too. This needs blob storage:
+the join-nudge voice call's audio clip (see above) is hosted here too. This needs blob storage:
 
 1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available), or
    **Connect Database** if a Blob store already exists on your account.
@@ -361,8 +375,8 @@ the join-nudge voice note (see above) is hosted here too. This needs blob storag
    - **Older flow**: injects `BLOB_READ_WRITE_TOKEN` directly.
 
    The app's own `isBlobConfigured` check (and every upload path, including the join-nudge voice
-   note) treats either one as configured — you don't need to hunt for a `BLOB_READ_WRITE_TOKEN`
-   that a newer-style connection never created.
+   call's audio clip) treats either one as configured — you don't need to hunt for a
+   `BLOB_READ_WRITE_TOKEN` that a newer-style connection never created.
 3. For **local development**, the OIDC flow doesn't apply (that's a Vercel-runtime-only
    mechanism), so pull a real read-write token from the Blob store's own dashboard page and put it
    in your `.env` as `BLOB_READ_WRITE_TOKEN`.

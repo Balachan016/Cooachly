@@ -3,7 +3,13 @@ import { getCurrentUser } from "@/lib/dal";
 import { formatWhenFor } from "@/lib/notifications/format";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
 import { Badge, Card, Select } from "@/components/ui";
-import { whatsAppConfigStatus, smsConfigStatus, isSmsConfigured, isSmsSendingDisabled } from "@/lib/notifications/sms";
+import {
+  whatsAppConfigStatus,
+  smsConfigStatus,
+  isSmsConfigured,
+  isSmsSendingDisabled,
+  voiceCallConfigStatus,
+} from "@/lib/notifications/sms";
 
 function ConfigRow({ label, value }: { label: string; value: string | null }) {
   return (
@@ -91,6 +97,25 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
         <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
           <ConfigRow label="US/Canada sender number" value={smsConfigStatus.us.from} />
           <ConfigRow label="India sender number" value={smsConfigStatus.india.from} />
+        </div>
+      </Card>
+
+      <Card className="mt-4 p-0">
+        <h2 className="flex items-center gap-2 p-4 pb-0 font-semibold">
+          Join-nudge voice call
+          <Badge tone={voiceCallConfigStatus.configured ? "success" : "danger"}>
+            {voiceCallConfigStatus.configured ? "Configured" : "Not configured"}
+          </Badge>
+        </h2>
+        <p className="px-4 pt-1 text-xs text-black/50 dark:text-white/50">
+          The join-nudge plays its message over an automated phone call, not a WhatsApp voice
+          note — WhatsApp templates can&apos;t carry audio, so a proactive voice note outside a
+          24h customer-service window always fails (Twilio error 63016). Calls aren&apos;t
+          subject to that rule. Needs a Twilio number with Voice enabled, set as{" "}
+          <code>TWILIO_VOICE_FROM</code>.
+        </p>
+        <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
+          <ConfigRow label="Calling number" value={voiceCallConfigStatus.from} />
         </div>
       </Card>
 

@@ -6,6 +6,12 @@ import { prisma } from "@/lib/prisma";
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886"
+// Plain E.164 Twilio number with Voice enabled — used only for the join-nudge
+// call (see sendVoiceCall below). Outbound phone calls aren't WhatsApp
+// messages, so Meta's 24h customer-service-window/template rule (see
+// sendWhatsAppReminder's comment) simply doesn't apply to them; that's the
+// whole reason the join-nudge uses a call instead of a WhatsApp voice note.
+const voiceCallFrom = process.env.TWILIO_VOICE_FROM;
 const reminderContentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
 const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
@@ -43,6 +49,12 @@ const SMS_SENDING_DISABLED = true;
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
 export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
 export const isSmsSendingDisabled = SMS_SENDING_DISABLED;
+export const isVoiceCallConfigured = Boolean(accountSid && authToken && voiceCallFrom);
+
+export const voiceCallConfigStatus = {
+  configured: isVoiceCallConfigured,
+  from: voiceCallFrom ?? null,
+};
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
 // SID actually deployed?" can be checked by loading a page instead of
@@ -174,44 +186,52 @@ export async function sendWhatsApp(opts: { to: string; body: string }): Promise<
   return Promise.all([createMessage(opts.to, { body: opts.body }), sendSms(opts.to, opts.body)]);
 }
 
+export type VoiceCallResult = {
+  skipped: boolean;
+  error?: string;
+  from?: string;
+  to: string;
+  sid?: string;
+  channel: "CALL";
+};
+
 /**
- * Sends an audio file as a WhatsApp voice message — no SMS fallback, since
- * plain SMS can't carry media. mediaUrl must be a publicly reachable HTTPS
- * URL (see @/lib/notifications/voice-nudge, which generates and uploads the
- * clip this calls with).
+ * Places an automated phone call that plays an audio clip (see
+ * @/lib/notifications/voice-nudge, which generates and uploads the clip
+ * this calls with) — the join-nudge's actual delivery channel. mediaUrl
+ * must be a publicly reachable HTTPS URL. No SMS/WhatsApp fallback here:
+ * this *is* the fallback, chosen specifically because outbound calls aren't
+ * subject to WhatsApp's 24h window/template rule.
  */
-export async function sendWhatsAppVoiceNote(opts: { to: string; mediaUrl: string }): Promise<WhatsAppSendResult> {
-  const addresses = { from: whatsappFrom?.replace(/^whatsapp:/, ""), to: opts.to, channel: "WHATSAPP" as const };
+export async function sendVoiceCall(opts: { to: string; mediaUrl: string }): Promise<VoiceCallResult> {
+  const addresses = { from: voiceCallFrom, to: opts.to, channel: "CALL" as const };
 
-  if (!client || !whatsappFrom) {
-    console.log(`[whatsapp:skipped, not configured] to=${opts.to}`);
+  if (!client || !voiceCallFrom) {
+    console.log(`[call:skipped, not configured] to=${opts.to}`);
     return { skipped: true as const, ...addresses };
-  }
-
-  if (RESTRICT_WHATSAPP_TO_ADMINS_ONLY) {
-    const recipientIsAdmin = await prisma.user.findFirst({
-      where: { phone: opts.to, role: { in: ["ADMIN", "SUPERADMIN"] } },
-      select: { id: true },
-    });
-    if (!recipientIsAdmin) {
-      console.log(`[whatsapp:skipped, restricted to admins] to=${opts.to}`);
-      return { skipped: true as const, ...addresses };
-    }
   }
 
   try {
     const appUrl = await getAppUrl();
-    const message = await client.messages.create({
-      from: whatsappFrom,
-      to: `whatsapp:${opts.to}`,
-      mediaUrl: [opts.mediaUrl],
+    const twiml = new twilioLib.twiml.VoiceResponse();
+    // Played twice with a short pause, in case the recipient picks up a
+    // beat late and misses the start of the first playthrough.
+    twiml.play(opts.mediaUrl);
+    twiml.pause({ length: 1 });
+    twiml.play(opts.mediaUrl);
+
+    const call = await client.calls.create({
+      from: voiceCallFrom,
+      to: opts.to,
+      twiml: twiml.toString(),
       statusCallback: `${appUrl}/api/twilio/status`,
+      statusCallbackEvent: ["completed"],
     });
-    return { skipped: false as const, sid: message.sid, ...addresses };
+    return { skipped: false as const, sid: call.sid, ...addresses };
   } catch (err) {
     const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Failed to send WhatsApp voice note", err);
+    console.error("Failed to place voice-nudge call", err);
     return { skipped: false as const, error: `${message}${code}`, ...addresses };
   }
 }

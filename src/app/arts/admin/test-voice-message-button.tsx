@@ -20,7 +20,7 @@ export function TestVoiceMessageButton() {
           })
         }
       >
-        {isPending ? "Sending…" : "Send test WhatsApp voice message"}
+        {isPending ? "Calling…" : "Place test voice call"}
       </Button>
       {message && <p className="mt-3 text-sm text-black/70 dark:text-white/70">{message}</p>}
     </div>
