@@ -30,13 +30,18 @@ async function generateSpeech(text: string): Promise<Buffer | null> {
   }
 }
 
-type SendResult = { skipped: boolean; error?: string };
+type SendResult = { skipped: boolean; error?: string; sid?: string; from?: string; to?: string };
 
 /**
  * Shared by the real join-nudge and the admin "test my voice-message setup"
  * button — generates the audio, uploads it, and sends it as a WhatsApp
  * voice note. Returns the same shape logNotification expects, so every
  * caller logs it the same way.
+ *
+ * Carries sendWhatsAppVoiceNote's sid/from/to through untouched — logNotification
+ * needs the sid as providerMessageSid so /api/twilio/status's async delivery
+ * callback has something to match the row by; dropping it here meant every
+ * voice note's real delivered/failed outcome was silently never recorded.
  */
 async function sendVoiceNote(opts: { to: string; text: string; pathname: string }): Promise<SendResult> {
   const audio = await generateSpeech(opts.text);
@@ -47,7 +52,8 @@ async function sendVoiceNote(opts: { to: string; text: string; pathname: string 
   if (!uploaded.url) return { skipped: true, error: uploaded.error };
 
   const result = await sendWhatsAppVoiceNote({ to: opts.to, mediaUrl: uploaded.url });
-  return result.skipped ? { skipped: true, error: "Twilio WhatsApp isn't configured" } : { skipped: false, error: result.error };
+  if (result.skipped) return { skipped: true, error: "Twilio WhatsApp isn't configured" };
+  return { skipped: false, error: result.error, sid: result.sid, from: result.from, to: result.to };
 }
 
 type BookingWithParties = Booking & { student: User; professor: User };
