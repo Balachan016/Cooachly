@@ -33,10 +33,10 @@ async function generateSpeech(text: string): Promise<Buffer | null> {
 type SendResult = { skipped: boolean; error?: string; sid?: string; from?: string; to?: string };
 
 /**
- * Shared by the real join-nudge and the admin "test my voice-message setup"
- * button — generates the audio, uploads it, and places an automated phone
- * call that plays it. Returns the same shape logNotification expects, so
- * every caller logs it the same way.
+ * Shared by the join-nudge, the 5-minute-before booking-reminder call, and
+ * the admin "test my voice-message setup" button — generates the audio,
+ * uploads it, and places an automated phone call that plays it. Returns the
+ * same shape logNotification expects, so every caller logs it the same way.
  *
  * This used to send the clip as a WhatsApp voice note instead, but WhatsApp
  * templates don't support an audio header at all (Meta's template header
@@ -45,7 +45,7 @@ type SendResult = { skipped: boolean; error?: string; sid?: string; from?: strin
  * 63016 — i.e. for essentially every real student/professor. A phone call
  * isn't subject to that WhatsApp-specific rule, so it actually works.
  */
-async function placeNudgeCall(opts: { to: string; text: string; pathname: string }): Promise<SendResult> {
+async function placeVoiceCall(opts: { to: string; text: string; pathname: string }): Promise<SendResult> {
   const audio = await generateSpeech(opts.text);
   if (!audio) return { skipped: true, error: "OpenAI isn't configured, or speech generation failed" };
 
@@ -86,8 +86,39 @@ export async function sendJoinNudge(booking: BookingWithParties, missing: "STUDE
   const brandName = SITE_CONFIG[recipient.site].brandName;
   const text = `Hi ${recipient.name}, this is an automated voice message from ${brandName}. Your session with ${peer.name} started a few minutes ago and we haven't seen you join yet. Please join now using the link we sent you.`;
 
-  const result = await placeNudgeCall({ to: recipient.phone, text, pathname: `join-nudge-${booking.id}-${missing.toLowerCase()}` });
+  const result = await placeVoiceCall({ to: recipient.phone, text, pathname: `join-nudge-${booking.id}-${missing.toLowerCase()}` });
   await logNotification({ bookingId: booking.id, userId: recipient.id, channel: "CALL", kind: "join_nudge", result });
+}
+
+/**
+ * One-time automated phone-call reminder to the student and professor,
+ * placed alongside the existing email/push/WhatsApp "5m" reminder (see
+ * sendBookingReminder in ./reminders, which calls this once per party for
+ * the "5m" window only — not 24h/1h, and not sent to admins, since a phone
+ * call is a lot more intrusive than the other channels and admins aren't
+ * the ones who need to join).
+ */
+export async function sendBookingReminderCall(opts: {
+  bookingId: string;
+  recipient: User;
+  peerName: string;
+}): Promise<void> {
+  if (!opts.recipient.phone) {
+    await logNotification({
+      bookingId: opts.bookingId,
+      userId: opts.recipient.id,
+      channel: "CALL",
+      kind: "5m",
+      result: { skipped: true, error: "No phone number on file" },
+    });
+    return;
+  }
+
+  const brandName = SITE_CONFIG[opts.recipient.site].brandName;
+  const text = `Hi ${opts.recipient.name}, this is an automated reminder from ${brandName}. Your session with ${opts.peerName} starts in 5 minutes. Please join now using the link we sent you.`;
+
+  const result = await placeVoiceCall({ to: opts.recipient.phone, text, pathname: `reminder-5m-${opts.bookingId}-${opts.recipient.id}` });
+  await logNotification({ bookingId: opts.bookingId, userId: opts.recipient.id, channel: "CALL", kind: "5m", result });
 }
 
 /**
@@ -98,7 +129,7 @@ export async function sendJoinNudge(booking: BookingWithParties, missing: "STUDE
  */
 export async function sendTestVoiceCall(opts: { userId: string; name: string; phone: string; brandName: string }): Promise<{ message: string }> {
   const text = `Hi ${opts.name}, this is a test voice message from ${opts.brandName}, confirming your automated join-nudge call setup is working correctly.`;
-  const result = await placeNudgeCall({ to: opts.phone, text, pathname: `test-${opts.userId}-${Date.now()}` });
+  const result = await placeVoiceCall({ to: opts.phone, text, pathname: `test-${opts.userId}-${Date.now()}` });
   await logNotification({ userId: opts.userId, channel: "CALL", kind: "test_voice", result });
 
   if (!result.skipped && !result.error) return { message: "Voice call: placed — your phone should ring shortly." };
