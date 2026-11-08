@@ -11,12 +11,14 @@ import { PAST_DUE_GRACE_MS, JOIN_NUDGE_DELAY_MS, getMissingParties } from "@/lib
 // Run this endpoint every 5 minutes via an external scheduler such as
 // cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
 // or ~5m from now that haven't had that reminder sent yet, and sends it
-// (email always; WhatsApp if the user has a phone number and Twilio is
-// configured). Also sends a one-time "due soon" nudge for unsubmitted
-// tests whose due date is ~24h away, a one-time WhatsApp voice-note nudge
-// to whoever hasn't joined a call ~2-3 minutes after its start (see
-// JOIN_NUDGE_DELAY_MS), and sweeps up any booking whose call is long over
-// but never got marked COMPLETED (see PAST_DUE_GRACE_MS).
+// (email always; WhatsApp/SMS if the user has a phone number and Twilio is
+// configured; the ~5m one also places an automated phone call to the
+// student and professor — see sendBookingReminder). Also sends a one-time
+// "due soon" nudge for unsubmitted tests whose due date is ~24h away, a
+// one-time join-nudge call to whoever hasn't joined a call ~2-3 minutes
+// after its start (see JOIN_NUDGE_DELAY_MS), and sweeps up any booking
+// whose call is long over but never got marked COMPLETED (see
+// PAST_DUE_GRACE_MS).
 
 const WINDOW_MINUTES = 5;
 const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day

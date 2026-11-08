@@ -28,7 +28,8 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Test files & answers** — professors and admins can share a test file on a booking; students
   upload their answer back, both stored via Vercel Blob.
 - **Reminders** — automatic email (Resend), WhatsApp, and SMS (Twilio) reminders 1 day, 1 hour,
-  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
+  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`. An
+  automated voice call also goes out to the student and professor at the 5-minute mark.
 - **Live call status + join nudge** — Admin → Bookings shows who's actually joined each session
   right now (derived from Daily's join/leave events), and automatically places a one-time
   automated voice call to whoever hasn't joined ~2-3 minutes after start.
@@ -231,16 +232,23 @@ Reminders only go out for **confirmed** bookings, and only once per threshold (t
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
 job frequently is safe. WhatsApp and SMS are both skipped for anyone without a phone number on file.
 
-### Join nudge (automated voice call if nobody's joined the call)
+### Join nudge & 5-minute reminder calls (automated voice calls)
 
-The same `/api/cron/reminders` job also watches for a session that's ~2-3 minutes past its own
-start time with the student and/or professor still not showing as joined (per Daily's
-`participant.joined`/`participant.left` webhook events — see Admin → Bookings' "Live now" panel,
-which reads the same data). Whoever's missing gets a one-time **automated phone call** that plays
-a short spoken message — not a WhatsApp message — generated on the fly and placed automatically;
-it's never re-sent for the same booking.
+The app places automated phone calls for two different situations, both sharing the exact same
+pipeline (OpenAI text-to-speech → Vercel Blob → Twilio Voice):
 
-This is a phone call rather than a WhatsApp voice note on purpose: WhatsApp's approved Message
+- **5-minute booking reminder** — the same `/api/cron/reminders` job that sends the email/push/
+  WhatsApp "starts in 5 minutes" reminder (see above) also places a one-time call to the student
+  and professor at that same ~5-minute mark, telling them to join now. Not sent to admins, and
+  not sent for the 24h/1h reminders — a phone call is a lot more intrusive than the other
+  channels, so it's reserved for the moment "please join now" actually matters.
+- **Join nudge** — the same job also watches for a session that's ~2-3 minutes *past* its own
+  start time with the student and/or professor still not showing as joined (per Daily's
+  `participant.joined`/`participant.left` webhook events — see Admin → Bookings' "Live now"
+  panel, which reads the same data). Whoever's missing gets a one-time call too; it's never
+  re-sent for the same booking.
+
+Both are phone calls rather than WhatsApp voice notes on purpose: WhatsApp's approved Message
 Template system (required for any business-initiated message sent outside a 24h customer-service
 window — see "WhatsApp templates" above) doesn't support an audio header at all (Meta's template
 header formats are TEXT/IMAGE/VIDEO/DOCUMENT only), so a free-form WhatsApp voice note to someone
@@ -365,7 +373,7 @@ ago — which a tripped-then-reset breaker with no session since can look like, 
 ## Setting up file sharing (Vercel Blob)
 
 Professors/admins can share a test file on a booking, students can upload their answer back, and
-the join-nudge voice call's audio clip (see above) is hosted here too. This needs blob storage:
+the join-nudge/reminder voice calls' audio clips (see above) are hosted here too. This needs blob storage:
 
 1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available), or
    **Connect Database** if a Blob store already exists on your account.

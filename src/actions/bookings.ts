@@ -329,6 +329,15 @@ export async function adminRescheduleBooking(_state: RescheduleFormState, formDa
         endAt: newEndDate,
         rescheduledAt: new Date(),
         rescheduledByRole: session.role,
+        // An admin override supersedes any pending student/professor
+        // proposal outright — clear it so the booking doesn't keep showing
+        // as "reschedule pending" for a proposal that's now moot, and so a
+        // stale acceptRescheduleProposal call from the other party can't
+        // silently move startAt again out from under this.
+        rescheduleProposedStartAt: null,
+        rescheduleProposedBy: null,
+        rescheduleProposedReason: null,
+        rescheduleProposedAt: null,
       },
       include: { student: true, professor: true },
     });

@@ -14,7 +14,13 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
   const view =
-    searchParams.view === "completed" ? "completed" : searchParams.view === "cancelled" ? "cancelled" : "upcoming";
+    searchParams.view === "completed"
+      ? "completed"
+      : searchParams.view === "cancelled"
+        ? "cancelled"
+        : searchParams.view === "reschedules"
+          ? "reschedules"
+          : "upcoming";
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
@@ -27,7 +33,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const [bookings, liveBookings, students] = await Promise.all([
     prisma.booking.findMany({
       where,
-      orderBy: { startAt: view === "upcoming" ? "asc" : "desc" },
+      orderBy: view === "upcoming" ? { startAt: "asc" } : view === "reschedules" ? { updatedAt: "desc" } : { startAt: "desc" },
       take: 300,
       include: {
         student: true,
@@ -57,7 +63,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   ]);
 
   const hasFilters = Boolean(studentId || date);
-  const tabQuery = (tabView: "upcoming" | "completed" | "cancelled") => {
+  const tabQuery = (tabView: "upcoming" | "completed" | "cancelled" | "reschedules") => {
     const params = new URLSearchParams();
     if (studentId) params.set("student", studentId);
     if (date) params.set("date", date);
@@ -86,7 +92,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
                 ? "Up to 300 completed classes, most recent first."
                 : view === "cancelled"
                   ? "Up to 300 cancelled classes, most recent first."
-                  : "Up to 300 upcoming classes, soonest first."}{" "}
+                  : view === "reschedules"
+                    ? "Every class with a pending reschedule proposal or past reschedule, most recent activity first."
+                    : "Up to 300 upcoming classes, soonest first."}{" "}
             Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
           </p>
         </div>
@@ -107,7 +115,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
       </div>
 
       <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
-        {(["upcoming", "completed", "cancelled"] as const).map((tabView) => (
+        {(["upcoming", "completed", "cancelled", "reschedules"] as const).map((tabView) => (
           <a
             key={tabView}
             href={`${sitePath(session.site, "/admin/bookings")}${tabQuery(tabView)}`}
@@ -222,7 +230,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
                       ? "No completed classes yet."
                       : view === "cancelled"
                         ? "No cancelled classes."
-                        : "No upcoming bookings."}
+                        : view === "reschedules"
+                          ? "No reschedule activity to review."
+                          : "No upcoming bookings."}
                 </td>
               </tr>
             )}
