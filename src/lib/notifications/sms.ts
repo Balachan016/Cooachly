@@ -6,35 +6,33 @@ import { prisma } from "@/lib/prisma";
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886"
-// Plain E.164 Twilio number with Voice enabled — used only for the join-nudge
-// call (see sendVoiceCall below). Outbound phone calls aren't WhatsApp
-// messages, so Meta's 24h customer-service-window/template rule (see
-// sendWhatsAppReminder's comment) simply doesn't apply to them; that's the
-// whole reason the join-nudge uses a call instead of a WhatsApp voice note.
-const voiceCallFrom = process.env.TWILIO_VOICE_FROM;
 const reminderContentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
 const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 /**
- * Every outgoing message now goes out on BOTH WhatsApp and plain SMS — a
- * recipient who misses one (app not installed, WhatsApp delivery silently
- * rejected) still gets the other. Each country's SMS leg needs its own
- * locally-registered sender number, since neither Twilio nor local carriers
- * let a single number send compliant SMS everywhere:
- *   - US/Canada: needs A2P 10DLC registration (TWILIO_SMS_FROM_US)
- *   - India: needs DLT registration with Indian telecom regulators
- *     (TWILIO_SMS_FROM_INDIA) — see README
+ * Both plain SMS and the join-nudge's voice call need a *locally-registered*
+ * sender number per destination country — neither Twilio nor local carriers
+ * let a single number send/call everywhere, and India specifically only
+ * allows its own local Twilio numbers to call Indian destinations at all
+ * (international calling from an Indian number is restricted by Indian
+ * telecom regulation, separate from the DLT text-messaging requirement
+ * below) — so the same per-country number used for SMS is reused as the
+ * Voice "from" too, picked by the recipient's country:
+ *   - US/Canada: needs A2P 10DLC registration for SMS (TWILIO_SMS_FROM_US)
+ *   - India: needs DLT registration for SMS (TWILIO_SMS_FROM_INDIA) — see
+ *     README
  * Leave either one unset to skip that country's SMS leg (WhatsApp still
- * goes out) until it's registered.
+ * goes out) and its voice-call leg (join-nudge falls back to "skipped")
+ * until it's registered.
  */
-const smsSenders: { prefix: string; from: string | undefined }[] = [
+const countrySenders: { prefix: string; from: string | undefined }[] = [
   { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
   { prefix: "+91", from: process.env.TWILIO_SMS_FROM_INDIA },
 ];
 
-function getSmsFrom(to: string): string | undefined {
-  return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
+function getSenderFor(to: string): string | undefined {
+  return countrySenders.find((sender) => to.startsWith(sender.prefix))?.from;
 }
 
 // Unlinked for now — every SMS send was failing in production (Twilio
@@ -47,13 +45,19 @@ function getSmsFrom(to: string): string | undefined {
 const SMS_SENDING_DISABLED = true;
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
-export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
+export const isSmsConfigured = Boolean(accountSid && authToken && countrySenders.some((sender) => sender.from));
 export const isSmsSendingDisabled = SMS_SENDING_DISABLED;
-export const isVoiceCallConfigured = Boolean(accountSid && authToken && voiceCallFrom);
+export const isVoiceCallConfigured = Boolean(accountSid && authToken && countrySenders.some((sender) => sender.from));
 
 export const voiceCallConfigStatus = {
-  configured: isVoiceCallConfigured,
-  from: voiceCallFrom ?? null,
+  us: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_US),
+    from: process.env.TWILIO_SMS_FROM_US ?? null,
+  },
+  india: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_INDIA),
+    from: process.env.TWILIO_SMS_FROM_INDIA ?? null,
+  },
 };
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
@@ -146,13 +150,13 @@ async function createMessage(
 
 /**
  * Plain SMS, sent alongside every WhatsApp message below — see the
- * smsSenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
+ * countrySenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
  * require a pre-approved Content Template for SMS bodies (once the sending
  * number has completed its local registration), so this always sends the
  * plain free-text body no matter which sendWhatsApp* function called it.
  */
 async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
-  const from = getSmsFrom(to);
+  const from = getSenderFor(to);
   const addresses = { from, to, channel: "SMS" as const };
 
   if (SMS_SENDING_DISABLED) {
@@ -202,11 +206,17 @@ export type VoiceCallResult = {
  * must be a publicly reachable HTTPS URL. No SMS/WhatsApp fallback here:
  * this *is* the fallback, chosen specifically because outbound calls aren't
  * subject to WhatsApp's 24h window/template rule.
+ *
+ * "From" is picked by the recipient's own country (same countrySenders list
+ * SMS uses above) rather than one fixed number — Indian Twilio numbers can
+ * only legally call Indian destinations, so calling a US number from the
+ * India sender (or vice versa) would simply fail.
  */
 export async function sendVoiceCall(opts: { to: string; mediaUrl: string }): Promise<VoiceCallResult> {
-  const addresses = { from: voiceCallFrom, to: opts.to, channel: "CALL" as const };
+  const from = getSenderFor(opts.to);
+  const addresses = { from, to: opts.to, channel: "CALL" as const };
 
-  if (!client || !voiceCallFrom) {
+  if (!client || !from) {
     console.log(`[call:skipped, not configured] to=${opts.to}`);
     return { skipped: true as const, ...addresses };
   }
@@ -221,7 +231,7 @@ export async function sendVoiceCall(opts: { to: string; mediaUrl: string }): Pro
     twiml.play(opts.mediaUrl);
 
     const call = await client.calls.create({
-      from: voiceCallFrom,
+      from,
       to: opts.to,
       twiml: twiml.toString(),
       statusCallback: `${appUrl}/api/twilio/status`,

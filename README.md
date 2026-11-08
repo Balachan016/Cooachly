@@ -250,10 +250,14 @@ restriction.
 
 This reuses infrastructure already documented above/below rather than adding a new service:
 
-1. **Twilio Voice** — needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (same as WhatsApp/SMS above)
-   plus `TWILIO_VOICE_FROM`, a Twilio phone number with **Voice** enabled (Twilio Console → Phone
-   Numbers → your number → Voice Configuration). This can be the same number used for SMS, or a
-   separate one — Voice capability is independent of the SMS/WhatsApp registration steps above.
+1. **Twilio Voice** — needs `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` (same as WhatsApp/SMS
+   above), plus **Voice enabled** on the same `TWILIO_SMS_FROM_US`/`TWILIO_SMS_FROM_INDIA`
+   numbers from the SMS section below (Twilio Console → Phone Numbers → your number → Voice
+   Configuration) — no separate number or env var needed. The call picks whichever of those two
+   numbers matches the recipient's own country (same logic SMS uses), because an Indian Twilio
+   number can only legally call Indian destinations and vice versa; a US recipient is called from
+   the US number, an Indian recipient from the India number. Missing either number just skips the
+   call for that country, same as it already skips SMS for that country.
 2. **OpenAI** (see "Setting up video calls & AI summaries" below) — `OPENAI_API_KEY` generates the
    spoken audio (text-to-speech) from a short script.
 3. **Vercel Blob** (see "Setting up file sharing" below) — `BLOB_READ_WRITE_TOKEN` hosts the
