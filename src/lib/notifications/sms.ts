@@ -11,24 +11,28 @@ const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 /**
- * Every outgoing message now goes out on BOTH WhatsApp and plain SMS — a
- * recipient who misses one (app not installed, WhatsApp delivery silently
- * rejected) still gets the other. Each country's SMS leg needs its own
- * locally-registered sender number, since neither Twilio nor local carriers
- * let a single number send compliant SMS everywhere:
- *   - US/Canada: needs A2P 10DLC registration (TWILIO_SMS_FROM_US)
- *   - India: needs DLT registration with Indian telecom regulators
- *     (TWILIO_SMS_FROM_INDIA) — see README
+ * Both plain SMS and the join-nudge's voice call need a *locally-registered*
+ * sender number per destination country — neither Twilio nor local carriers
+ * let a single number send/call everywhere, and India specifically only
+ * allows its own local Twilio numbers to call Indian destinations at all
+ * (international calling from an Indian number is restricted by Indian
+ * telecom regulation, separate from the DLT text-messaging requirement
+ * below) — so the same per-country number used for SMS is reused as the
+ * Voice "from" too, picked by the recipient's country:
+ *   - US/Canada: needs A2P 10DLC registration for SMS (TWILIO_SMS_FROM_US)
+ *   - India: needs DLT registration for SMS (TWILIO_SMS_FROM_INDIA) — see
+ *     README
  * Leave either one unset to skip that country's SMS leg (WhatsApp still
- * goes out) until it's registered.
+ * goes out) and its voice-call leg (join-nudge falls back to "skipped")
+ * until it's registered.
  */
-const smsSenders: { prefix: string; from: string | undefined }[] = [
+const countrySenders: { prefix: string; from: string | undefined }[] = [
   { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
   { prefix: "+91", from: process.env.TWILIO_SMS_FROM_INDIA },
 ];
 
-function getSmsFrom(to: string): string | undefined {
-  return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
+function getSenderFor(to: string): string | undefined {
+  return countrySenders.find((sender) => to.startsWith(sender.prefix))?.from;
 }
 
 // Unlinked for now — every SMS send was failing in production (Twilio
@@ -41,8 +45,20 @@ function getSmsFrom(to: string): string | undefined {
 const SMS_SENDING_DISABLED = true;
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
-export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
+export const isSmsConfigured = Boolean(accountSid && authToken && countrySenders.some((sender) => sender.from));
 export const isSmsSendingDisabled = SMS_SENDING_DISABLED;
+export const isVoiceCallConfigured = Boolean(accountSid && authToken && countrySenders.some((sender) => sender.from));
+
+export const voiceCallConfigStatus = {
+  us: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_US),
+    from: process.env.TWILIO_SMS_FROM_US ?? null,
+  },
+  india: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_INDIA),
+    from: process.env.TWILIO_SMS_FROM_INDIA ?? null,
+  },
+};
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
 // SID actually deployed?" can be checked by loading a page instead of
@@ -134,13 +150,13 @@ async function createMessage(
 
 /**
  * Plain SMS, sent alongside every WhatsApp message below — see the
- * smsSenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
+ * countrySenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
  * require a pre-approved Content Template for SMS bodies (once the sending
  * number has completed its local registration), so this always sends the
  * plain free-text body no matter which sendWhatsApp* function called it.
  */
 async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
-  const from = getSmsFrom(to);
+  const from = getSenderFor(to);
   const addresses = { from, to, channel: "SMS" as const };
 
   if (SMS_SENDING_DISABLED) {
@@ -174,44 +190,58 @@ export async function sendWhatsApp(opts: { to: string; body: string }): Promise<
   return Promise.all([createMessage(opts.to, { body: opts.body }), sendSms(opts.to, opts.body)]);
 }
 
+export type VoiceCallResult = {
+  skipped: boolean;
+  error?: string;
+  from?: string;
+  to: string;
+  sid?: string;
+  channel: "CALL";
+};
+
 /**
- * Sends an audio file as a WhatsApp voice message — no SMS fallback, since
- * plain SMS can't carry media. mediaUrl must be a publicly reachable HTTPS
- * URL (see @/lib/notifications/voice-nudge, which generates and uploads the
- * clip this calls with).
+ * Places an automated phone call that plays an audio clip (see
+ * @/lib/notifications/voice-nudge, which generates and uploads the clip
+ * this calls with) — the join-nudge's actual delivery channel. mediaUrl
+ * must be a publicly reachable HTTPS URL. No SMS/WhatsApp fallback here:
+ * this *is* the fallback, chosen specifically because outbound calls aren't
+ * subject to WhatsApp's 24h window/template rule.
+ *
+ * "From" is picked by the recipient's own country (same countrySenders list
+ * SMS uses above) rather than one fixed number — Indian Twilio numbers can
+ * only legally call Indian destinations, so calling a US number from the
+ * India sender (or vice versa) would simply fail.
  */
-export async function sendWhatsAppVoiceNote(opts: { to: string; mediaUrl: string }): Promise<WhatsAppSendResult> {
-  const addresses = { from: whatsappFrom?.replace(/^whatsapp:/, ""), to: opts.to, channel: "WHATSAPP" as const };
+export async function sendVoiceCall(opts: { to: string; mediaUrl: string }): Promise<VoiceCallResult> {
+  const from = getSenderFor(opts.to);
+  const addresses = { from, to: opts.to, channel: "CALL" as const };
 
-  if (!client || !whatsappFrom) {
-    console.log(`[whatsapp:skipped, not configured] to=${opts.to}`);
+  if (!client || !from) {
+    console.log(`[call:skipped, not configured] to=${opts.to}`);
     return { skipped: true as const, ...addresses };
-  }
-
-  if (RESTRICT_WHATSAPP_TO_ADMINS_ONLY) {
-    const recipientIsAdmin = await prisma.user.findFirst({
-      where: { phone: opts.to, role: { in: ["ADMIN", "SUPERADMIN"] } },
-      select: { id: true },
-    });
-    if (!recipientIsAdmin) {
-      console.log(`[whatsapp:skipped, restricted to admins] to=${opts.to}`);
-      return { skipped: true as const, ...addresses };
-    }
   }
 
   try {
     const appUrl = await getAppUrl();
-    const message = await client.messages.create({
-      from: whatsappFrom,
-      to: `whatsapp:${opts.to}`,
-      mediaUrl: [opts.mediaUrl],
+    const twiml = new twilioLib.twiml.VoiceResponse();
+    // Played twice with a short pause, in case the recipient picks up a
+    // beat late and misses the start of the first playthrough.
+    twiml.play(opts.mediaUrl);
+    twiml.pause({ length: 1 });
+    twiml.play(opts.mediaUrl);
+
+    const call = await client.calls.create({
+      from,
+      to: opts.to,
+      twiml: twiml.toString(),
       statusCallback: `${appUrl}/api/twilio/status`,
+      statusCallbackEvent: ["completed"],
     });
-    return { skipped: false as const, sid: message.sid, ...addresses };
+    return { skipped: false as const, sid: call.sid, ...addresses };
   } catch (err) {
     const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
     const message = err instanceof Error ? err.message : String(err);
-    console.error("Failed to send WhatsApp voice note", err);
+    console.error("Failed to place voice-nudge call", err);
     return { skipped: false as const, error: `${message}${code}`, ...addresses };
   }
 }

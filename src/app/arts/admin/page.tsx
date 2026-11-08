@@ -49,11 +49,11 @@ export default async function AdminOverviewPage() {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="font-semibold">Test join-nudge voice message</h2>
+        <h2 className="font-semibold">Test join-nudge voice call</h2>
         <p className="mt-1 text-sm text-black/50 dark:text-white/50">
-          Sends a test WhatsApp voice note to your own number, using the exact same pipeline as the
+          Places a test automated call to your own number, using the exact same pipeline as the
           automatic join-nudge — confirms OpenAI (text-to-speech), Vercel Blob (hosting the clip), and
-          Twilio WhatsApp are all wired up together.
+          Twilio Voice are all wired up together.
         </p>
         <div className="mt-4">
           <TestVoiceMessageButton />
