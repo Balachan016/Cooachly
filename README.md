@@ -259,13 +259,23 @@ restriction.
 This reuses infrastructure already documented above/below rather than adding a new service:
 
 1. **Twilio Voice** — needs `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` (same as WhatsApp/SMS
-   above), plus **Voice enabled** on the same `TWILIO_SMS_FROM_US`/`TWILIO_SMS_FROM_INDIA`
-   numbers from the SMS section below (Twilio Console → Phone Numbers → your number → Voice
-   Configuration) — no separate number or env var needed. The call picks whichever of those two
-   numbers matches the recipient's own country (same logic SMS uses), because an Indian Twilio
-   number can only legally call Indian destinations and vice versa; a US recipient is called from
-   the US number, an Indian recipient from the India number. Missing either number just skips the
-   call for that country, same as it already skips SMS for that country.
+   above). The call picks a "from" number matching the recipient's own country, because an Indian
+   Twilio number can only legally call Indian destinations and vice versa — but which number that
+   is differs per country:
+   - **US/Canada** reuses `TWILIO_SMS_FROM_US` from the SMS section below — confirmed to work for
+     Voice too, just make sure **Voice is enabled** on it (Twilio Console → Phone Numbers → your
+     number → Voice Configuration).
+   - **India** needs its *own* `TWILIO_VOICE_FROM_INDIA` — **not** `TWILIO_SMS_FROM_INDIA`.
+     Confirmed live: that number is carrier-flagged **Do-Not-Originate** for Voice (Twilio error
+     **21212**, "From number must be valid and not on do-not-originate list") since it was
+     provisioned as a WhatsApp/messaging sender, not a genuine Voice-capable line — adding it as a
+     Verified Caller ID doesn't help; DNO overrides that. Twilio also won't sell you an Indian
+     number for Voice without completing their India KYC/regulatory bundle first (a separate,
+     longer process from WhatsApp/SMS registration). Leave `TWILIO_VOICE_FROM_INDIA` unset until
+     you have one — calls to Indian recipients are skipped (logged as `SKIPPED`, not an error)
+     rather than attempted and failing every time with 21212.
+
+   Missing either number just skips the call for that country.
 2. **OpenAI** (see "Setting up video calls & AI summaries" below) — `OPENAI_API_KEY` generates the
    spoken audio (text-to-speech) from a short script.
 3. **Vercel Blob** (see "Setting up file sharing" below) — `BLOB_READ_WRITE_TOKEN` hosts the

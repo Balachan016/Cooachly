@@ -11,28 +11,44 @@ const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 /**
- * Both plain SMS and the join-nudge's voice call need a *locally-registered*
- * sender number per destination country — neither Twilio nor local carriers
- * let a single number send/call everywhere, and India specifically only
- * allows its own local Twilio numbers to call Indian destinations at all
- * (international calling from an Indian number is restricted by Indian
- * telecom regulation, separate from the DLT text-messaging requirement
- * below) — so the same per-country number used for SMS is reused as the
- * Voice "from" too, picked by the recipient's country:
- *   - US/Canada: needs A2P 10DLC registration for SMS (TWILIO_SMS_FROM_US)
- *   - India: needs DLT registration for SMS (TWILIO_SMS_FROM_INDIA) — see
- *     README
+ * Plain SMS needs a *locally-registered* sender number per destination
+ * country — neither Twilio nor local carriers let a single number send
+ * everywhere:
+ *   - US/Canada: needs A2P 10DLC registration (TWILIO_SMS_FROM_US)
+ *   - India: needs DLT registration (TWILIO_SMS_FROM_INDIA) — see README
  * Leave either one unset to skip that country's SMS leg (WhatsApp still
- * goes out) and its voice-call leg (join-nudge falls back to "skipped")
- * until it's registered.
+ * goes out) until it's registered.
  */
-const countrySenders: { prefix: string; from: string | undefined }[] = [
+const smsSenders: { prefix: string; from: string | undefined }[] = [
   { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
   { prefix: "+91", from: process.env.TWILIO_SMS_FROM_INDIA },
 ];
 
-function getSenderFor(to: string): string | undefined {
-  return countrySenders.find((sender) => to.startsWith(sender.prefix))?.from;
+function getSmsFrom(to: string): string | undefined {
+  return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
+}
+
+/**
+ * Voice calls also need a per-country "from" (Indian Twilio numbers can
+ * only legally call Indian destinations and vice versa), and it *looks*
+ * like it should just be the same number SMS uses per country — except
+ * TWILIO_SMS_FROM_INDIA turned out to be carrier-flagged Do-Not-Originate
+ * for Voice (confirmed live: Twilio error 21212), because it was
+ * provisioned as a WhatsApp/messaging sender, not a genuine Voice-capable
+ * line, and verified Caller ID doesn't override a DNO flag. So Voice gets
+ * its own India variable, deliberately left unset until a real
+ * Voice-capable Indian number (needs Twilio's India KYC/regulatory bundle)
+ * is set up — until then, calls to Indian numbers are skipped rather than
+ * attempted and logged as a permanently-failing error every time. The US
+ * number is shared since it's already confirmed to work for Voice too.
+ */
+const voiceCallSenders: { prefix: string; from: string | undefined }[] = [
+  { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
+  { prefix: "+91", from: process.env.TWILIO_VOICE_FROM_INDIA },
+];
+
+function getVoiceCallFrom(to: string): string | undefined {
+  return voiceCallSenders.find((sender) => to.startsWith(sender.prefix))?.from;
 }
 
 // Unlinked for now — every SMS send was failing in production (Twilio
@@ -45,9 +61,9 @@ function getSenderFor(to: string): string | undefined {
 const SMS_SENDING_DISABLED = true;
 
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
-export const isSmsConfigured = Boolean(accountSid && authToken && countrySenders.some((sender) => sender.from));
+export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
 export const isSmsSendingDisabled = SMS_SENDING_DISABLED;
-export const isVoiceCallConfigured = Boolean(accountSid && authToken && countrySenders.some((sender) => sender.from));
+export const isVoiceCallConfigured = Boolean(accountSid && authToken && voiceCallSenders.some((sender) => sender.from));
 
 export const voiceCallConfigStatus = {
   us: {
@@ -55,8 +71,8 @@ export const voiceCallConfigStatus = {
     from: process.env.TWILIO_SMS_FROM_US ?? null,
   },
   india: {
-    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_INDIA),
-    from: process.env.TWILIO_SMS_FROM_INDIA ?? null,
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_VOICE_FROM_INDIA),
+    from: process.env.TWILIO_VOICE_FROM_INDIA ?? null,
   },
 };
 
@@ -150,13 +166,13 @@ async function createMessage(
 
 /**
  * Plain SMS, sent alongside every WhatsApp message below — see the
- * countrySenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
+ * smsSenders comment above. Unlike WhatsApp, Twilio/carrier rules don't
  * require a pre-approved Content Template for SMS bodies (once the sending
  * number has completed its local registration), so this always sends the
  * plain free-text body no matter which sendWhatsApp* function called it.
  */
 async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
-  const from = getSenderFor(to);
+  const from = getSmsFrom(to);
   const addresses = { from, to, channel: "SMS" as const };
 
   if (SMS_SENDING_DISABLED) {
@@ -207,13 +223,11 @@ export type VoiceCallResult = {
  * this *is* the fallback, chosen specifically because outbound calls aren't
  * subject to WhatsApp's 24h window/template rule.
  *
- * "From" is picked by the recipient's own country (same countrySenders list
- * SMS uses above) rather than one fixed number — Indian Twilio numbers can
- * only legally call Indian destinations, so calling a US number from the
- * India sender (or vice versa) would simply fail.
+ * "From" is picked by the recipient's own country (see voiceCallSenders
+ * above) rather than one fixed number.
  */
 export async function sendVoiceCall(opts: { to: string; mediaUrl: string }): Promise<VoiceCallResult> {
-  const from = getSenderFor(opts.to);
+  const from = getVoiceCallFrom(opts.to);
   const addresses = { from, to: opts.to, channel: "CALL" as const };
 
   if (!client || !from) {
