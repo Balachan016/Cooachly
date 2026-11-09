@@ -112,10 +112,14 @@ export default async function SuperadminRemindersPage(props: PageProps<"/superad
           The join-nudge plays its message over an automated phone call, not a WhatsApp voice
           note — WhatsApp templates can&apos;t carry audio, so a proactive voice note outside a
           24h customer-service window always fails (Twilio error 63016). Calls aren&apos;t
-          subject to that rule. Reuses the same per-country sender numbers as SMS above (Voice
-          needs to be enabled on each number in Twilio) — a US number can&apos;t legally call an
-          Indian destination or vice versa, so whichever leg is missing for the recipient&apos;s
-          country is skipped.
+          subject to that rule. The US number below is shared with SMS above (confirmed working
+          for Voice too); the India number is deliberately separate from SMS&apos;s{" "}
+          <code>TWILIO_SMS_FROM_INDIA</code> — that number is carrier-flagged Do-Not-Originate
+          for Voice (Twilio error 21212, confirmed live), since it was provisioned for messaging,
+          not genuine Voice calling, and verified Caller ID doesn&apos;t override a DNO flag. Set{" "}
+          <code>TWILIO_VOICE_FROM_INDIA</code> once a real Voice-capable Indian number is set up
+          (needs Twilio&apos;s India KYC/regulatory bundle) — until then, calls to Indian numbers
+          are skipped rather than attempted and logged as a permanently-failing error.
         </p>
         <div className="mt-2 divide-y divide-black/5 dark:divide-white/5">
           <ConfigRow label="US/Canada calling number" value={voiceCallConfigStatus.us.from} />
