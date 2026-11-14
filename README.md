@@ -354,11 +354,19 @@ cheaper and more private than cloud recording.
 **If attendance tracking, transcription, and AI summaries all stop at once** (not just one of
 them), the webhook has almost certainly tripped Daily's circuit breaker: by default, 3 non-2xx
 responses from your endpoint — across *any* event type — and Daily stops sending *all* future
-webhooks to it, silently, with no notice anywhere in your own app. Check Admin → Overview's "Daily
-webhook health" card first — it reads the same `DailyWebhookEvent` log every delivery writes to,
-and flags both outright failures and a last delivery that's gone stale (succeeded, but a long time
-ago — which a tripped-then-reset breaker with no session since can look like, so don't read
-"stale" alone as still broken). Then, on Daily's own side:
+webhooks to it, silently, with no notice anywhere in your own app. This has happened more than
+once in production, each time needing the same manual reset below — **set `DAILY_WEBHOOK_UUID`
+(see `.env.example`) and `/api/cron/reminders` checks for this and resets it automatically on
+every 5-minute run**, instead of waiting for someone to notice a missing summary or a session stuck
+showing nobody joined. The steps below are for troubleshooting it manually (auto-reset not set up
+yet, or it's still broken after a reset — see step 2's root causes first, since auto-reset can't
+fix those).
+
+Check Admin → Overview's "Daily webhook health" card first — it reads the same `DailyWebhookEvent`
+log every delivery writes to (auto-reset included, logged as `auto_reset`), and flags both outright
+failures and a last delivery that's gone stale (succeeded, but a long time ago — which a
+tripped-then-reset breaker with no session since can look like, so don't read "stale" alone as
+still broken). Then, on Daily's own side:
 
 1. `GET https://api.daily.co/v1/webhooks` (with your `DAILY_API_KEY` as the bearer token) lists
    your webhook(s) — look at `state`/`failedCount` and whether `lastMomentPushed` is recent.
