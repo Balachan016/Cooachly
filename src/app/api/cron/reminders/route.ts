@@ -6,6 +6,7 @@ import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
 import { sendTestDueSoonEmail } from "@/lib/notifications/tests";
 import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
 import { sendJoinNudge } from "@/lib/notifications/voice-nudge";
+import { checkAndResetWebhookHealth } from "@/lib/daily";
 import { PAST_DUE_GRACE_MS, JOIN_NUDGE_DELAY_MS, getMissingParties } from "@/lib/bookings";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
@@ -16,9 +17,13 @@ import { PAST_DUE_GRACE_MS, JOIN_NUDGE_DELAY_MS, getMissingParties } from "@/lib
 // student and professor — see sendBookingReminder). Also sends a one-time
 // "due soon" nudge for unsubmitted tests whose due date is ~24h away, a
 // one-time join-nudge call to whoever hasn't joined a call ~2-3 minutes
-// after its start (see JOIN_NUDGE_DELAY_MS), and sweeps up any booking
-// whose call is long over but never got marked COMPLETED (see
-// PAST_DUE_GRACE_MS).
+// after its start (see JOIN_NUDGE_DELAY_MS), sweeps up any booking whose
+// call is long over but never got marked COMPLETED (see PAST_DUE_GRACE_MS)
+// — that sweep runs unconditionally, independent of Daily's webhook — and
+// checks/auto-resets Daily's webhook circuit breaker if it's tripped (see
+// checkAndResetWebhookHealth), so a trip self-heals within one run of
+// whatever schedule this endpoint is on instead of silently breaking AI
+// summaries and live-join tracking until someone happens to notice.
 
 const WINDOW_MINUTES = 5;
 const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day
@@ -39,6 +44,21 @@ export async function GET(request: Request) {
     if (!authorized) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+  }
+
+  const webhookHealth = await checkAndResetWebhookHealth();
+  if (webhookHealth.checked && webhookHealth.wasReset) {
+    await prisma.dailyWebhookEvent.create({
+      data: {
+        type: "auto_reset",
+        ok: true,
+        error: `Circuit breaker was "${webhookHealth.previousState}" — reset to ACTIVE`,
+      },
+    });
+  } else if (webhookHealth.checked && webhookHealth.error) {
+    await prisma.dailyWebhookEvent.create({
+      data: { type: "auto_reset", ok: false, error: webhookHealth.error },
+    });
   }
 
   let sentCount = 0;

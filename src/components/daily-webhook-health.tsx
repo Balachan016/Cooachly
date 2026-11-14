@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isWebhookAutoResetConfigured } from "@/lib/daily";
 import { Badge, Card } from "@/components/ui";
 
 const RECENT_COUNT = 10;
@@ -43,8 +44,14 @@ export async function DailyWebhookHealth() {
       <h2 className="font-semibold">Daily webhook health</h2>
       <p className="mt-1 text-sm text-black/50 dark:text-white/50">
         Whether Daily.co&apos;s webhook deliveries (call join/leave, transcripts) are reaching this app. A long gap
-        since the last delivery, or a run of failures below, usually means the circuit breaker has tripped — see the
-        README for how to reset it.
+        since the last delivery, or a run of failures below, usually means the circuit breaker has tripped.{" "}
+        {isWebhookAutoResetConfigured ? (
+          <>Checked and auto-reset every 5 minutes via the reminders cron job — look for an <code>auto_reset</code>{" "}
+          entry below if one has fired.</>
+        ) : (
+          <>Set <code>DAILY_WEBHOOK_UUID</code> to have this reset itself automatically instead of needing a manual
+          fix each time (see README) — not configured yet.</>
+        )}
       </p>
 
       {last ? (
@@ -71,7 +78,11 @@ export async function DailyWebhookHealth() {
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span className="font-medium">{e.type}</span>
               <span className="text-black/50 dark:text-white/50">{formatTime(e.receivedAt)}</span>
-              <Badge tone={e.ok ? "success" : "danger"}>{e.ok ? "OK" : e.error ?? "Failed"}</Badge>
+              {/* auto_reset success events carry a detail in `error` too (e.g. "Circuit
+                  breaker was FAILED — reset to ACTIVE") — worth showing even though `ok`
+                  is true, since it's the one case where "OK" alone would hide the actual
+                  story: the breaker DID trip, it just healed itself on this run. */}
+              <Badge tone={e.ok ? "success" : "danger"}>{e.error ?? (e.ok ? "OK" : "Failed")}</Badge>
             </div>
           ))}
         </div>
