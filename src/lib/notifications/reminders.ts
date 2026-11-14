@@ -8,6 +8,7 @@ import { sendBookingReminderCall } from "./voice-nudge";
 import { logNotification } from "./log";
 import { formatWhenFor } from "./format";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
+import { resolveJoinLink } from "@/lib/daily";
 
 // Where tapping a reminder push takes each role. Superadmin's dashboard is
 // cross-site, so its path is never site-prefixed.
@@ -45,7 +46,7 @@ const SUBJECT_PHRASE: Record<ReminderKind, string> = {
 type BookingWithParties = Booking & { student: User; professor: User };
 
 export async function sendBookingReminder(booking: BookingWithParties, kind: ReminderKind) {
-  const joinLink = booking.dailyRoomUrl || booking.meetingLink;
+  const joinLink = await resolveJoinLink(booking);
 
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", isActive: true, site: booking.professor.site },

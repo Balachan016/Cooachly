@@ -1,4 +1,5 @@
 import "server-only";
+import { getAppUrl } from "@/lib/url";
 
 const apiKey = process.env.DAILY_API_KEY;
 const DAILY_API_BASE = "https://api.daily.co/v1";
@@ -15,6 +16,39 @@ export const isDailyConfigured = Boolean(apiKey);
 // with a Deepgram API key (Daily's dashboard → Settings) — this is separate
 // from DAILY_API_KEY and is a one-time setup step in Daily's UI.
 export const isTranscriptionEnabled = process.env.DAILY_ENABLE_TRANSCRIPTION === "true";
+
+/**
+ * The link to actually hand a student/professor/admin for joining a
+ * session — NEVER the raw dailyRoomUrl directly once one exists. This
+ * routes through /api/daily/join/[bookingId] instead, which issues the
+ * clicking user a signed Daily meeting token carrying their own user id —
+ * that's the ONLY thing that lets /api/daily/webhook's participant.joined/
+ * left handler attribute a join to a real student or professor rather than
+ * an anonymous Daily participant with no user_id at all. getLiveCallStatus
+ * and getMissingParties (the join-nudge's "who's missing" check) both
+ * depend entirely on that attribution, via CallAttendanceEvent.userId.
+ *
+ * Handing out the bare dailyRoomUrl instead (every notification used to)
+ * means Daily still reports the join just fine, but with no attributable
+ * user_id — so neither check can ever see it, which is exactly why "Live
+ * now" kept showing nobody joined with two people actually on the call,
+ * and why the join-nudge could end up calling someone who'd already
+ * joined. The same one link works for every recipient of a shared email/
+ * notification (student and professor alike): the route reads whoever is
+ * actually signed in when *they* click it, not anything baked into the
+ * URL. Falls back to the raw external meetingLink unchanged for a
+ * non-Daily booking (e.g. an admin-entered Zoom link) — there's no
+ * token/attribution to gain there either way.
+ */
+export async function resolveJoinLink(booking: {
+  id: string;
+  dailyRoomUrl: string | null;
+  meetingLink: string | null;
+}): Promise<string | null> {
+  if (!booking.dailyRoomUrl) return booking.meetingLink;
+  const appUrl = await getAppUrl();
+  return `${appUrl}/api/daily/join/${booking.id}`;
+}
 
 /**
  * Creates a Daily.co video room for a booking. The room is only joinable

@@ -1,13 +1,30 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { login } from "@/actions/auth";
 import { Button, Card, FormMessage, Input, Label } from "@/components/ui";
 import { ArtsLogo } from "@/components/arts/logo";
 
 export default function LoginPage() {
+  // useSearchParams needs a Suspense boundary above it per Next.js, hence
+  // the wrapper below rather than reading it directly in this component.
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const [state, action, pending] = useActionState(login, undefined);
+  // Set by /api/daily/join/[bookingId] (and anything else that needs a
+  // logged-out user to land back where they started) so a session's join
+  // link still takes them into the actual call after signing in, instead
+  // of dropping them on their role's home page — see auth.ts's login
+  // action, which only ever honors this as a same-site relative path.
+  const next = useSearchParams().get("next");
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
@@ -23,6 +40,7 @@ export default function LoginPage() {
 
         <form action={action} className="mt-6 space-y-4">
           <input type="hidden" name="site" value="ARTS" />
+          {next && <input type="hidden" name="next" value={next} />}
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" placeholder="you@example.com" required />
