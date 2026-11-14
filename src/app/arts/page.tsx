@@ -126,7 +126,7 @@ export default function ArtsHome() {
             />
             <Feature
               title="AI class summaries"
-              description="Classes can be recorded and automatically summarized by AI, with the recap emailed to both student and guru afterward."
+              description="Classes can be transcribed and automatically summarized by AI — text only, no audio or video is stored — with the recap emailed to both student and guru afterward."
             />
             <Feature
               title="Built-in video calls"

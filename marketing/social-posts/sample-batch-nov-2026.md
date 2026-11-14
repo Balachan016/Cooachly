@@ -3,7 +3,6 @@
 Written to `.claude/brand-voice-guidelines.md`. Every fact here comes from the live website copy. There are **no invented stats, testimonials or guarantees.**
 
 **Before publishing:**
-- Confirm the live domain. Links use `cooachly.com` (Open Question 2 in the guidelines).
 - Replace `[link]` with the UTM link shown under each post.
 - Attach the flyer named in **Visual** (from `marketing/flyers/`).
 - Only send WhatsApp broadcasts to contacts who opted in.

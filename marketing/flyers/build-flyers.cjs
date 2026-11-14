@@ -6,8 +6,8 @@
  *   npm i --prefix /tmp/flyer-tools qrcode playwright
  *   NODE_PATH=/tmp/flyer-tools/node_modules node marketing/flyers/build-flyers.cjs
  *
- * Copy follows .claude/brand-voice-guidelines.md. Change SITE_URL once the live domain
- * is confirmed (Open Question 2 in the guidelines).
+ * Copy follows .claude/brand-voice-guidelines.md. SITE_URL is the live site (see the
+ * README's "Deploying — hosting cooachly.com" section).
  */
 const fs = require("fs");
 const path = require("path");

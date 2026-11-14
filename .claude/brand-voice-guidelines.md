@@ -39,7 +39,7 @@ Both brands talk like **a trusted teacher who is also well-organized**: warm, cl
 |---|---|---|
 | "guaranteed results", "guaranteed score", "top 1%" | Unprovable; risky with parents and ad platforms | "personal attention", "clear concepts", "steady progress" |
 | "tutor" (Cooachly) / "teacher" (Arts) as the main noun | The brands consistently say **coach / professor** and **guru** | coach, professor · guru |
-| "recorded" / "we record your classes" | Conflicts with the README (only text is stored, never audio/video) — see Open Question 1 | "AI session summaries emailed after every class" |
+| "recorded" / "we record your classes" | Untrue: sessions are transcribed as text only; no audio or video is ever stored | "AI session summaries emailed after every class" |
 | "cheap", "discount tutoring" | Cheapens a vetted-teacher brand | "economical", "no platform fees" (Arts) |
 | "AI tutor" / "learn with AI" | AI only writes the recaps; the teaching is human | "taught live by a real coach/guru; AI writes the recap" |
 | Urgency tricks ("only 2 seats left!", countdowns) | Not supported by the product; erodes trust with parents | "Book a free demo whenever you're ready" |
@@ -191,7 +191,7 @@ Variations on the site:
 | Term | Reason |
 |---|---|
 | guaranteed score / grade | Unprovable claim |
-| "recorded sessions" | See Open Question 1 |
+| "recorded sessions" | Untrue: text transcripts only, nothing recorded |
 | any unverified credential ("IIT/Ivy faculty") | Not stated anywhere |
 
 ## Visual identity (for flyers & social graphics)
@@ -323,15 +323,15 @@ Variations:
 
 # Part 4 — Open Questions for Team Discussion
 
-### High priority
-1. **"Recorded" vs. "not stored"**
-   - Found: Home/About (both brands) say sessions "can be recorded and automatically summarized by AI". The README says live transcription stores **no audio/video, just text**.
-   - Recommendation: in marketing, say **"AI session summaries emailed after every class"** and never "recorded". Also fix the website copy to match.
-   - Need from you: confirm, and say whether transcription is actually switched on in production (if not, drop the AI-summary claim from ads).
-2. **Public domain for QR codes and links**
-   - Found: no production URL in the repo (`NEXT_PUBLIC_APP_URL` is localhost). Support email uses `cooachly.com`.
-   - Recommendation: the sample flyers use `https://cooachly.com/demo` and `https://cooachly.com/arts/demo` with UTM tags.
-   - Need from you: confirm the live domain before printing.
+### Resolved
+1. **"Recorded" vs. "not stored"** — *resolved 2026-11-14*
+   - Sessions are **transcribed (text only), never recorded**. No audio or video is stored (README, "Optional live transcription + AI session summaries").
+   - Website copy on the Home and About pages of both brands now says "transcribed and summarized by AI — text only, no audio or video is stored".
+   - Marketing rule: say **"AI session summaries"** or **"transcribed, never recorded"**. Never say "recorded".
+   - Still open: transcription is opt-in (`DAILY_ENABLE_TRANSCRIPTION`). If it's off in production, drop the AI-summary bullet from ads and flyers.
+2. **Public domain for QR codes and links** — *resolved 2026-11-14*
+   - The live site is **`https://cooachly.com`** (README, "Deploying — hosting `cooachly.com`"). Flyer QR codes and post links already use it.
+   - If `www.cooachly.com` is made canonical instead, the apex redirect still sends QR scans to the right page, so the flyers don't need reprinting.
 
 ### Medium priority
 3. **Primary geography and audience**

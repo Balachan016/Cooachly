@@ -11,4 +11,4 @@ Content for Cooachly and Cooachly Arts. None of it is part of the app build.
 | `flyers/build-flyers.cjs` | Rebuilds every flyer (copy, QR codes with UTM links, rendering). See the header for how to run it. |
 | `social-posts/sample-batch-nov-2026.md` | Two-week post batch (14 posts), reply templates for comments/DMs, posting calendar |
 
-**Before publishing:** confirm the live domain (QR codes point to `https://cooachly.com/...`), and settle the "recorded vs. not stored" wording (open questions 1–2 in the guidelines).
+**Before publishing:** links and QR codes point to the live site, `https://cooachly.com`. Never describe sessions as "recorded": they're transcribed as text only. If AI summaries (`DAILY_ENABLE_TRANSCRIPTION`) are off in production, remove the AI-summary bullet from flyers and posts.
