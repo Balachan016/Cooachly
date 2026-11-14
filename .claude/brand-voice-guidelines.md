@@ -328,7 +328,7 @@ Variations:
    - Sessions are **transcribed (text only), never recorded**. No audio or video is stored (README, "Optional live transcription + AI session summaries").
    - Website copy on the Home and About pages of both brands now says "transcribed and summarized by AI — text only, no audio or video is stored".
    - Marketing rule: say **"AI session summaries"** or **"transcribed, never recorded"**. Never say "recorded".
-   - Still open: transcription is opt-in (`DAILY_ENABLE_TRANSCRIPTION`). If it's off in production, drop the AI-summary bullet from ads and flyers.
+   - Transcription is **on in production** (confirmed 2026-11-14), so "AI session summaries, emailed after every session" is a valid claim. If `DAILY_ENABLE_TRANSCRIPTION` is ever turned off, remove that claim from ads, flyers and posts.
 2. **Public domain for QR codes and links** — *resolved 2026-11-14*
    - The live site is **`https://cooachly.com`** (README, "Deploying — hosting `cooachly.com`"). Flyer QR codes and post links already use it.
    - If `www.cooachly.com` is made canonical instead, the apex redirect still sends QR scans to the right page, so the flyers don't need reprinting.
