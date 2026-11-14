@@ -42,6 +42,21 @@ function readSite(formData: FormData): Site {
   return formData.get("site") === "ARTS" ? "ARTS" : DEFAULT_SITE;
 }
 
+// login's optional `next` field (see /login/page.tsx and
+// /api/daily/join/[bookingId], which sets it so someone who clicks a
+// session's join link while logged out lands back in the actual call after
+// signing in, instead of just their role's home page). Only ever a
+// same-site relative path: must start with a single "/" (never "//", which
+// browsers treat as protocol-relative to another host) and never contain
+// "://", so this can't be turned into an open redirect to an external site.
+function readSafeNextPath(formData: FormData): string | null {
+  const next = formData.get("next");
+  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//") || next.includes("://")) {
+    return null;
+  }
+  return next;
+}
+
 export type AuthFormState =
   | {
       errors?: {
@@ -73,6 +88,7 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
 
   const { email, password } = validated.data;
   const site = readSite(formData);
+  const nextPath = readSafeNextPath(formData);
 
   if (await isLoginLocked(site, email)) {
     return { message: "Too many failed attempts. Please wait 15 minutes and try again." };
@@ -103,7 +119,7 @@ export async function login(_state: AuthFormState, formData: FormData): Promise<
     targetId: user.id,
     detail: `${user.role} login`,
   });
-  redirect(roleHomePath(user.role, user.site));
+  redirect(nextPath ?? roleHomePath(user.role, user.site));
 }
 
 export async function logout() {
