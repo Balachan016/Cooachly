@@ -4,9 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "./email";
 import { sendWhatsAppReminder } from "./sms";
 import { sendPushToUser } from "./push";
+import { sendBookingReminderCall } from "./voice-nudge";
 import { logNotification } from "./log";
 import { formatWhenFor } from "./format";
 import { SITE_CONFIG, sitePath } from "@/lib/site";
+import { resolveJoinLink } from "@/lib/daily";
 
 // Where tapping a reminder push takes each role. Superadmin's dashboard is
 // cross-site, so its path is never site-prefixed.
@@ -44,7 +46,7 @@ const SUBJECT_PHRASE: Record<ReminderKind, string> = {
 type BookingWithParties = Booking & { student: User; professor: User };
 
 export async function sendBookingReminder(booking: BookingWithParties, kind: ReminderKind) {
-  const joinLink = booking.dailyRoomUrl || booking.meetingLink;
+  const joinLink = await resolveJoinLink(booking);
 
   const admins = await prisma.user.findMany({
     where: { role: "ADMIN", isActive: true, site: booking.professor.site },
@@ -55,6 +57,22 @@ export async function sendBookingReminder(booking: BookingWithParties, kind: Rem
     notifyPerson(booking.student, { peerName: booking.professor.name, startAt: booking.startAt, joinLink }, booking.id, kind),
     notifyPerson(booking.professor, { peerName: booking.student.name, startAt: booking.startAt, joinLink }, booking.id, kind),
     ...admins.map((admin) => notifyPerson(admin, { peerName: pairName, startAt: booking.startAt, joinLink }, booking.id, kind)),
+    // Automated call on top of the above, 5 minutes out only — not 24h/1h,
+    // and only to the two people who actually need to join, not admins (a
+    // phone call is a lot more intrusive than email/push/WhatsApp, so this
+    // is reserved for the one reminder where "please join now" matters most).
+    // Same isActive check as notifyPerson: a disabled account gets nothing.
+    ...(kind === "5m"
+      ? [booking.student, booking.professor]
+          .filter((person) => person.isActive)
+          .map((recipient) =>
+            sendBookingReminderCall({
+              bookingId: booking.id,
+              recipient,
+              peerName: recipient.id === booking.student.id ? booking.professor.name : booking.student.name,
+            })
+          )
+      : []),
   ]);
 }
 

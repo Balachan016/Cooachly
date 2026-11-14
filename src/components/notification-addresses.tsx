@@ -20,18 +20,21 @@ export function NotificationAddresses({ log }: { log: Pick<NotificationLog, "sen
 }
 
 /**
- * The async delivery outcome Twilio reports after accepting a WhatsApp
- * message (see /api/twilio/status) — "SENT" above only means Twilio took the
- * message, not that it reached the recipient. Renders nothing until that
- * callback has come back.
+ * The async delivery outcome Twilio reports after accepting a WhatsApp/SMS
+ * message or a Voice call (see /api/twilio/status) — "SENT" above only
+ * means Twilio took it, not that it reached or was answered by the
+ * recipient. Renders nothing until that callback has come back.
  */
 export function DeliveryStatusBadge({ log }: { log: Pick<NotificationLog, "deliveryStatus" | "deliveryError"> }) {
   if (!log.deliveryStatus) return null;
 
   const tone =
-    log.deliveryStatus === "delivered" || log.deliveryStatus === "read"
+    log.deliveryStatus === "delivered" || log.deliveryStatus === "read" || log.deliveryStatus === "completed"
       ? "success"
-      : log.deliveryStatus === "undelivered" || log.deliveryStatus === "failed"
+      : log.deliveryStatus === "undelivered" ||
+          log.deliveryStatus === "failed" ||
+          log.deliveryStatus === "busy" ||
+          log.deliveryStatus === "no-answer"
         ? "danger"
         : "default";
 

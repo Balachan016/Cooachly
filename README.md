@@ -28,7 +28,11 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Test files & answers** — professors and admins can share a test file on a booking; students
   upload their answer back, both stored via Vercel Blob.
 - **Reminders** — automatic email (Resend), WhatsApp, and SMS (Twilio) reminders 1 day, 1 hour,
-  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`.
+  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`. An
+  automated voice call also goes out to the student and professor at the 5-minute mark.
+- **Live call status + join nudge** — Admin → Bookings shows who's actually joined each session
+  right now (derived from Daily's join/leave events), and automatically places a one-time
+  automated voice call to whoever hasn't joined ~2-3 minutes after start.
 - **Installable mobile app (PWA)** — Cooachly and Cooachly Arts can each be installed to an iPhone or
   Android home screen from the browser, with their own icon and name, and send push notifications
   for session reminders and new messages. Turned on per device under **Settings → Mobile app &
@@ -228,6 +232,62 @@ Reminders only go out for **confirmed** bookings, and only once per threshold (t
 `reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
 job frequently is safe. WhatsApp and SMS are both skipped for anyone without a phone number on file.
 
+### Join nudge & 5-minute reminder calls (automated voice calls)
+
+The app places automated phone calls for two different situations, both sharing the exact same
+pipeline (OpenAI text-to-speech → Vercel Blob → Twilio Voice):
+
+- **5-minute booking reminder** — the same `/api/cron/reminders` job that sends the email/push/
+  WhatsApp "starts in 5 minutes" reminder (see above) also places a one-time call to the student
+  and professor at that same ~5-minute mark, telling them to join now. Not sent to admins, and
+  not sent for the 24h/1h reminders — a phone call is a lot more intrusive than the other
+  channels, so it's reserved for the moment "please join now" actually matters.
+- **Join nudge** — the same job also watches for a session that's ~2-3 minutes *past* its own
+  start time with the student and/or professor still not showing as joined (per Daily's
+  `participant.joined`/`participant.left` webhook events — see Admin → Bookings' "Live now"
+  panel, which reads the same data). Whoever's missing gets a one-time call too; it's never
+  re-sent for the same booking.
+
+Both are phone calls rather than WhatsApp voice notes on purpose: WhatsApp's approved Message
+Template system (required for any business-initiated message sent outside a 24h customer-service
+window — see "WhatsApp templates" above) doesn't support an audio header at all (Meta's template
+header formats are TEXT/IMAGE/VIDEO/DOCUMENT only), so a free-form WhatsApp voice note to someone
+who hasn't messaged the business number in the last 24 hours is rejected outright with Twilio
+error 63016 — which in practice is every real student/professor, every time. A call has no such
+restriction.
+
+This reuses infrastructure already documented above/below rather than adding a new service:
+
+1. **Twilio Voice** — needs `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` (same as WhatsApp/SMS
+   above). The call picks a "from" number matching the recipient's own country, because an Indian
+   Twilio number can only legally call Indian destinations and vice versa — but which number that
+   is differs per country:
+   - **US/Canada** reuses `TWILIO_SMS_FROM_US` from the SMS section below — confirmed to work for
+     Voice too, just make sure **Voice is enabled** on it (Twilio Console → Phone Numbers → your
+     number → Voice Configuration).
+   - **India** needs its *own* `TWILIO_VOICE_FROM_INDIA` — **not** `TWILIO_SMS_FROM_INDIA`.
+     Confirmed live: that number is carrier-flagged **Do-Not-Originate** for Voice (Twilio error
+     **21212**, "From number must be valid and not on do-not-originate list") since it was
+     provisioned as a WhatsApp/messaging sender, not a genuine Voice-capable line — adding it as a
+     Verified Caller ID doesn't help; DNO overrides that. Twilio also won't sell you an Indian
+     number for Voice without completing their India KYC/regulatory bundle first (a separate,
+     longer process from WhatsApp/SMS registration). Leave `TWILIO_VOICE_FROM_INDIA` unset until
+     you have one — calls to Indian recipients are skipped (logged as `SKIPPED`, not an error)
+     rather than attempted and failing every time with 21212.
+
+   Missing either number just skips the call for that country.
+2. **OpenAI** (see "Setting up video calls & AI summaries" below) — `OPENAI_API_KEY` generates the
+   spoken audio (text-to-speech) from a short script.
+3. **Vercel Blob** (see "Setting up file sharing" below) — `BLOB_READ_WRITE_TOKEN` hosts the
+   generated audio clip at a public URL, since Twilio's call needs one to fetch the audio from
+   mid-call.
+
+Missing any of the three just means that leg is skipped (logged in Admin → Bookings' "Reminder
+log" as `join_nudge`, same as every other channel) — nothing breaks, it just won't actually place
+the call until all three are set. Superadmin → Reminders shows each piece's config status, plus
+the real call outcome (`completed`/`no-answer`/`busy`/`failed`) once Twilio's status callback
+reports it.
+
 ## Setting up the mobile app & push notifications
 
 The app ships a web app manifest per site (`/manifest.webmanifest` and `/arts/manifest.webmanifest`)
@@ -294,27 +354,62 @@ cheaper and more private than cloud recording.
 **If attendance tracking, transcription, and AI summaries all stop at once** (not just one of
 them), the webhook has almost certainly tripped Daily's circuit breaker: by default, 3 non-2xx
 responses from your endpoint — across *any* event type — and Daily stops sending *all* future
-webhooks to it, silently, with no notice anywhere in your own app. Check for this first:
+webhooks to it, silently, with no notice anywhere in your own app. This has happened more than
+once in production, each time needing the same manual reset below — **set `DAILY_WEBHOOK_UUID`
+(see `.env.example`) and `/api/cron/reminders` checks for this and resets it automatically on
+every 5-minute run**, instead of waiting for someone to notice a missing summary or a session stuck
+showing nobody joined. The steps below are for troubleshooting it manually (auto-reset not set up
+yet, or it's still broken after a reset — see step 2's root causes first, since auto-reset can't
+fix those).
+
+Check Admin → Overview's "Daily webhook health" card first — it reads the same `DailyWebhookEvent`
+log every delivery writes to (auto-reset included, logged as `auto_reset`), and flags both outright
+failures and a last delivery that's gone stale (succeeded, but a long time ago — which a
+tripped-then-reset breaker with no session since can look like, so don't read "stale" alone as
+still broken). Then, on Daily's own side:
 
 1. `GET https://api.daily.co/v1/webhooks` (with your `DAILY_API_KEY` as the bearer token) lists
-   your webhook(s) — look at `failedCount` and whether it's still trying to deliver.
-2. Fix whatever caused the failures (check Vercel's function logs for `/api/daily/webhook` around
-   when it stopped, and confirm `DAILY_WEBHOOK_SECRET` in production still matches what Daily has
-   on file for that webhook, if you set one — a mismatch after recreating/updating the webhook
-   rejects every single delivery with 401 and trips the breaker almost immediately).
-3. `POST https://api.daily.co/v1/webhooks/<uuid>` makes Daily retry once; a 200 from your endpoint
-   closes the breaker and resumes normal delivery. There's no dashboard button for this — it's
-   API-only.
+   your webhook(s) — look at `state`/`failedCount` and whether `lastMomentPushed` is recent.
+2. Fix whatever caused the failures first, or the reset below just trips again:
+   - Check Vercel's function logs for `/api/daily/webhook` around when it stopped.
+   - Confirm `DAILY_WEBHOOK_SECRET` in production still matches what Daily has on file for that
+     webhook, if you set one — a mismatch after recreating/updating the webhook rejects every
+     single delivery with 401 and trips the breaker almost immediately.
+   - **Check for a www/apex redirect on the registered webhook URL.** If `url` (from step 1) is,
+     say, `https://www.cooachly.com/api/daily/webhook` but you've set up the one-click redirect
+     from the "Deploying" section below with `www` redirecting to the apex domain (or vice versa),
+     *every* delivery gets a 3xx instead of 200 — webhook senders don't follow redirects — which
+     trips the breaker again almost immediately after every reset. Point the webhook's `url` at
+     whichever domain doesn't redirect.
+3. Reset it: `POST https://api.daily.co/v1/webhooks/<uuid>` with the **same `url`, `eventTypes`,
+   and `hmac`** your `GET` in step 1 showed, as a JSON body — this is an update call, not a bare
+   retry trigger, and Daily rejects it with `"url" is required` if you POST without a body. Use
+   this same call to fix the `url` if step 2 found a redirect problem. A 200 back with
+   `"state":"ACTIVE"` and `"failedCount":0` confirms it's reset; there's no dashboard button for
+   this, it's API-only.
 
 ## Setting up file sharing (Vercel Blob)
 
-Professors/admins can share a test file on a booking, and students can upload their answer back.
-This needs blob storage:
+Professors/admins can share a test file on a booking, students can upload their answer back, and
+the join-nudge/reminder voice calls' audio clips (see above) are hosted here too. This needs blob storage:
 
-1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available).
-2. Vercel automatically injects `BLOB_READ_WRITE_TOKEN` into your production environment once
-   connected — no manual copying needed there. For local development, copy the token shown in the
-   Blob store's dashboard into your `.env`.
+1. In your Vercel project, go to **Storage → Create Database → Blob** (free tier available), or
+   **Connect Database** if a Blob store already exists on your account.
+2. Vercel automatically injects what your production environment needs once connected — no manual
+   copying needed there. Which variable(s) show up under **Settings → Environment Variables**
+   depends on which flow you used:
+   - **Newer "Connect Database" flow**: injects `BLOB_STORE_ID` (and `BLOB_WEBHOOK_PUBLIC_KEY`) —
+     no `BLOB_READ_WRITE_TOKEN` at all. Auth happens via Vercel's own OIDC token, which the platform
+     injects automatically as long as **Enable access to System Environment Variables** (shown
+     right on that same Environment Variables page) is checked — it is by default.
+   - **Older flow**: injects `BLOB_READ_WRITE_TOKEN` directly.
+
+   The app's own `isBlobConfigured` check (and every upload path, including the join-nudge voice
+   call's audio clip) treats either one as configured — you don't need to hunt for a
+   `BLOB_READ_WRITE_TOKEN` that a newer-style connection never created.
+3. For **local development**, the OIDC flow doesn't apply (that's a Vercel-runtime-only
+   mechanism), so pull a real read-write token from the Blob store's own dashboard page and put it
+   in your `.env` as `BLOB_READ_WRITE_TOKEN`.
 
 Without this configured, upload attempts show a message asking an admin to set it up, rather than
 failing silently.

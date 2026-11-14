@@ -11,14 +11,11 @@ const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
 
 /**
- * Every outgoing message now goes out on BOTH WhatsApp and plain SMS — a
- * recipient who misses one (app not installed, WhatsApp delivery silently
- * rejected) still gets the other. Each country's SMS leg needs its own
- * locally-registered sender number, since neither Twilio nor local carriers
- * let a single number send compliant SMS everywhere:
+ * Plain SMS needs a *locally-registered* sender number per destination
+ * country — neither Twilio nor local carriers let a single number send
+ * everywhere:
  *   - US/Canada: needs A2P 10DLC registration (TWILIO_SMS_FROM_US)
- *   - India: needs DLT registration with Indian telecom regulators
- *     (TWILIO_SMS_FROM_INDIA) — see README
+ *   - India: needs DLT registration (TWILIO_SMS_FROM_INDIA) — see README
  * Leave either one unset to skip that country's SMS leg (WhatsApp still
  * goes out) until it's registered.
  */
@@ -29,6 +26,29 @@ const smsSenders: { prefix: string; from: string | undefined }[] = [
 
 function getSmsFrom(to: string): string | undefined {
   return smsSenders.find((sender) => to.startsWith(sender.prefix))?.from;
+}
+
+/**
+ * Voice calls also need a per-country "from" (Indian Twilio numbers can
+ * only legally call Indian destinations and vice versa), and it *looks*
+ * like it should just be the same number SMS uses per country — except
+ * TWILIO_SMS_FROM_INDIA turned out to be carrier-flagged Do-Not-Originate
+ * for Voice (confirmed live: Twilio error 21212), because it was
+ * provisioned as a WhatsApp/messaging sender, not a genuine Voice-capable
+ * line, and verified Caller ID doesn't override a DNO flag. So Voice gets
+ * its own India variable, deliberately left unset until a real
+ * Voice-capable Indian number (needs Twilio's India KYC/regulatory bundle)
+ * is set up — until then, calls to Indian numbers are skipped rather than
+ * attempted and logged as a permanently-failing error every time. The US
+ * number is shared since it's already confirmed to work for Voice too.
+ */
+const voiceCallSenders: { prefix: string; from: string | undefined }[] = [
+  { prefix: "+1", from: process.env.TWILIO_SMS_FROM_US },
+  { prefix: "+91", from: process.env.TWILIO_VOICE_FROM_INDIA },
+];
+
+function getVoiceCallFrom(to: string): string | undefined {
+  return voiceCallSenders.find((sender) => to.startsWith(sender.prefix))?.from;
 }
 
 // Unlinked for now — every SMS send was failing in production (Twilio
@@ -43,6 +63,18 @@ const SMS_SENDING_DISABLED = true;
 export const isWhatsAppConfigured = Boolean(accountSid && authToken && whatsappFrom);
 export const isSmsConfigured = Boolean(accountSid && authToken && smsSenders.some((sender) => sender.from));
 export const isSmsSendingDisabled = SMS_SENDING_DISABLED;
+export const isVoiceCallConfigured = Boolean(accountSid && authToken && voiceCallSenders.some((sender) => sender.from));
+
+export const voiceCallConfigStatus = {
+  us: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_SMS_FROM_US),
+    from: process.env.TWILIO_SMS_FROM_US ?? null,
+  },
+  india: {
+    configured: Boolean(accountSid && authToken && process.env.TWILIO_VOICE_FROM_INDIA),
+    from: process.env.TWILIO_VOICE_FROM_INDIA ?? null,
+  },
+};
 
 // Read-only snapshot for the superadmin reminders page, so "is the template
 // SID actually deployed?" can be checked by loading a page instead of
@@ -172,6 +204,60 @@ async function sendSms(to: string, body: string): Promise<WhatsAppSendResult> {
 
 export async function sendWhatsApp(opts: { to: string; body: string }): Promise<WhatsAppSendResult[]> {
   return Promise.all([createMessage(opts.to, { body: opts.body }), sendSms(opts.to, opts.body)]);
+}
+
+export type VoiceCallResult = {
+  skipped: boolean;
+  error?: string;
+  from?: string;
+  to: string;
+  sid?: string;
+  channel: "CALL";
+};
+
+/**
+ * Places an automated phone call that plays an audio clip (see
+ * @/lib/notifications/voice-nudge, which generates and uploads the clip
+ * this calls with) — the join-nudge's actual delivery channel. mediaUrl
+ * must be a publicly reachable HTTPS URL. No SMS/WhatsApp fallback here:
+ * this *is* the fallback, chosen specifically because outbound calls aren't
+ * subject to WhatsApp's 24h window/template rule.
+ *
+ * "From" is picked by the recipient's own country (see voiceCallSenders
+ * above) rather than one fixed number.
+ */
+export async function sendVoiceCall(opts: { to: string; mediaUrl: string }): Promise<VoiceCallResult> {
+  const from = getVoiceCallFrom(opts.to);
+  const addresses = { from, to: opts.to, channel: "CALL" as const };
+
+  if (!client || !from) {
+    console.log(`[call:skipped, not configured] to=${opts.to}`);
+    return { skipped: true as const, ...addresses };
+  }
+
+  try {
+    const appUrl = await getAppUrl();
+    const twiml = new twilioLib.twiml.VoiceResponse();
+    // Played twice with a short pause, in case the recipient picks up a
+    // beat late and misses the start of the first playthrough.
+    twiml.play(opts.mediaUrl);
+    twiml.pause({ length: 1 });
+    twiml.play(opts.mediaUrl);
+
+    const call = await client.calls.create({
+      from,
+      to: opts.to,
+      twiml: twiml.toString(),
+      statusCallback: `${appUrl}/api/twilio/status`,
+      statusCallbackEvent: ["completed"],
+    });
+    return { skipped: false as const, sid: call.sid, ...addresses };
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? ` (code ${(err as { code: unknown }).code})` : "";
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Failed to place voice-nudge call", err);
+    return { skipped: false as const, error: `${message}${code}`, ...addresses };
+  }
 }
 
 /**

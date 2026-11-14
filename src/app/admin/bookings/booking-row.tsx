@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Attachment, Booking, NotificationLog, Role, User } from "@prisma/client";
+import type { Attachment, Booking, CallAttendanceEvent, NotificationLog, Role, User } from "@prisma/client";
 import { extendBooking, deleteBooking, markBookingCompleted, adminCancelBooking } from "@/actions/bookings";
 import { sendManualReminder } from "@/actions/reminders";
 import { isPastDate } from "@/lib/time";
+import { getLiveCallStatus } from "@/lib/bookings";
 import { Badge, Button } from "@/components/ui";
 import { AttachmentPanel } from "@/components/attachment-panel";
 import { NotificationAddresses, DeliveryStatusBadge } from "@/components/notification-addresses";
@@ -18,7 +19,77 @@ const KIND_LABEL: Record<string, string> = {
   manual: "Manual reminder",
   instant: "Instant call",
   test: "Test",
+  join_nudge: "Join nudge (voice)",
 };
+
+const RESCHEDULE_ROLE_LABEL: Record<string, string> = {
+  STUDENT: "student",
+  PROFESSOR: "professor",
+  ADMIN: "admin",
+  SUPERADMIN: "admin",
+};
+
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+/**
+ * The bare "Reschedule pending" badge next to Status doesn't say what's
+ * actually being proposed — this fills in the detail the Reschedules tab
+ * (and anyone scanning any other tab) needs: what time is on the table, who
+ * asked, why, or — once resolved — when it last actually moved and by whom.
+ * rescheduledAt only ever tracks the *most recent* move (see schema), so
+ * there's no history of every past reschedule, just the latest one.
+ */
+function RescheduleInfo({
+  booking,
+}: {
+  booking: {
+    rescheduleProposedStartAt: Date | null;
+    rescheduleProposedBy: Role | null;
+    rescheduleProposedReason: string | null;
+    rescheduledAt: Date | null;
+    rescheduledByRole: Role | null;
+  };
+}) {
+  if (booking.rescheduleProposedStartAt) {
+    const proposerLabel = booking.rescheduleProposedBy ? RESCHEDULE_ROLE_LABEL[booking.rescheduleProposedBy] : "someone";
+    return (
+      <div className="mt-1 text-xs text-black/50 dark:text-white/50">
+        Proposed by {proposerLabel} → {DATE_TIME_FORMAT.format(booking.rescheduleProposedStartAt)}
+        {booking.rescheduleProposedReason ? ` — "${booking.rescheduleProposedReason}"` : ""}
+      </div>
+    );
+  }
+  if (booking.rescheduledAt) {
+    const moverLabel = booking.rescheduledByRole ? RESCHEDULE_ROLE_LABEL[booking.rescheduledByRole] : "someone";
+    return (
+      <div className="mt-1 text-xs text-black/50 dark:text-white/50">
+        Last rescheduled {DATE_TIME_FORMAT.format(booking.rescheduledAt)} by {moverLabel}
+      </div>
+    );
+  }
+  return null;
+}
+
+function LiveStatusBadge({
+  booking,
+  events,
+}: {
+  booking: { studentId: string; professorId: string; startAt: Date; endAt: Date; status: string };
+  events: CallAttendanceEvent[];
+}) {
+  const status = getLiveCallStatus(booking, events);
+  if (!status) return null;
+
+  if (status.kind === "live_both") return <Badge tone="success">Live — both joined</Badge>;
+  if (status.kind === "live_waiting") {
+    return <Badge tone="warning">Live — waiting on {status.missing === "STUDENT" ? "student" : "professor"}</Badge>;
+  }
+  return (
+    <Badge tone="danger">
+      Nobody joined yet ({status.minutesSinceStart}m)
+    </Badge>
+  );
+}
 
 export function AdminBookingRow({
   booking,
@@ -30,6 +101,7 @@ export function AdminBookingRow({
     professor: User;
     attachments: Attachment[];
     notificationLogs: NotificationLog[];
+    callAttendanceEvents: CallAttendanceEvent[];
   };
   viewerRole: Role;
   viewerTimezone: string;
@@ -75,7 +147,9 @@ export function AdminBookingRow({
             <Badge tone={booking.paymentStatus === "UNPAID" ? "warning" : "success"}>{booking.paymentStatus}</Badge>
             {booking.isDemo && <Badge tone="default">Free demo</Badge>}
             {booking.rescheduleProposedStartAt && <Badge tone="warning">Reschedule pending</Badge>}
+            <LiveStatusBadge booking={booking} events={booking.callAttendanceEvents} />
           </div>
+          <RescheduleInfo booking={booking} />
         </td>
         <td className="whitespace-nowrap px-4 py-1.5 text-right font-medium">${(booking.priceCents / 100).toFixed(2)}</td>
         <td className="px-4 py-1.5">

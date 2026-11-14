@@ -1,7 +1,25 @@
 import { prisma } from "@/lib/prisma";
+import { isWebhookAutoResetConfigured } from "@/lib/daily";
 import { Badge, Card } from "@/components/ui";
 
 const RECENT_COUNT = 10;
+// A last delivery can be "ok: true" and still be from days ago if the
+// circuit breaker tripped and was then reset without any new session
+// happening yet — the badge used to read "Healthy" in exactly that state,
+// which is what made the most recent incident (reset fixed on Daily's side,
+// but no way to tell from this card whether anything had actually flowed
+// since) harder to confirm than it should have been. This threshold is
+// just when the card starts calling that out — it's not itself a sign of
+// breakage, since plenty of real gaps between sessions are normal.
+const STALE_AFTER_HOURS = 24;
+
+function timeAgo(d: Date): string {
+  const ms = new Date().getTime() - d.getTime();
+  const hours = ms / 3_600_000;
+  if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))}m ago`;
+  if (hours < 48) return `${Math.round(hours)}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
 
 /**
  * Not site-scoped — Daily's webhook delivery (and its circuit breaker) is
@@ -17,6 +35,8 @@ export async function DailyWebhookHealth() {
   });
   const last = events[0];
   const recentFailures = events.filter((e) => !e.ok).length;
+  const hoursSinceLast = last ? (new Date().getTime() - last.receivedAt.getTime()) / 3_600_000 : null;
+  const isStale = hoursSinceLast !== null && hoursSinceLast > STALE_AFTER_HOURS;
   const formatTime = (d: Date) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(d);
 
   return (
@@ -24,15 +44,23 @@ export async function DailyWebhookHealth() {
       <h2 className="font-semibold">Daily webhook health</h2>
       <p className="mt-1 text-sm text-black/50 dark:text-white/50">
         Whether Daily.co&apos;s webhook deliveries (call join/leave, transcripts) are reaching this app. A long gap
-        since the last delivery, or a run of failures below, usually means the circuit breaker has tripped — see the
-        README for how to reset it.
+        since the last delivery, or a run of failures below, usually means the circuit breaker has tripped.{" "}
+        {isWebhookAutoResetConfigured ? (
+          <>Checked and auto-reset every 5 minutes via the reminders cron job — look for an <code>auto_reset</code>{" "}
+          entry below if one has fired.</>
+        ) : (
+          <>Set <code>DAILY_WEBHOOK_UUID</code> to have this reset itself automatically instead of needing a manual
+          fix each time (see README) — not configured yet.</>
+        )}
       </p>
 
       {last ? (
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-          <Badge tone={last.ok ? "success" : "danger"}>{last.ok ? "Healthy" : "Last delivery failed"}</Badge>
+          <Badge tone={!last.ok ? "danger" : isStale ? "warning" : "success"}>
+            {!last.ok ? "Last delivery failed" : isStale ? "No recent deliveries" : "Healthy"}
+          </Badge>
           <span className="text-black/60 dark:text-white/60">
-            Last delivery: {last.type} · {formatTime(last.receivedAt)}
+            Last delivery: {last.type} · {formatTime(last.receivedAt)} ({timeAgo(last.receivedAt)})
           </span>
           {recentFailures > 0 && (
             <span className="text-red-600 dark:text-red-400">
@@ -50,7 +78,11 @@ export async function DailyWebhookHealth() {
             <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span className="font-medium">{e.type}</span>
               <span className="text-black/50 dark:text-white/50">{formatTime(e.receivedAt)}</span>
-              <Badge tone={e.ok ? "success" : "danger"}>{e.ok ? "OK" : e.error ?? "Failed"}</Badge>
+              {/* auto_reset success events carry a detail in `error` too (e.g. "Circuit
+                  breaker was FAILED — reset to ACTIVE") — worth showing even though `ok`
+                  is true, since it's the one case where "OK" alone would hide the actual
+                  story: the breaker DID trip, it just healed itself on this run. */}
+              <Badge tone={e.ok ? "success" : "danger"}>{e.error ?? (e.ok ? "OK" : "Failed")}</Badge>
             </div>
           ))}
         </div>

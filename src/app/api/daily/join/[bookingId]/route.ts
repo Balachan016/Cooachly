@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { createDailyMeetingToken } from "@/lib/daily";
+import { sitePath } from "@/lib/site";
 
 /**
  * Every "Join video call" link in the app now points here instead of the
@@ -15,14 +16,24 @@ import { createDailyMeetingToken } from "@/lib/daily";
  */
 export async function GET(request: Request, { params }: { params: Promise<{ bookingId: string }> }) {
   const { bookingId } = await params;
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: { professor: { select: { site: true } } },
   });
   if (!booking) return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+
+  const user = await getCurrentUser();
+  if (!user) {
+    // Site-aware (not a bare "/login") so an Arts booking's link signs in
+    // against the right site instead of defaulting to Cooachly, and carries
+    // `next` back to this exact URL so login lands the person straight in
+    // the call instead of just their role's home page — see auth.ts's
+    // login action, which only ever honors `next` as a same-site path.
+    const loginUrl = new URL(sitePath(booking.professor.site, "/login"), request.url);
+    loginUrl.searchParams.set("next", new URL(request.url).pathname);
+    return NextResponse.redirect(loginUrl);
+  }
 
   const isParty = user.id === booking.studentId || user.id === booking.professorId;
   const isSiteAdmin = (user.role === "ADMIN" || user.role === "SUPERADMIN") && user.site === booking.professor.site;

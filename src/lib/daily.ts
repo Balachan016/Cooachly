@@ -1,9 +1,13 @@
 import "server-only";
+import { getAppUrl } from "@/lib/url";
 
 const apiKey = process.env.DAILY_API_KEY;
 const DAILY_API_BASE = "https://api.daily.co/v1";
+const webhookUuid = process.env.DAILY_WEBHOOK_UUID;
+const webhookSecret = process.env.DAILY_WEBHOOK_SECRET;
 
 export const isDailyConfigured = Boolean(apiKey);
+export const isWebhookAutoResetConfigured = Boolean(apiKey && webhookUuid);
 
 // Live transcription is billed per participant-minute on top of Daily's free
 // video minutes, so it's opt-in — set DAILY_ENABLE_TRANSCRIPTION="true" to
@@ -15,6 +19,109 @@ export const isDailyConfigured = Boolean(apiKey);
 // with a Deepgram API key (Daily's dashboard → Settings) — this is separate
 // from DAILY_API_KEY and is a one-time setup step in Daily's UI.
 export const isTranscriptionEnabled = process.env.DAILY_ENABLE_TRANSCRIPTION === "true";
+
+/**
+ * The link to actually hand a student/professor/admin for joining a
+ * session — NEVER the raw dailyRoomUrl directly once one exists. This
+ * routes through /api/daily/join/[bookingId] instead, which issues the
+ * clicking user a signed Daily meeting token carrying their own user id —
+ * that's the ONLY thing that lets /api/daily/webhook's participant.joined/
+ * left handler attribute a join to a real student or professor rather than
+ * an anonymous Daily participant with no user_id at all. getLiveCallStatus
+ * and getMissingParties (the join-nudge's "who's missing" check) both
+ * depend entirely on that attribution, via CallAttendanceEvent.userId.
+ *
+ * Handing out the bare dailyRoomUrl instead (every notification used to)
+ * means Daily still reports the join just fine, but with no attributable
+ * user_id — so neither check can ever see it, which is exactly why "Live
+ * now" kept showing nobody joined with two people actually on the call,
+ * and why the join-nudge could end up calling someone who'd already
+ * joined. The same one link works for every recipient of a shared email/
+ * notification (student and professor alike): the route reads whoever is
+ * actually signed in when *they* click it, not anything baked into the
+ * URL. Falls back to the raw external meetingLink unchanged for a
+ * non-Daily booking (e.g. an admin-entered Zoom link) — there's no
+ * token/attribution to gain there either way.
+ */
+export async function resolveJoinLink(booking: {
+  id: string;
+  dailyRoomUrl: string | null;
+  meetingLink: string | null;
+}): Promise<string | null> {
+  if (!booking.dailyRoomUrl) return booking.meetingLink;
+  const appUrl = await getAppUrl();
+  return `${appUrl}/api/daily/join/${booking.id}`;
+}
+
+type DailyWebhookConfig = {
+  uuid: string;
+  url: string;
+  state: string;
+  failedCount: number;
+  eventTypes: string[];
+  hmac?: string;
+};
+
+export type WebhookHealthCheckResult =
+  | { checked: false }
+  | { checked: true; wasReset: boolean; previousState?: string; error?: string };
+
+/**
+ * Daily's webhook delivery has a circuit breaker: 3 non-2xx responses in a
+ * row stops ALL future deliveries — every event type, not just whichever
+ * one failed — silently, with no notification. This repo has already hit
+ * that exact trip multiple times in production (see README's "Webhook
+ * troubleshooting"), each time needing the same manual fix: GET the
+ * webhook's current config, then POST it straight back as an update, which
+ * resets failedCount to 0 and flips state back to ACTIVE. This automates
+ * that fix instead of waiting for someone to notice a missing summary days
+ * later — call it from /api/cron/reminders on every 5-minute run, so a
+ * trip self-heals within minutes.
+ *
+ * Needs DAILY_WEBHOOK_UUID (the webhook's own id — from Daily's dashboard,
+ * or any `GET /v1/webhooks/<uuid>` response; it never changes once the
+ * webhook is created, so this is a one-time setup step). Uses this app's
+ * own DAILY_WEBHOOK_SECRET as the reset's hmac rather than whatever GET
+ * returns — that's the value /api/daily/webhook's signature check actually
+ * verifies against, so echoing back anything else here would break
+ * verification for every future delivery instead of fixing anything.
+ */
+export async function checkAndResetWebhookHealth(): Promise<WebhookHealthCheckResult> {
+  if (!apiKey || !webhookUuid) return { checked: false };
+
+  try {
+    const res = await fetch(`${DAILY_API_BASE}/webhooks/${webhookUuid}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) return { checked: false };
+
+    const webhook = (await res.json()) as DailyWebhookConfig;
+    if (webhook.state === "ACTIVE") return { checked: true, wasReset: false };
+
+    const resetRes = await fetch(`${DAILY_API_BASE}/webhooks/${webhookUuid}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: webhook.url,
+        eventTypes: webhook.eventTypes,
+        ...(webhookSecret ? { hmac: webhookSecret } : webhook.hmac ? { hmac: webhook.hmac } : {}),
+      }),
+    });
+    if (!resetRes.ok) {
+      const text = await resetRes.text();
+      console.error("Failed to auto-reset Daily webhook", text);
+      return { checked: true, wasReset: false, error: text, previousState: webhook.state };
+    }
+
+    console.warn(
+      `Auto-reset Daily webhook ${webhookUuid} (was "${webhook.state}", failedCount ${webhook.failedCount})`
+    );
+    return { checked: true, wasReset: true, previousState: webhook.state };
+  } catch (err) {
+    console.error("Failed to check/reset Daily webhook health", err);
+    return { checked: false };
+  }
+}
 
 /**
  * Creates a Daily.co video room for a booking. The room is only joinable

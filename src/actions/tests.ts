@@ -488,7 +488,7 @@ export async function saveFileAnswer(_state: TestFormState, formData: FormData):
   if (!isBlobConfigured) return { message: "File storage isn't configured yet. Ask an admin to set up Vercel Blob." };
 
   const uploaded = await uploadFile({ pathname: `tests/${assignmentId}/${questionId}-${file.name}`, file });
-  if (!uploaded) return { message: "Upload failed. Please try again." };
+  if (!uploaded.url) return { message: "Upload failed. Please try again." };
 
   await prisma.testAnswer.upsert({
     where: { assignmentId_questionId: { assignmentId, questionId } },

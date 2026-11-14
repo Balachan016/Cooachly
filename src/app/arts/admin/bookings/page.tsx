@@ -2,8 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { sitePath } from "@/lib/site";
-import { bookingStatusFilter } from "@/lib/bookings";
-import { Card, Select } from "@/components/ui";
+import { bookingStatusFilter, getLiveCallStatus } from "@/lib/bookings";
+import { Badge, Card, Select } from "@/components/ui";
 import { AdminBookingRow } from "./booking-row";
 
 export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bookings">) {
@@ -14,7 +14,13 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   const studentId = typeof searchParams.student === "string" ? searchParams.student : "";
   const date = typeof searchParams.date === "string" ? searchParams.date : "";
   const view =
-    searchParams.view === "completed" ? "completed" : searchParams.view === "cancelled" ? "cancelled" : "upcoming";
+    searchParams.view === "completed"
+      ? "completed"
+      : searchParams.view === "cancelled"
+        ? "cancelled"
+        : searchParams.view === "reschedules"
+          ? "reschedules"
+          : "upcoming";
 
   const where: Prisma.BookingWhereInput = {
     professor: { site: session.site },
@@ -23,17 +29,31 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
     ...(date ? { startAt: { gte: new Date(`${date}T00:00:00.000Z`), lt: new Date(`${date}T23:59:59.999Z`) } } : {}),
   };
 
-  const [bookings, students] = await Promise.all([
+  const now = new Date();
+  const [bookings, liveBookings, students] = await Promise.all([
     prisma.booking.findMany({
       where,
-      orderBy: { startAt: view === "upcoming" ? "asc" : "desc" },
+      orderBy: view === "upcoming" ? { startAt: "asc" } : view === "reschedules" ? { updatedAt: "desc" } : { startAt: "desc" },
       take: 300,
       include: {
         student: true,
         professor: true,
         attachments: true,
         notificationLogs: { orderBy: { createdAt: "desc" } },
+        callAttendanceEvents: true,
       },
+    }),
+    // Independent of the tab/filters above — an admin should see every
+    // class happening right now regardless of what view they're looking at.
+    prisma.booking.findMany({
+      where: {
+        professor: { site: session.site },
+        status: { in: ["PENDING", "CONFIRMED"] },
+        startAt: { lte: now },
+        endAt: { gte: now },
+      },
+      orderBy: { startAt: "asc" },
+      include: { student: true, professor: true, callAttendanceEvents: true },
     }),
     prisma.user.findMany({
       where: { role: "STUDENT", site: session.site, bookingsAsStudent: { some: {} } },
@@ -43,7 +63,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
   ]);
 
   const hasFilters = Boolean(studentId || date);
-  const tabQuery = (tabView: "upcoming" | "completed" | "cancelled") => {
+  const tabQuery = (tabView: "upcoming" | "completed" | "cancelled" | "reschedules") => {
     const params = new URLSearchParams();
     if (studentId) params.set("student", studentId);
     if (date) params.set("date", date);
@@ -72,7 +92,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
                 ? "Up to 300 completed classes, most recent first."
                 : view === "cancelled"
                   ? "Up to 300 cancelled classes, most recent first."
-                  : "Up to 300 upcoming classes, soonest first."}{" "}
+                  : view === "reschedules"
+                    ? "Every class with a pending reschedule proposal or past reschedule, most recent activity first."
+                    : "Up to 300 upcoming classes, soonest first."}{" "}
             Cooachly Arts doesn&apos;t collect payment — gurus and students arrange rates directly.
           </p>
         </div>
@@ -93,7 +115,7 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
       </div>
 
       <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
-        {(["upcoming", "completed", "cancelled"] as const).map((tabView) => (
+        {(["upcoming", "completed", "cancelled", "reschedules"] as const).map((tabView) => (
           <a
             key={tabView}
             href={`${sitePath(session.site, "/admin/bookings")}${tabQuery(tabView)}`}
@@ -107,6 +129,39 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
           </a>
         ))}
       </div>
+
+      <Card className="mt-6">
+        <h2 className="font-semibold">Live now</h2>
+        <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+          Every class whose scheduled window is open right now, and who&apos;s actually joined — derived from Daily&apos;s
+          join/leave events, so refresh the page for the latest. If nobody&apos;s joined after a couple of minutes, a
+          voice-note nudge goes out automatically (see a class&apos;s Details for the reminder log).
+        </p>
+        {liveBookings.length === 0 ? (
+          <p className="mt-3 text-sm text-black/40 dark:text-white/40">No classes in progress right now.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {liveBookings.map((b) => {
+              const status = getLiveCallStatus(b, b.callAttendanceEvents);
+              if (!status) return null;
+              return (
+                <div key={b.id} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-medium">
+                    {b.student.name} ↔ {b.professor.name}
+                  </span>
+                  {status.kind === "live_both" && <Badge tone="success">Live — both joined</Badge>}
+                  {status.kind === "live_waiting" && (
+                    <Badge tone="warning">Live — waiting on {status.missing === "STUDENT" ? "student" : "guru"}</Badge>
+                  )}
+                  {status.kind === "nobody_joined" && (
+                    <Badge tone="danger">Nobody joined yet ({status.minutesSinceStart}m)</Badge>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         {view !== "upcoming" && <input type="hidden" name="view" value={view} />}
@@ -175,7 +230,9 @@ export default async function AdminBookingsPage(props: PageProps<"/arts/admin/bo
                       ? "No completed classes yet."
                       : view === "cancelled"
                         ? "No cancelled classes."
-                        : "No upcoming bookings."}
+                        : view === "reschedules"
+                          ? "No reschedule activity to review."
+                          : "No upcoming bookings."}
                 </td>
               </tr>
             )}
