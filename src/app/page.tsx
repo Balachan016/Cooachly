@@ -143,7 +143,7 @@ export default function Home() {
             />
             <Feature
               title="AI session summaries"
-              description="Sessions can be recorded and automatically summarized by AI, with the recap emailed to the student."
+              description="Sessions can be transcribed and automatically summarized by AI — text only, no audio or video is stored — with the recap emailed to both student and coach."
             />
             <Feature
               title="Built-in video calls"

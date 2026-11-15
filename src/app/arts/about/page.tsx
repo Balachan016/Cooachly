@@ -92,7 +92,7 @@ export default function AboutPage() {
           <li><strong>1. Find your guru.</strong> Browse gurus by level and see their availability.</li>
           <li><strong>2. Book a class.</strong> Pick a time slot shown in your own local timezone.</li>
           <li><strong>3. Join &amp; learn.</strong> Get reminders by email and WhatsApp, then join your class with one click.</li>
-          <li><strong>4. Review afterward.</strong> Classes can be recorded and summarized by AI so you never lose track of what was covered.</li>
+          <li><strong>4. Review afterward.</strong> Classes can be transcribed and summarized by AI (text only — no audio or video is stored) so you never lose track of what was covered.</li>
         </ol>
 
         <div className="mt-16 flex gap-4">
