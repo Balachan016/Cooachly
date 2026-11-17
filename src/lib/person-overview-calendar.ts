@@ -134,6 +134,13 @@ function bucketByDay(entries: PersonOverviewEntry[], year: number, month: number
  * professor(s) they've actually had a confirmed/completed session with, not
  * every professor on the site, so it reads as "your schedule" rather than
  * exposing the whole team's calendars to every student.
+ *
+ * Days before today are always dropped from the result (see the
+ * `todayKey` filter below) — this is a forward-looking "what's ahead this
+ * month" dashboard widget, not a historical log of the month so far (that's
+ * what Bookings/Class Logs are for), so a recurring weekly availability
+ * window has no business still showing as "open" on a date that's already
+ * come and gone.
  */
 export async function buildPersonMonthOverview(opts: {
   role: "STUDENT" | "PROFESSOR";
@@ -226,7 +233,21 @@ export async function buildPersonMonthOverview(opts: {
     );
   }
 
-  const allEntries = [...bookedEntries, ...availableEntries].filter((e) => !opts.status || e.status === opts.status);
+  // expandOpenSlots expands a professor's recurring weekly availability
+  // across every day of the month with no regard for whether that day has
+  // already happened — a slot on the 3rd still shows as "open" even once
+  // the whole month has moved past it, since it was never checked against
+  // "now" at all (only against that professor's own bookings, to decide
+  // booked vs. open). Dropping anything whose own calendar day (in the
+  // viewer's timezone) is before today keeps this dashboard view
+  // forward-looking — "what's ahead this month" — rather than cluttered
+  // with slots and bookings from dates that have already gone by. Compared
+  // by calendar day, not exact time, so today's own entries stay visible
+  // in full regardless of what time of day it already is.
+  const todayKey = dateKeyInZone(new Date(), opts.viewerTimezone);
+  const allEntries = [...bookedEntries, ...availableEntries].filter(
+    (e) => (!opts.status || e.status === opts.status) && dateKeyInZone(e.startAt, opts.viewerTimezone) >= todayKey
+  );
 
   return bucketByDay(allEntries, year, month, daysInMonth, opts.viewerTimezone);
 }
