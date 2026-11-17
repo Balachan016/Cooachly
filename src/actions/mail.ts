@@ -6,6 +6,18 @@ import { requireRole } from "@/lib/dal";
 import { sendEmail, isEmailConfigured } from "@/lib/notifications/email";
 import { sitePath } from "@/lib/site";
 
+/** Admin > Mail's Inbox tab — marks a received message read so the unread count clears. Site-scoped, same as every other admin read here. */
+export async function markInboundEmailRead(id: string): Promise<void> {
+  const session = await requireRole("ADMIN", "SUPERADMIN");
+
+  const email = await prisma.inboundEmail.findUnique({ where: { id } });
+  if (!email || email.site !== session.site) return;
+  if (email.readAt) return;
+
+  await prisma.inboundEmail.update({ where: { id }, data: { readAt: new Date() } });
+  revalidatePath(sitePath(session.site, "/admin/mail"));
+}
+
 export type SendAdminEmailInput = { to: string; cc?: string; subject: string; body: string };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

@@ -288,6 +288,33 @@ the call until all three are set. Superadmin → Reminders shows each piece's co
 the real call outcome (`completed`/`no-answer`/`busy`/`failed`) once Twilio's status callback
 reports it.
 
+### Receiving mail at admin@cooachly.com
+
+Admin → Mail's **Inbox** tab shows mail actually sent *to* `admin@cooachly.com`, not just what the
+app sends out. This uses Resend's own inbound-email feature (the same provider as outbound above),
+so no new vendor or API key is needed — just one more webhook, the same pattern as Daily's and
+Twilio's.
+
+1. In Resend's dashboard, open the `cooachly.com` domain and enable **Receiving**. Resend shows you
+   an MX record to add — **add it on a subdomain** (e.g. `mail.cooachly.com`), not the root domain,
+   *unless* you're certain nothing else on the root domain depends on its mail routing (if
+   `admin@cooachly.com` doesn't receive real mail anywhere today, pointing the root domain's MX
+   directly at Resend is fine and is what lets `admin@cooachly.com` itself — not some subdomain
+   address — actually receive mail).
+2. Still in Resend, go to **Webhooks → Add Webhook**, point it at
+   `https://cooachly.com/api/mail/inbound`, and subscribe it to the **`email.received`** event
+   only. Copy the signing secret it shows you (shown once) into `RESEND_INBOUND_WEBHOOK_SECRET`.
+3. That's it — no code changes needed. The Inbox tab shows "not configured yet" until both
+   `RESEND_API_KEY` (already set for outbound) and `RESEND_INBOUND_WEBHOOK_SECRET` are present.
+
+The webhook payload itself only carries metadata (from/to/subject/id) — `/api/mail/inbound` fetches
+the actual body via Resend's API once per message, the same "payload just carries an id, fetch the
+real thing yourself" shape as Daily's transcript webhook. A message's HTML body is rendered inside
+a sandboxed `<iframe>` (empty `sandbox` attribute) rather than directly in the page — inbound mail
+is attacker-controlled content (anyone can email that address), so rendering it straight into an
+authenticated admin page would let a sender run script in the admin's own session just by sending
+a message.
+
 ## Setting up the mobile app & push notifications
 
 The app ships a web app manifest per site (`/manifest.webmanifest` and `/arts/manifest.webmanifest`)

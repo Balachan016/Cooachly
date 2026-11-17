@@ -559,6 +559,30 @@ model AdminEmail {
   @@index([site, createdAt])
 }
 
+// Mail actually received at admin@cooachly.com, via Resend's inbound email
+// feature (MX records on the domain point at Resend; Resend POSTs an
+// email.received webhook to /api/mail/inbound, which fetches the full body
+// and stores it here) — the inbound counterpart to AdminEmail above, shown
+// as the "Inbox" tab on the same Admin > Mail page.
+model InboundEmail {
+  id        String    @id @default(cuid())
+  site      Site      @default(COOACHLY)
+  // Resend's own id for this message — resend.io dedupes webhook retries by
+  // re-delivering the same email.received event, so this is unique rather
+  // than just an index, letting a duplicate delivery no-op instead of
+  // storing the same email twice.
+  resendId  String    @unique
+  from      String
+  to        String    // comma-separated, matches AdminEmail's "to" convention
+  subject   String
+  html      String?
+  text      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([site, createdAt])
+}
+
 enum CallEventType {
   JOINED
   LEFT
