@@ -27,9 +27,11 @@ Next.js (App Router), TypeScript, Prisma/PostgreSQL, and Stripe.
 - **Admin class log** — admins can browse every past session with its transcript and AI summary.
 - **Test files & answers** — professors and admins can share a test file on a booking; students
   upload their answer back, both stored via Vercel Blob.
-- **Reminders** — automatic email (Resend), WhatsApp, and SMS (Twilio) reminders 1 day, 1 hour,
-  and 5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`. An
-  automated voice call also goes out to the student and professor at the 5-minute mark.
+- **Reminders** — automatic WhatsApp, SMS (Twilio), and push reminders 12 hours, 1 hour, and
+  5 minutes before each session, sent by a scheduled job hitting `/api/cron/reminders`; email
+  (Resend) goes out for the 1-hour and 5-minute ones too, but not the 12-hour one, to cut down on
+  email volume. An automated voice call also goes out to the student and professor at the 5-minute
+  mark.
 - **Live call status + join nudge** — Admin → Bookings shows who's actually joined each session
   right now (derived from Daily's join/leave events), and automatically places a one-time
   automated voice call to whoever hasn't joined ~2-3 minutes after start.
@@ -182,6 +184,10 @@ Open [http://localhost:3000](http://localhost:3000).
      Thanks for requesting a free {{2}} demo for {{3}}, {{1}}! We'll reach out shortly to
      schedule a time.
      ```
+   - **Post-session feedback request** — `TWILIO_FEEDBACK_CONTENT_SID`:
+     ```
+     Hi {{1}}, thanks for your session with {{2}}! We'd love your feedback — share it here: {{3}}
+     ```
 
    Once Meta approves each one, copy its **Content SID** (starts with `HX...`) into the matching
    env var above. Until an env var is set, that message type sends free-form text, which only
@@ -221,7 +227,7 @@ Open [http://localhost:3000](http://localhost:3000).
    **This step is easy to miss** — without it, `/api/cron/reminders` is never called by anything,
    so no reminder (and no entry in Admin → Bookings' "Reminders" log) will ever appear, even with
    email/WhatsApp fully configured. Check Admin → Bookings after setting this up: you should start
-   seeing "Reminders" entries appear within a few minutes of a session's 24h/1h/5m mark.
+   seeing "Reminders" entries appear within a few minutes of a session's 12h/1h/5m mark.
 
    (Vercel's own Cron Jobs feature can also call this endpoint via a `vercel.json` `crons` entry,
    but Vercel's **Hobby plan only allows once-a-day cron schedules** — a 5-minute schedule is
@@ -229,7 +235,7 @@ Open [http://localhost:3000](http://localhost:3000).
    cron-job.org unless you're on a Pro plan or above.)
 
 Reminders only go out for **confirmed** bookings, and only once per threshold (tracked via
-`reminder24hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
+`reminder12hSentAt` / `reminder1hSentAt` / `reminder5mSentAt` on each booking), so re-running the
 job frequently is safe. WhatsApp and SMS are both skipped for anyone without a phone number on file.
 
 ### Join nudge & 5-minute reminder calls (automated voice calls)
@@ -240,7 +246,7 @@ pipeline (OpenAI text-to-speech → Vercel Blob → Twilio Voice):
 - **5-minute booking reminder** — the same `/api/cron/reminders` job that sends the email/push/
   WhatsApp "starts in 5 minutes" reminder (see above) also places a one-time call to the student
   and professor at that same ~5-minute mark, telling them to join now. Not sent to admins, and
-  not sent for the 24h/1h reminders — a phone call is a lot more intrusive than the other
+  not sent for the 12h/1h reminders — a phone call is a lot more intrusive than the other
   channels, so it's reserved for the moment "please join now" actually matters.
 - **Join nudge** — the same job also watches for a session that's ~2-3 minutes *past* its own
   start time with the student and/or professor still not showing as joined (per Daily's
@@ -326,7 +332,7 @@ the browser — no App Store or Play Store submission needed:
 - **iPhone/iPad (Safari):** Share → **Add to Home Screen**. Push notifications on iOS need iOS 16.4+
   and only work from the installed app, not a Safari tab.
 
-Push notifications (session reminders at 1 day / 1 hour / 5 minutes, and new messages) need a VAPID
+Push notifications (session reminders at 12 hours / 1 hour / 5 minutes, and new messages) need a VAPID
 key pair. Generate it once and add both values to your environment:
 
 ```bash
@@ -525,5 +531,5 @@ src/app/about               Public "About Cooachly" page
 src/app/api/stripe/webhook  Stripe webhook handler
 src/app/api/daily/webhook   Daily.co webhook → attendance events, transcription, summarize + email
 src/app/api/daily/join      Tags a join with the signed-in user before sending them to the room
-src/app/api/cron/reminders  Scheduled job: sends 24h/1h/5m reminders for upcoming sessions
+src/app/api/cron/reminders  Scheduled job: sends 12h/1h/5m reminders for upcoming sessions
 ```

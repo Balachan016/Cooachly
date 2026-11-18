@@ -6,7 +6,7 @@ import { summarizeTranscript } from "@/lib/ai-summary";
 import { sendEmail } from "@/lib/notifications/email";
 import { getAdminCcEmails } from "@/lib/notifications/admin-recipients";
 import { formatWhenFor } from "@/lib/notifications/format";
-import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
+import { sendFeedbackRequest } from "@/lib/notifications/feedback-request";
 import { SITE_CONFIG } from "@/lib/site";
 
 // Configure this URL as a webhook in your Daily.co dashboard, subscribed to
@@ -188,7 +188,7 @@ export async function POST(request: Request) {
     });
 
     if (!wasAlreadyCompleted && !booking.isDemo) {
-      await sendFeedbackRequestEmails(booking);
+      await sendFeedbackRequest(booking);
     }
 
     if (summary) {

@@ -4,17 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { sendBookingReminder } from "@/lib/notifications/reminders";
 import { sendDemoRequestReminder } from "@/lib/notifications/demo-requests";
 import { sendTestDueSoonEmail } from "@/lib/notifications/tests";
-import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
+import { sendFeedbackRequest } from "@/lib/notifications/feedback-request";
 import { sendJoinNudge } from "@/lib/notifications/voice-nudge";
 import { checkAndResetWebhookHealth } from "@/lib/daily";
 import { PAST_DUE_GRACE_MS, JOIN_NUDGE_DELAY_MS, getMissingParties } from "@/lib/bookings";
 
 // Run this endpoint every 5 minutes via an external scheduler such as
-// cron-job.org. Each run looks for confirmed bookings starting ~24h, ~1h,
+// cron-job.org. Each run looks for confirmed bookings starting ~12h, ~1h,
 // or ~5m from now that haven't had that reminder sent yet, and sends it
-// (email always; WhatsApp/SMS if the user has a phone number and Twilio is
-// configured; the ~5m one also places an automated phone call to the
-// student and professor — see sendBookingReminder). Also sends a one-time
+// (WhatsApp/SMS if the user has a phone number and Twilio is configured,
+// plus push and — for 1h/5m only, not 12h, to cut down on email volume —
+// email; the ~5m one also places an automated phone call to the student
+// and professor — see sendBookingReminder). Also sends a one-time
 // "due soon" nudge for unsubmitted tests whose due date is ~24h away, a
 // one-time join-nudge call to whoever hasn't joined a call ~2-3 minutes
 // after its start (see JOIN_NUDGE_DELAY_MS), sweeps up any booking whose
@@ -29,7 +30,7 @@ const WINDOW_MINUTES = 5;
 const DEMO_REQUEST_REMINDER_INTERVAL_MS = 2 * 24 * 60 * 60 * 1000; // every other day
 
 const REMINDER_WINDOWS = [
-  { kind: "24h" as const, field: "reminder24hSentAt" as const, target: () => addHours(new Date(), 24) },
+  { kind: "12h" as const, field: "reminder12hSentAt" as const, target: () => addHours(new Date(), 12) },
   { kind: "1h" as const, field: "reminder1hSentAt" as const, target: () => addHours(new Date(), 1) },
   { kind: "5m" as const, field: "reminder5mSentAt" as const, target: () => addMinutes(new Date(), 5) },
 ];
@@ -162,7 +163,7 @@ export async function GET(request: Request) {
       data: { status: "COMPLETED" },
       include: { student: true, professor: true },
     });
-    await sendFeedbackRequestEmails(updated);
+    await sendFeedbackRequest(updated);
     completedCount += 1;
   }
 

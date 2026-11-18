@@ -18,7 +18,7 @@ import {
 } from "@/lib/booking-rules";
 import { provisionVideoRoomForBooking, updateDailyRoomExpiry } from "@/lib/daily";
 import { sendDemoFollowUpEmail } from "@/lib/notifications/demo-followup";
-import { sendFeedbackRequestEmails } from "@/lib/notifications/feedback-request";
+import { sendFeedbackRequest } from "@/lib/notifications/feedback-request";
 import {
   sendBookingConfirmation,
   sendBookingRescheduledEmail,
@@ -836,7 +836,7 @@ export async function markBookingCompleted(bookingId: string) {
     if (booking.isDemo) {
       await sendDemoFollowUpEmail(booking);
     } else {
-      await sendFeedbackRequestEmails(booking);
+      await sendFeedbackRequest(booking);
     }
   }
 

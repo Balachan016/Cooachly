@@ -13,7 +13,7 @@ import { CancelBookingControl } from "@/components/cancel-booking-control";
 import { AdminRescheduleControl } from "@/components/admin-reschedule-control";
 
 const KIND_LABEL: Record<string, string> = {
-  "24h": "24h reminder",
+  "12h": "12h reminder",
   "1h": "1h reminder",
   "5m": "5m reminder",
   manual: "Manual reminder",
