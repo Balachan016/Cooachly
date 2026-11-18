@@ -476,7 +476,9 @@ model Booking {
   aiSummary              String?
   summarySentAt          DateTime?
 
-  reminder24hSentAt      DateTime?
+  // Renamed from reminder24hSentAt — the "day before" reminder now fires
+  // 12 hours out instead of 24, see /api/cron/reminders.
+  reminder12hSentAt      DateTime?
   reminder1hSentAt       DateTime?
   reminder5mSentAt       DateTime?
   feedbackRequestSentAt  DateTime?
@@ -513,7 +515,7 @@ model NotificationLog {
   userId    String?
   user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   channel   NotificationChannel
-  kind      String              // "24h" | "1h" | "5m" | "test"
+  kind      String              // "12h" | "1h" | "5m" | "test"
   status    NotificationStatus
   error     String?
   // Addresses actually used for this message: an email address (with display

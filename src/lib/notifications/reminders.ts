@@ -25,10 +25,10 @@ function bookingsPath(person: User): string {
   }
 }
 
-export type ReminderKind = "24h" | "1h" | "5m" | "manual" | "instant";
+export type ReminderKind = "12h" | "1h" | "5m" | "manual" | "instant";
 
 const LABEL: Record<ReminderKind, string> = {
-  "24h": "in 1 day",
+  "12h": "in 12 hours",
   "1h": "in 1 hour",
   "5m": "in 5 minutes",
   manual: "as scheduled",
@@ -36,7 +36,7 @@ const LABEL: Record<ReminderKind, string> = {
 };
 
 const SUBJECT_PHRASE: Record<ReminderKind, string> = {
-  "24h": "starts in 1 day",
+  "12h": "starts in 12 hours",
   "1h": "starts in 1 hour",
   "5m": "starts in 5 minutes",
   manual: "is coming up",
@@ -94,20 +94,25 @@ async function notifyPerson(
   const linkLine = info.joinLink ? `\n\nJoin here: ${info.joinLink}` : "";
   const textBody = `Reminder: ${sentence}.${linkLine}`;
 
-  const emailHtml = `
-    <p>Hi ${person.name},</p>
-    <p>This is a reminder that ${sentence}.</p>
-    ${info.joinLink ? `<p><a href="${info.joinLink}">Click here to join the video call</a></p>` : ""}
-    <p>— ${brandName}</p>
-  `;
-
-  const emailResult = await sendEmail({
-    to: person.email,
-    site: person.site,
-    subject: `Your ${brandName} session ${SUBJECT_PHRASE[kind]}`,
-    html: emailHtml,
-  });
-  await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
+  // The 12h-before reminder is WhatsApp/SMS/push only, no email — cut
+  // specifically to reduce email volume for the reminder that goes out
+  // most often (every confirmed booking gets one, same as 1h/5m). The 1h
+  // and 5m reminders keep their email leg unchanged.
+  if (kind !== "12h") {
+    const emailHtml = `
+      <p>Hi ${person.name},</p>
+      <p>This is a reminder that ${sentence}.</p>
+      ${info.joinLink ? `<p><a href="${info.joinLink}">Click here to join the video call</a></p>` : ""}
+      <p>— ${brandName}</p>
+    `;
+    const emailResult = await sendEmail({
+      to: person.email,
+      site: person.site,
+      subject: `Your ${brandName} session ${SUBJECT_PHRASE[kind]}`,
+      html: emailHtml,
+    });
+    await logNotification({ bookingId, userId: person.id, channel: "EMAIL", kind, result: emailResult });
+  }
 
   // Push goes to every device the person enabled notifications on (installed
   // app or browser). Right before (or at) the session, tapping it opens the call.

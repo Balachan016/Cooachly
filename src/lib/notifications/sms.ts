@@ -9,6 +9,7 @@ const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+141552
 const reminderContentSid = process.env.TWILIO_REMINDER_CONTENT_SID;
 const inviteContentSid = process.env.TWILIO_INVITE_CONTENT_SID;
 const demoContentSid = process.env.TWILIO_DEMO_CONTENT_SID;
+const feedbackContentSid = process.env.TWILIO_FEEDBACK_CONTENT_SID;
 
 /**
  * Plain SMS needs a *locally-registered* sender number per destination
@@ -87,6 +88,7 @@ export const whatsAppConfigStatus = {
   reminderTemplateSid: reminderContentSid ?? null,
   inviteTemplateSid: inviteContentSid ?? null,
   demoTemplateSid: demoContentSid ?? null,
+  feedbackTemplateSid: feedbackContentSid ?? null,
 };
 
 export const smsConfigStatus = {
@@ -334,6 +336,34 @@ export async function sendWhatsAppReminder(opts: {
           "3": opts.variables.label,
           "4": opts.variables.when,
           "5": opts.variables.joinLink || "(link not available yet)",
+        }),
+      })
+    : createMessage(opts.to, { body: opts.body });
+
+  return Promise.all([whatsapp, sendSms(opts.to, opts.body)]);
+}
+
+/**
+ * Post-session feedback prompt — sent instead of an email (feedback
+ * requests used to be email-only; moved to WhatsApp/SMS to cut down on
+ * email volume). Same 24h-window template requirement as
+ * sendWhatsAppReminder above: set TWILIO_FEEDBACK_CONTENT_SID once a
+ * template is approved; until then this falls back to a free-form body,
+ * which only works on the sandbox. The SMS leg always sends the plain
+ * body — no template needed.
+ */
+export async function sendWhatsAppFeedbackRequest(opts: {
+  to: string;
+  body: string;
+  variables: { recipientName: string; peerName: string; feedbackUrl: string };
+}): Promise<WhatsAppSendResult[]> {
+  const whatsapp = feedbackContentSid
+    ? createMessage(opts.to, {
+        contentSid: feedbackContentSid,
+        contentVariables: JSON.stringify({
+          "1": opts.variables.recipientName,
+          "2": opts.variables.peerName,
+          "3": opts.variables.feedbackUrl,
         }),
       })
     : createMessage(opts.to, { body: opts.body });
